@@ -166,27 +166,36 @@
                     </div>
                 </template>
 
-                {{-- Remaining due via cash/card --}}
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-500 mb-1">Method</label>
-                        <select x-model="payMethod" class="w-full rounded-md border border-slate-300 p-2 text-sm">
-                            <option value="cash">Cash</option>
-                            <option value="card">Card</option>
-                            <option value="other">Other</option>
-                        </select>
+                {{-- Remaining due via one or more payment methods (split tender) --}}
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-medium text-slate-500">Payment</label>
+                        <button type="button" @click="addTender()" class="text-xs text-indigo-600 hover:underline">+ Add method</button>
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-500 mb-1">Tendered</label>
-                        <input type="number" min="0" step="0.01" x-model.number="tendered"
-                               class="w-full rounded-md border border-slate-300 p-2 text-sm text-right">
+                    <div class="space-y-2">
+                        <template x-for="(t, i) in tenders" :key="i">
+                            <div class="flex items-center gap-2">
+                                <select x-model="t.method" class="rounded-md border border-slate-300 p-2 text-sm">
+                                    <option value="cash">Cash</option>
+                                    <option value="card">Card</option>
+                                    <option value="other">Other</option>
+                                </select>
+                                <div class="relative flex-1">
+                                    <span class="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{{ $symbol }}</span>
+                                    <input type="number" min="0" step="0.01" x-model.number="t.amount"
+                                           class="w-full rounded-md border border-slate-300 p-2 pl-7 text-sm text-right" placeholder="0.00">
+                                </div>
+                                <button type="button" @click="fillDue(t)" class="text-xs text-slate-500 hover:text-indigo-600 whitespace-nowrap" title="Fill the remaining amount due">= due</button>
+                                <button type="button" @click="removeTender(i)" x-show="tenders.length > 1" class="text-slate-300 hover:text-red-500 text-sm" title="Remove">✕</button>
+                            </div>
+                        </template>
                     </div>
                 </div>
                 <div class="flex justify-between text-sm" x-show="walletApplied > 0">
                     <span class="text-slate-500">Remaining due</span>
                     <span class="font-semibold text-slate-700" x-text="money(remainderDue)"></span>
                 </div>
-                <div class="flex justify-between text-sm" x-show="payMethod === 'cash'">
+                <div class="flex justify-between text-sm" x-show="changeDue > 0">
                     <span class="text-slate-500">Change due</span>
                     <span class="font-semibold text-slate-700" x-text="money(changeDue)"></span>
                 </div>
@@ -254,8 +263,8 @@ function posRegister() {
         cartDiscount: 0,
         redeemPoints: 0,
         useWallet: 0,
-        payMethod: 'cash',
-        tendered: 0,
+        // Split tender: one or more payment lines, each { method, amount }.
+        tenders: [{ method: 'cash', amount: null }],
         submitting: false,
 
         init() {
@@ -307,8 +316,20 @@ function posRegister() {
         dec(line) { line.qty = Math.max(0, Math.round((line.qty - 1) * 1000) / 1000); },
         removeLine(i) { this.cart.splice(i, 1); },
         clearCart() {
-            this.cart = []; this.cartDiscount = 0; this.tendered = 0;
+            this.cart = []; this.cartDiscount = 0;
+            this.tenders = [{ method: 'cash', amount: null }];
             this.redeemPoints = 0; this.useWallet = 0;
+        },
+
+        // --- Split-tender payment lines ---
+        addTender() { this.tenders.push({ method: 'cash', amount: null }); },
+        removeTender(i) {
+            this.tenders.splice(i, 1);
+            if (this.tenders.length === 0) this.addTender();
+        },
+        // Top this line up so the whole sale is covered (assumes cash for any change).
+        fillDue(t) {
+            t.amount = Math.round(((parseFloat(t.amount) || 0) + this.amountDue) * 100) / 100;
         },
 
         lineNet(line) {
@@ -382,25 +403,20 @@ function posRegister() {
         get remainderDue() {
             return Math.max(0, Math.round((this.total - this.walletApplied) * 100) / 100);
         },
-        get methodPaid() {
-            // Amount collected now via the chosen method. Empty 'tendered' pays the
-            // remaining balance in full; a smaller value makes it a partial payment.
-            if (this.tendered > 0) {
-                // Cash may exceed the balance (change); card/other are capped to it.
-                return this.payMethod === 'cash' ? this.tendered : Math.min(this.tendered, this.remainderDue);
-            }
-            return this.remainderDue;
+        // Sum of all tender lines entered by the cashier (cash + card + other).
+        get tenderedTotal() {
+            return Math.round(this.tenders.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0) * 100) / 100;
         },
-        get changeDue() {
-            if (this.payMethod !== 'cash') return 0;
-            return Math.max(0, Math.round((this.methodPaid - this.remainderDue) * 100) / 100);
-        },
-        // Total actually paid now (wallet + this method) and whether it covers the sale.
+        // Total collected now = wallet + every tender line.
         get amountPaid() {
-            return Math.round((this.walletApplied + this.methodPaid) * 100) / 100;
+            return Math.round((this.walletApplied + this.tenderedTotal) * 100) / 100;
         },
         get amountDue() {
             return Math.max(0, Math.round((this.total - this.amountPaid) * 100) / 100);
+        },
+        // Any overpayment is handed back as change (assumed cash).
+        get changeDue() {
+            return Math.max(0, Math.round((this.amountPaid - this.total) * 100) / 100);
         },
         get fullyPaid() {
             return this.amountPaid + 0.001 >= this.total;
@@ -413,8 +429,9 @@ function posRegister() {
         get paymentsList() {
             const list = [];
             if (this.walletApplied > 0) list.push({ method: 'wallet', amount: this.walletApplied });
-            if (this.methodPaid > 0 || this.walletApplied === 0) {
-                list.push({ method: this.payMethod, amount: this.methodPaid });
+            for (const t of this.tenders) {
+                const amount = Math.round((parseFloat(t.amount) || 0) * 100) / 100;
+                if (amount > 0) list.push({ method: t.method, amount });
             }
             return list;
         },
