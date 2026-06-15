@@ -170,15 +170,15 @@
                 <div>
                     <div class="flex items-center justify-between mb-1">
                         <label class="block text-xs font-medium text-slate-500">Payment</label>
-                        <button type="button" @click="addTender()" class="text-xs text-indigo-600 hover:underline">+ Add method</button>
+                        <button type="button" @click="addTender()" x-show="canAddTender" class="text-xs text-indigo-600 hover:underline">+ Add method</button>
                     </div>
                     <div class="space-y-2">
                         <template x-for="(t, i) in tenders" :key="i">
                             <div class="flex items-center gap-2">
                                 <select x-model="t.method" class="rounded-md border border-slate-300 p-2 text-sm">
-                                    <option value="cash">Cash</option>
-                                    <option value="card">Card</option>
-                                    <option value="other">Other</option>
+                                    <template x-for="m in payMethods" :key="m">
+                                        <option :value="m" :disabled="methodTaken(t, m)" x-text="methodLabel(m)"></option>
+                                    </template>
                                 </select>
                                 <div class="relative flex-1">
                                     <span class="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{{ $symbol }}</span>
@@ -264,6 +264,8 @@ function posRegister() {
         redeemPoints: 0,
         useWallet: 0,
         // Split tender: one or more payment lines, each { method, amount }.
+        // A method may appear at most once across the lines.
+        payMethods: ['cash', 'card', 'other'],
         tenders: [{ method: 'cash', amount: null }],
         submitting: false,
 
@@ -321,8 +323,20 @@ function posRegister() {
             this.redeemPoints = 0; this.useWallet = 0;
         },
 
-        // --- Split-tender payment lines ---
-        addTender() { this.tenders.push({ method: 'cash', amount: null }); },
+        // --- Split-tender payment lines (each method usable only once) ---
+        methodLabel(m) { return m.charAt(0).toUpperCase() + m.slice(1); },
+        // True when method `m` is already used by a DIFFERENT line than `t`.
+        methodTaken(t, m) {
+            return m !== t.method && this.tenders.some(x => x !== t && x.method === m);
+        },
+        get canAddTender() {
+            return this.tenders.length < this.payMethods.length;
+        },
+        addTender() {
+            const used = this.tenders.map(t => t.method);
+            const next = this.payMethods.find(m => !used.includes(m));
+            if (next) this.tenders.push({ method: next, amount: null });
+        },
         removeTender(i) {
             this.tenders.splice(i, 1);
             if (this.tenders.length === 0) this.addTender();

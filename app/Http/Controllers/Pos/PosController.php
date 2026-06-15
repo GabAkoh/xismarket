@@ -85,9 +85,12 @@ class PosController extends Controller
             'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
             'payments' => ['required', 'array', 'min:1'],
-            'payments.*.method' => ['required', 'string', 'in:cash,card,other,wallet'],
+            // 'distinct' guards against the same method being submitted twice.
+            'payments.*.method' => ['required', 'string', 'in:cash,card,other,wallet', 'distinct'],
             'payments.*.amount' => ['required', 'numeric', 'min:0'],
             'payments.*.reference' => ['nullable', 'string', 'max:255'],
+        ], [
+            'payments.*.method.distinct' => 'Each payment method can only be used once.',
         ]);
 
         try {
