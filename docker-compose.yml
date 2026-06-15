@@ -1,0 +1,83 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: xismarket-app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - xismarket
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: xismarket-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - xismarket
+
+  mysql:
+    image: mysql:8.0
+    container_name: xismarket-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-xismarket}
+      MYSQL_USER: ${DB_USERNAME:-xismarket}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD:-rootsecret}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - xismarket
+
+  redis:
+    image: redis:7-alpine
+    container_name: xismarket-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - xismarket
+
+  node:
+    image: node:22-alpine
+    container_name: xismarket-node
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    ports:
+      - "5173:5173"
+    tty: true
+    networks:
+      - xismarket
+    profiles:
+      - dev
+
+networks:
+  xismarket:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local

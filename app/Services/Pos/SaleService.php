@@ -1,0 +1,567 @@
+<?php
+
+namespace App\Services\Pos;
+
+use App\Models\Inventory\Product;
+use App\Models\Inventory\Warehouse;
+use App\Models\Pos\Customer;
+use App\Models\Pos\Payment;
+use App\Models\Pos\Register;
+use App\Models\Pos\Sale;
+use App\Models\Pos\SaleItem;
+use App\Support\Tenancy;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * The POS checkout brain.
+ *
+ * Owns the full sale lifecycle: building the Sale/SaleItem/Payment rows,
+ * decrementing inventory through the Inventory module, and posting the
+ * matching double-entry journal through the Accounting module. Both of
+ * those cross-module calls are guarded with class_exists so this module
+ * compiles and runs even when those modules are absent.
+ */
+class SaleService
+{
+    public function __construct(protected Tenancy $tenancy) {}
+
+    /**
+     * Complete a sale inside a single DB transaction.
+     *
+     * Expected $data shape:
+     *   register_id?  int|null
+     *   shift_id?     int|null
+     *   customer_id?  int|null
+     *   user_id?      int|null      (defaults to auth user)
+     *   note?         string|null
+     *   completed_at? Carbon|string (defaults to now; lets the seeder backdate)
+     *   discount?     float         (overall discount applied on top of line discounts)
+     *   items:        [['product_id' => int, 'quantity' => float, 'unit_price'? => float,
+     *                    'discount'? => float], ...]
+     *   payments:     [['method' => string, 'amount' => float, 'reference'? => string], ...]
+     */
+    public function complete(array $data): Sale
+    {
+        $sale = DB::transaction(function () use ($data) {
+            $tenantId = $this->tenancy->id();
+            $register = isset($data['register_id'])
+                ? Register::find($data['register_id'])
+                : null;
+
+            $completedAt = isset($data['completed_at'])
+                ? Carbon::parse($data['completed_at'])
+                : now();
+
+            // --- Build line items (with product snapshots) ---
+            $lines = [];
+            $subtotal = 0.0;     // sum of line nets BEFORE tax, AFTER line discounts
+            $taxTotal = 0.0;
+            $lineDiscountTotal = 0.0;
+            $cogsTotal = 0.0;
+            $products = [];      // product_id => Product (for stock movements)
+
+            foreach ($data['items'] ?? [] as $row) {
+                $product = Product::find($row['product_id']);
+                if (! $product) {
+                    continue;
+                }
+
+                $qty = round((float) ($row['quantity'] ?? 0), 3);
+                if ($qty <= 0) {
+                    continue;
+                }
+
+                $unitPrice = isset($row['unit_price'])
+                    ? round((float) $row['unit_price'], 2)
+                    : round((float) $product->sale_price, 2);
+                $unitCost = round((float) $product->cost_price, 2);
+                // Product tax_rate is stored as a percentage (e.g. 8.0 == 8%).
+                $taxRate = (float) $product->tax_rate / 100;
+                $discount = round((float) ($row['discount'] ?? 0), 2);
+
+                $gross = round($unitPrice * $qty, 2);
+                $net = round($gross - $discount, 2);          // taxable base for this line
+                if ($net < 0) {
+                    $net = 0.0;
+                }
+                $lineTax = round($net * $taxRate, 2);
+                $lineTotal = round($net + $lineTax, 2);
+
+                $subtotal += $net;
+                $taxTotal += $lineTax;
+                $lineDiscountTotal += $discount;
+                $cogsTotal += round($unitCost * $qty, 2);
+
+                $products[$product->id] = $product;
+
+                $lines[] = [
+                    'tenant_id' => $tenantId,
+                    'product_id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'quantity' => $qty,
+                    'unit_price' => $unitPrice,
+                    'unit_cost' => $unitCost,
+                    'tax_rate' => $taxRate,
+                    'discount' => $discount,
+                    'line_total' => $lineTotal,
+                ];
+            }
+
+            // Resolve the customer up front (needed for wallet + loyalty).
+            $customer = isset($data['customer_id'])
+                ? Customer::find($data['customer_id'])
+                : null;
+
+            // Overall (cart-level) discount applies to the net revenue.
+            $overallDiscount = round((float) ($data['discount'] ?? 0), 2);
+
+            // subtotal = gross value before any discount, so that
+            // (subtotal - discount_total) == net revenue.
+            $subtotal = round($subtotal + $lineDiscountTotal, 2);
+
+            // Net revenue before loyalty redemption is applied.
+            $discountBeforeLoyalty = round($lineDiscountTotal + $overallDiscount, 2);
+            $netBeforeLoyalty = max(0.0, round($subtotal - $discountBeforeLoyalty, 2));
+
+            // --- Loyalty redemption -> discount (capped to points held & to net) ---
+            $loyalty = app(LoyaltyService::class);
+            $settings = $loyalty->settings();
+            $requestedPoints = (int) ($data['points_redeemed'] ?? 0);
+            $pointsRedeemed = 0;
+            $loyaltyDiscount = 0.0;
+            if ($customer && $settings->is_active && $requestedPoints > 0 && (float) $settings->redeem_value > 0) {
+                $maxByPoints = min($requestedPoints, (int) $customer->loyalty_points);
+                $maxByValue = (int) floor($netBeforeLoyalty / (float) $settings->redeem_value);
+                $pointsRedeemed = max(0, min($maxByPoints, $maxByValue));
+                $loyaltyDiscount = $settings->valueOf($pointsRedeemed);
+            }
+
+            $discountTotal = round($discountBeforeLoyalty + $loyaltyDiscount, 2);
+            $netRevenue = round($subtotal - $discountTotal, 2);
+            if ($netRevenue < 0) {
+                $netRevenue = 0.0;
+            }
+
+            $total = round($netRevenue + $taxTotal, 2);
+
+            // Wallet-funded portion of this sale (capped to the total).
+            $walletUsed = 0.0;
+            foreach ($data['payments'] ?? [] as $p) {
+                if (($p['method'] ?? null) === 'wallet') {
+                    $walletUsed += round((float) ($p['amount'] ?? 0), 2);
+                }
+            }
+            $walletUsed = round(min($walletUsed, $total), 2);
+
+            // Points earned on the realised net revenue.
+            $pointsEarned = ($customer && $settings->is_active)
+                ? $settings->pointsFor($netRevenue)
+                : 0;
+
+            // --- Payments ---
+            // Wallet counts at its clamped value; other methods at the tendered amount.
+            $nonWalletPaid = 0.0;
+            foreach ($data['payments'] ?? [] as $p) {
+                if (($p['method'] ?? null) === 'wallet') {
+                    continue;
+                }
+                $nonWalletPaid += round((float) ($p['amount'] ?? 0), 2);
+            }
+            $paidTotal = round($walletUsed + round($nonWalletPaid, 2), 2);
+
+            // A sale must be paid in full — partial payments are not allowed.
+            if ($paidTotal + 0.001 < $total) {
+                throw new \RuntimeException(
+                    'Payment is insufficient: '.number_format($paidTotal, 2)
+                    .' paid against a total of '.number_format($total, 2)
+                    .'. The full amount must be paid to complete the sale.'
+                );
+            }
+
+            $status = 'completed';
+            $balanceDue = 0.0;
+            $changeDue = round(max(0, $paidTotal - $total), 2);
+
+            // --- Persist the Sale ---
+            $sale = Sale::create([
+                'tenant_id' => $tenantId,
+                'register_id' => $register?->id,
+                'shift_id' => $data['shift_id'] ?? null,
+                'customer_id' => $data['customer_id'] ?? null,
+                'user_id' => $data['user_id'] ?? auth()->id(),
+                'number' => $this->nextNumber(),
+                'status' => $status,
+                'subtotal' => $subtotal,
+                'discount_total' => $discountTotal,
+                'tax_total' => $taxTotal,
+                'total' => $total,
+                'paid_total' => $paidTotal,
+                'change_due' => $changeDue,
+                'balance_due' => $balanceDue,
+                'wallet_used' => $walletUsed,
+                'loyalty_discount' => $loyaltyDiscount,
+                'points_earned' => $pointsEarned,
+                'points_redeemed' => $pointsRedeemed,
+                'note' => $data['note'] ?? null,
+                'completed_at' => $completedAt,
+            ]);
+
+            foreach ($lines as $line) {
+                $line['sale_id'] = $sale->id;
+                SaleItem::create($line);
+            }
+
+            // Record the wallet portion as a single clamped line...
+            if ($walletUsed > 0) {
+                Payment::create([
+                    'tenant_id' => $tenantId,
+                    'sale_id' => $sale->id,
+                    'method' => 'wallet',
+                    'amount' => $walletUsed,
+                    'reference' => null,
+                    'paid_at' => $completedAt,
+                ]);
+            }
+            // ...then every non-wallet payment at its tendered amount.
+            foreach ($data['payments'] ?? [] as $p) {
+                if (($p['method'] ?? null) === 'wallet') {
+                    continue;
+                }
+                $amount = round((float) ($p['amount'] ?? 0), 2);
+                if ($amount <= 0) {
+                    continue;
+                }
+                Payment::create([
+                    'tenant_id' => $tenantId,
+                    'sale_id' => $sale->id,
+                    'method' => $p['method'] ?? 'cash',
+                    'amount' => $amount,
+                    'reference' => $p['reference'] ?? null,
+                    'paid_at' => $completedAt,
+                ]);
+            }
+
+            // --- Wallet + loyalty side effects (all inside the sale transaction) ---
+            if ($customer && $walletUsed > 0) {
+                // Throws if the balance is insufficient, rolling back the whole sale.
+                app(WalletService::class)->debit($customer, $walletUsed, 'POS sale '.$sale->number, $sale);
+            }
+            if ($customer && $pointsRedeemed > 0) {
+                $loyalty->redeem($customer, $pointsRedeemed, 'Redeemed on sale '.$sale->number, $sale);
+            }
+            if ($customer && $pointsEarned > 0) {
+                $loyalty->earn($customer, $pointsEarned, 'Earned on sale '.$sale->number, $sale);
+            }
+
+            // --- Cross-module: decrement stock & post the journal ---
+            $warehouse = $this->resolveWarehouse($register);
+
+            $this->decrementStock($sale, $products, $lines, $warehouse);
+            $this->postSaleJournal($sale, $netRevenue, $taxTotal, $total, $cogsTotal, $walletUsed, $balanceDue, $completedAt);
+
+            return $sale->load('items', 'payments', 'customer');
+        });
+
+        // The bestsellers ranking changed — drop its cache so the storefront rebuilds it.
+        app(\App\Services\Storefront\BestsellerService::class)->forget($this->tenancy->id());
+
+        return $sale;
+    }
+
+    /**
+     * Refund a completed sale: reverse the stock movements (type 'return', +qty)
+     * and post a reversing journal entry, then mark the sale refunded.
+     */
+    public function refund(Sale $sale): Sale
+    {
+        $sale = DB::transaction(function () use ($sale) {
+            $sale->loadMissing('items', 'register');
+            $warehouse = $this->resolveWarehouse($sale->register);
+
+            // Reverse stock for each line.
+            if (class_exists(\App\Services\Inventory\StockService::class)
+                && class_exists(\App\Models\Inventory\Product::class)) {
+                $stock = app(\App\Services\Inventory\StockService::class);
+                foreach ($sale->items as $item) {
+                    if (! $item->product_id) {
+                        continue;
+                    }
+                    $product = Product::find($item->product_id);
+                    if (! $product) {
+                        continue;
+                    }
+                    $stock->recordMovement(
+                        $product,
+                        $warehouse,
+                        'return',
+                        (float) $item->quantity,
+                        (float) $item->unit_cost,
+                        $sale,
+                        'Refund '.$sale->number,
+                    );
+                }
+            }
+
+            // Reversing journal entry (mirror of the sale posting).
+            $cogsTotal = round((float) $sale->items->sum(
+                fn ($i) => round((float) $i->unit_cost * (float) $i->quantity, 2)
+            ), 2);
+
+            $this->postRefundJournal(
+                $sale,
+                (float) $sale->netRevenue(),
+                (float) $sale->tax_total,
+                (float) $sale->total,
+                $cogsTotal,
+                now(),
+            );
+
+            $sale->update(['status' => 'refunded']);
+
+            return $sale;
+        });
+
+        // Refunding removes the sale from the ranking — invalidate the cache.
+        app(\App\Services\Storefront\BestsellerService::class)->forget($this->tenancy->id());
+
+        return $sale;
+    }
+
+    /**
+     * Record a follow-up payment against a partially-paid (credit) sale.
+     * Settles the A/R balance and flips the sale to 'completed' once cleared.
+     *
+     * $data = ['amount' => float, 'method' => 'cash'|'card'|'other'|'wallet', 'reference' => ?string]
+     */
+    public function addPayment(Sale $sale, array $data): Sale
+    {
+        return DB::transaction(function () use ($sale, $data) {
+            $sale->refresh();
+
+            if ($sale->status !== 'partially_paid') {
+                throw new \RuntimeException('This sale is not awaiting payment.');
+            }
+
+            $balanceDue = round((float) $sale->total - (float) $sale->paid_total, 2);
+            $amount = round((float) ($data['amount'] ?? 0), 2);
+            $method = $data['method'] ?? 'cash';
+
+            // Never accept more than the outstanding balance (no change on a settlement).
+            $applied = round(min($amount, $balanceDue), 2);
+            if ($applied <= 0) {
+                throw new \RuntimeException('Enter a payment amount greater than zero.');
+            }
+
+            // Wallet settlement draws down the customer's store credit.
+            if ($method === 'wallet') {
+                $customer = $sale->customer;
+                if (! $customer) {
+                    throw new \RuntimeException('This sale has no customer wallet to charge.');
+                }
+                app(WalletService::class)->debit($customer, $applied, 'Payment for sale '.$sale->number, $sale);
+            }
+
+            Payment::create([
+                'tenant_id' => $this->tenancy->id(),
+                'sale_id' => $sale->id,
+                'method' => $method,
+                'amount' => $applied,
+                'reference' => $data['reference'] ?? null,
+                'paid_at' => now(),
+            ]);
+
+            $newPaid = round((float) $sale->paid_total + $applied, 2);
+            $newBalance = round((float) $sale->total - $newPaid, 2);
+            if ($newBalance < 0) {
+                $newBalance = 0.0;
+            }
+
+            $sale->update([
+                'paid_total' => $newPaid,
+                'balance_due' => $newBalance,
+                'status' => $newBalance <= 0.001 ? 'completed' : 'partially_paid',
+            ]);
+
+            $this->postSettlementJournal($sale, $applied, $method, now());
+
+            return $sale->refresh();
+        });
+    }
+
+    /** Post a credit-sale settlement: Dr Cash/Wallet, Cr Accounts Receivable. */
+    protected function postSettlementJournal(Sale $sale, float $amount, string $method, Carbon $date): void
+    {
+        if (! class_exists(\App\Services\Accounting\PostingService::class)) {
+            return;
+        }
+
+        $debit = '1000';
+        $memo = 'Cash received';
+        if ($method === 'wallet') {
+            app(WalletService::class)->ensureLiabilityAccount();
+            $debit = WalletService::LIABILITY_CODE;
+            $memo = 'Store credit applied';
+        }
+
+        app(\App\Services\Accounting\PostingService::class)->post([
+            'date' => $date,
+            'memo' => 'Payment for sale '.$sale->number,
+            'reference' => $sale->number.'-P',
+            'source' => $sale,
+            'lines' => [
+                ['account' => $debit, 'debit' => $amount, 'credit' => 0, 'memo' => $memo],
+                ['account' => '1200', 'debit' => 0, 'credit' => $amount, 'memo' => 'Receivable settled'],
+            ],
+        ]);
+    }
+
+    /** Generate the next per-tenant sequential sale number (INV-0001 …). */
+    protected function nextNumber(): string
+    {
+        $last = Sale::query()
+            ->where('tenant_id', $this->tenancy->id())
+            ->orderByDesc('id')
+            ->value('number');
+
+        $seq = 0;
+        if ($last && preg_match('/(\d+)$/', $last, $m)) {
+            $seq = (int) $m[1];
+        }
+
+        return 'INV-'.str_pad((string) ($seq + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    /** Resolve the warehouse a register sells from, falling back to the default. */
+    protected function resolveWarehouse(?Register $register): ?Warehouse
+    {
+        if (! class_exists(\App\Models\Inventory\Warehouse::class)) {
+            return null;
+        }
+
+        if ($register && $register->warehouse_id) {
+            $warehouse = Warehouse::find($register->warehouse_id);
+            if ($warehouse) {
+                return $warehouse;
+            }
+        }
+
+        return Warehouse::default();
+    }
+
+    /**
+     * Decrement stock for each sold line through the Inventory StockService.
+     * Guarded so POS stays decoupled from the Inventory module.
+     */
+    protected function decrementStock(Sale $sale, array $products, array $lines, ?Warehouse $warehouse): void
+    {
+        if (! $warehouse
+            || ! class_exists(\App\Services\Inventory\StockService::class)) {
+            return;
+        }
+
+        $stock = app(\App\Services\Inventory\StockService::class);
+
+        foreach ($lines as $line) {
+            $product = $products[$line['product_id']] ?? null;
+            if (! $product || ! $product->track_stock) {
+                continue;
+            }
+
+            $stock->recordMovement(
+                $product,
+                $warehouse,
+                'sale',
+                -1 * (float) $line['quantity'],
+                (float) $product->cost_price,
+                $sale,
+                'Sale '.$sale->number,
+            );
+        }
+    }
+
+    /**
+     * Post the sale's double-entry journal through the Accounting PostingService.
+     * Guarded so POS stays decoupled from the Accounting module.
+     *
+     *   Dr 1000 Cash               = total − wallet used − balance due
+     *   Dr 2200 Customer Credit    = wallet used   (store credit drawn down)
+     *   Dr 1200 Accounts Receivable= balance due   (unpaid portion of a credit sale)
+     *   Cr 4000 Sales Revenue      = net (subtotal - discount)
+     *   Cr 2100 Tax Payable        = tax_total
+     *   Dr 5000 COGS               = Σ cost
+     *   Cr 1300 Inventory          = Σ cost
+     */
+    protected function postSaleJournal(Sale $sale, float $net, float $tax, float $total, float $cogs, float $walletUsed, float $balanceDue, Carbon $date): void
+    {
+        if (! class_exists(\App\Services\Accounting\PostingService::class)) {
+            return;
+        }
+
+        $walletUsed = round(min($walletUsed, $total), 2);
+        $balanceDue = round(min(max($balanceDue, 0), $total), 2);
+        $cashDebit = round($total - $walletUsed - $balanceDue, 2);
+
+        $lines = [];
+        if ($cashDebit > 0) {
+            $lines[] = ['account' => '1000', 'debit' => $cashDebit, 'credit' => 0, 'memo' => 'Cash received'];
+        }
+        if ($walletUsed > 0) {
+            // Drawing down the customer-deposits liability funded the rest.
+            app(WalletService::class)->ensureLiabilityAccount();
+            $lines[] = ['account' => WalletService::LIABILITY_CODE, 'debit' => $walletUsed, 'credit' => 0, 'memo' => 'Store credit redeemed'];
+        }
+        if ($balanceDue > 0) {
+            $lines[] = ['account' => '1200', 'debit' => $balanceDue, 'credit' => 0, 'memo' => 'Amount receivable'];
+        }
+        $lines[] = ['account' => '4000', 'debit' => 0, 'credit' => $net, 'memo' => 'Sales revenue'];
+
+        if (round($tax, 2) > 0) {
+            $lines[] = ['account' => '2100', 'debit' => 0, 'credit' => round($tax, 2), 'memo' => 'Tax payable'];
+        }
+
+        if (round($cogs, 2) > 0) {
+            $lines[] = ['account' => '5000', 'debit' => round($cogs, 2), 'credit' => 0, 'memo' => 'Cost of goods sold'];
+            $lines[] = ['account' => '1300', 'debit' => 0, 'credit' => round($cogs, 2), 'memo' => 'Inventory reduction'];
+        }
+
+        app(\App\Services\Accounting\PostingService::class)->post([
+            'date' => $date,
+            'memo' => 'POS sale '.$sale->number,
+            'reference' => $sale->number,
+            'source' => $sale,
+            'lines' => $lines,
+        ]);
+    }
+
+    /** Post the reversing journal for a refund (mirror image of the sale entry). */
+    protected function postRefundJournal(Sale $sale, float $net, float $tax, float $total, float $cogs, Carbon $date): void
+    {
+        if (! class_exists(\App\Services\Accounting\PostingService::class)) {
+            return;
+        }
+
+        $lines = [
+            ['account' => '4000', 'debit' => $net, 'credit' => 0, 'memo' => 'Reverse sales revenue'],
+            ['account' => '1000', 'debit' => 0, 'credit' => $total, 'memo' => 'Cash refunded'],
+        ];
+
+        if (round($tax, 2) > 0) {
+            $lines[] = ['account' => '2100', 'debit' => round($tax, 2), 'credit' => 0, 'memo' => 'Reverse tax payable'];
+        }
+
+        if (round($cogs, 2) > 0) {
+            $lines[] = ['account' => '1300', 'debit' => round($cogs, 2), 'credit' => 0, 'memo' => 'Inventory returned'];
+            $lines[] = ['account' => '5000', 'debit' => 0, 'credit' => round($cogs, 2), 'memo' => 'Reverse COGS'];
+        }
+
+        app(\App\Services\Accounting\PostingService::class)->post([
+            'date' => $date,
+            'memo' => 'POS refund '.$sale->number,
+            'reference' => $sale->number.'-R',
+            'source' => $sale,
+            'lines' => $lines,
+        ]);
+    }
+}

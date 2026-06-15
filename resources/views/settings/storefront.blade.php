@@ -1,0 +1,115 @@
+@extends('layouts.app')
+@section('title', 'Storefront content')
+
+@section('content')
+<x-page-header title="Storefront content">
+    <a href="{{ route('shop.home', ['store' => $store->slug]) }}" target="_blank" rel="noopener"
+       class="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">View storefront ↗</a>
+</x-page-header>
+
+<form method="POST" action="{{ route('storefront.settings.update') }}" enctype="multipart/form-data" class="max-w-3xl space-y-6">
+    @csrf @method('PUT')
+
+    {{-- Promo bar --}}
+    <x-card>
+        <h2 class="text-sm font-semibold text-slate-700 mb-3">Promotion bar</h2>
+        <label class="flex items-center gap-2 text-sm text-slate-700 mb-3">
+            <input type="checkbox" name="promo_enabled" value="1" @checked(old('promo_enabled', $store->setting('storefront.promo_enabled', true)))>
+            Show the promotion bar at the top of the shop
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Message</label>
+        <input name="promo" maxlength="255"
+               value="{{ old('promo', $store->setting('storefront.promo')) }}"
+               placeholder="Free delivery on orders over {{ $store->currency }} 150 · Shop the latest arrivals today"
+               class="mt-1 w-full rounded-md border border-slate-300 p-2">
+    </x-card>
+
+    {{-- Hero --}}
+    <x-card>
+        <h2 class="text-sm font-semibold text-slate-700 mb-3">Hero section</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Headline</label>
+                <input name="hero_title" maxlength="150"
+                       value="{{ old('hero_title', $store->setting('storefront.hero_title')) }}"
+                       placeholder="Quality you can trust. Value you can feel."
+                       class="mt-1 w-full rounded-md border border-slate-300 p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Sub-heading</label>
+                <textarea name="hero_subtitle" rows="2" maxlength="500"
+                          placeholder="Discover a hand-picked selection from {{ $store->name }} — everyday essentials and special finds, delivered to your door."
+                          class="mt-1 w-full rounded-md border border-slate-300 p-2">{{ old('hero_subtitle', $store->setting('storefront.hero_subtitle')) }}</textarea>
+            </div>
+            @php $heroImage = $store->setting('storefront.hero_image'); @endphp
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Hero image</label>
+                @if ($heroImage)
+                    <div class="mt-2 flex items-center gap-3">
+                        <img src="{{ asset('storage/'.$heroImage) }}" alt="Hero image" class="h-20 w-32 rounded-md border border-slate-200 object-cover">
+                        <label class="flex items-center gap-2 text-sm text-slate-600">
+                            <input type="checkbox" name="remove_hero_image" value="1">
+                            Remove image
+                        </label>
+                    </div>
+                @endif
+                <input type="file" name="hero_image" accept="image/*"
+                       class="mt-2 w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+                <p class="mt-1 text-xs text-slate-400">JPG, PNG, WEBP or GIF up to 4&nbsp;MB. If empty, the newest product image is used. Landscape (4:3) works best.</p>
+                @error('hero_image')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
+        </div>
+    </x-card>
+
+    {{-- Brand story --}}
+    <x-card>
+        <h2 class="text-sm font-semibold text-slate-700 mb-3">Brand story</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Title</label>
+                <input name="story_title" maxlength="150"
+                       value="{{ old('story_title', $store->setting('storefront.story_title')) }}"
+                       placeholder="Our Story"
+                       class="mt-1 w-full rounded-md border border-slate-300 p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Body</label>
+                <textarea name="story_body" rows="5" maxlength="2000"
+                          placeholder="{{ $store->name }} was built on a simple idea: bring you dependable quality at a fair price…"
+                          class="mt-1 w-full rounded-md border border-slate-300 p-2">{{ old('story_body', $store->setting('storefront.story_body')) }}</textarea>
+            </div>
+        </div>
+    </x-card>
+
+    {{-- Testimonials --}}
+    @php
+        $testimonialRows = array_values(old('testimonials', $store->setting('storefront.testimonials', [])) ?: []);
+    @endphp
+    <div class="bg-white rounded-lg shadow-sm p-5" x-data="{ rows: @js($testimonialRows ?: [['name' => '', 'text' => '']]) }">
+        <div class="flex items-center justify-between mb-1">
+            <h2 class="text-sm font-semibold text-slate-700">Testimonials</h2>
+            <button type="button" @click="rows.push({ name: '', text: '' })" class="text-sm font-medium text-indigo-600 hover:underline">+ Add review</button>
+        </div>
+        <p class="text-xs text-slate-400 mb-3">Leave every row empty to show the default sample reviews on the storefront.</p>
+
+        <template x-for="(row, i) in rows" :key="i">
+            <div class="mb-3 rounded-md border border-slate-100 p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-400" x-text="'Review #' + (i + 1)"></span>
+                    <button type="button" @click="rows.splice(i, 1)" class="text-xs text-red-500 hover:underline">Remove</button>
+                </div>
+                <input type="text" :name="`testimonials[${i}][name]`" x-model="row.name" maxlength="100"
+                       placeholder="Customer name" class="w-full rounded-md border border-slate-300 p-2 text-sm mb-2">
+                <textarea :name="`testimonials[${i}][text]`" x-model="row.text" rows="2" maxlength="500"
+                          placeholder="What they said about your store…" class="w-full rounded-md border border-slate-300 p-2 text-sm"></textarea>
+            </div>
+        </template>
+    </div>
+
+    <p class="text-xs text-slate-400">Leave a field blank to use the default shown in grey. The store phone and email in the story section come from your tenant profile.</p>
+
+    <div class="flex gap-2">
+        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Save changes</button>
+    </div>
+</form>
+@endsection

@@ -1,0 +1,9 @@
+.git
+.gitignore
+node_modules
+vendor
+storage/*.key
+.env
+npm-debug.log
+yarn-error.log
+docker-compose.override.yml
