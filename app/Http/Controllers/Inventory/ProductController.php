@@ -95,7 +95,7 @@ class ProductController extends Controller
             'tax_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'track_stock' => ['boolean'],
             'is_active' => ['boolean'],
-            'image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:2048'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:8192'],
         ]);
     }
 
