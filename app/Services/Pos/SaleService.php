@@ -297,9 +297,9 @@ class SaleService
      * reversing journal entry. The sale becomes 'partially_refunded', or 'refunded'
      * once every line is fully returned.
      *
-     * Note: refund amounts are derived from each line's own economics (unit price,
-     * line discount, tax). Sale-level (cart) and loyalty discounts are not clawed
-     * back proportionally.
+     * Refund revenue is apportioned from the sale's net revenue (which already
+     * reflects cart-level and loyalty discounts), so the refunded amount matches
+     * what was actually paid; tax is refunded as it was charged.
      *
      * @param  array<int|string, float>  $quantities  sale_item_id => quantity to return
      */
@@ -320,6 +320,16 @@ class SaleService
                 ? app(\App\Services\Inventory\StockService::class)
                 : null;
 
+            // The sale's net revenue already reflects cart-level and loyalty
+            // discounts; apportion it down to each line so the refunded revenue
+            // matches what was actually paid (tax stays as it was charged).
+            $totalLineNet = round((float) $sale->items->sum(
+                fn ($i) => (float) $i->unit_price * (float) $i->quantity - (float) $i->discount
+            ), 2);
+            $revenueFactor = $totalLineNet > 0
+                ? min(1.0, max(0.0, $sale->netRevenue() / $totalLineNet))
+                : 1.0;
+
             $net = 0.0;
             $tax = 0.0;
             $cogs = 0.0;
@@ -339,12 +349,15 @@ class SaleService
                     );
                 }
 
-                // Apportion the line's net/tax/cost to the returned quantity.
+                // Apportion the line to the returned quantity. Tax was charged on
+                // the line net (before cart/loyalty discounts); revenue is then
+                // scaled by the sale-level discount factor.
                 $lineQty = (float) $item->quantity;
                 $fraction = $lineQty > 0 ? $qty / $lineQty : 0.0;
                 $lineNet = round((float) $item->unit_price * $lineQty - (float) $item->discount, 2);
-                $rNet = round($lineNet * $fraction, 2);
-                $rTax = round($rNet * (float) $item->tax_rate, 2);
+                $rNetPre = round($lineNet * $fraction, 2);
+                $rTax = round($rNetPre * (float) $item->tax_rate, 2);
+                $rNet = round($rNetPre * $revenueFactor, 2);
 
                 $net += $rNet;
                 $tax += $rTax;
@@ -377,16 +390,13 @@ class SaleService
             // Fully returned when no line has any returnable quantity left.
             $fully = $sale->items->every(fn ($i) => $i->returnableQuantity() <= 0.0001);
 
-            // Cumulative fraction of the sale returned, on a per-line-total basis,
-            // used to apportion sale-level wallet/loyalty figures exactly (and in
-            // full once the whole sale is returned).
-            $basis = round((float) $sale->items->sum(fn ($i) => (float) $i->line_total), 2);
-            $returnedBasis = round((float) $sale->items->sum(
-                fn ($i) => (float) $i->quantity > 0
-                    ? round((float) $i->line_total * ((float) $i->returned_quantity / (float) $i->quantity), 2)
-                    : 0
-            ), 2);
-            $frac = $fully ? 1.0 : ($basis > 0 ? min(1.0, $returnedBasis / $basis) : 0.0);
+            // Cumulative fraction of the sale's paid value returned so far, used to
+            // apportion sale-level wallet/loyalty figures — exact, and 1 when fully
+            // returned. $total already reflects the apportioned cart/loyalty discount.
+            $refundedSoFar = round((float) $sale->refunded_total + $total, 2);
+            $frac = $fully
+                ? 1.0
+                : ((float) $sale->total > 0 ? min(1.0, $refundedSoFar / (float) $sale->total) : 0.0);
 
             $customer = $sale->customer;
 
