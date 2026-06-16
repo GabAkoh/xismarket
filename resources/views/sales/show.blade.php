@@ -60,32 +60,42 @@
 
         @if ($sale->isPartiallyPaid())
             @permission('pos.use')
+            @php
+                // A method already recorded on this sale can't be used again (any amount).
+                $usedMethods = $sale->payments->pluck('method')->all();
+                $methodOptions = ['cash' => 'Cash', 'card' => 'Card', 'other' => 'Other'];
+                if ($sale->customer && $sale->customer->balance > 0) {
+                    $methodOptions['wallet'] = 'Wallet ('.$symbol.number_format($sale->customer->balance, 2).')';
+                }
+                $availableMethods = array_diff(array_keys($methodOptions), $usedMethods);
+            @endphp
             <x-card title="Record payment">
                 <p class="text-sm text-slate-500 mb-3">Outstanding balance:
                     <span class="font-semibold text-red-600">{{ $symbol }}{{ number_format($sale->balance_due, 2) }}</span></p>
-                <form method="POST" action="{{ route('sales.payment', $sale) }}" class="space-y-3">
-                    @csrf
-                    <div class="flex gap-2">
-                        <div class="flex-1">
-                            <label class="block text-xs font-medium text-slate-500 mb-1">Amount ({{ $symbol }})</label>
-                            <input type="number" name="amount" step="0.01" min="0.01" max="{{ $sale->balance_due }}"
-                                   value="{{ number_format((float) $sale->balance_due, 2, '.', '') }}" required
-                                   class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                @if (empty($availableMethods))
+                    <p class="text-sm text-amber-600">Every payment method has already been used on this sale.</p>
+                @else
+                    <form method="POST" action="{{ route('sales.payment', $sale) }}" class="space-y-3">
+                        @csrf
+                        <div class="flex gap-2">
+                            <div class="flex-1">
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Amount ({{ $symbol }})</label>
+                                <input type="number" name="amount" step="0.01" min="0.01" max="{{ $sale->balance_due }}"
+                                       value="{{ number_format((float) $sale->balance_due, 2, '.', '') }}" required
+                                       class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Method</label>
+                                <select name="method" class="rounded-md border border-slate-300 p-2 text-sm">
+                                    @foreach ($availableMethods as $val)
+                                        <option value="{{ $val }}">{{ $methodOptions[$val] }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 mb-1">Method</label>
-                            <select name="method" class="rounded-md border border-slate-300 p-2 text-sm">
-                                <option value="cash">Cash</option>
-                                <option value="card">Card</option>
-                                <option value="other">Other</option>
-                                @if ($sale->customer && $sale->customer->balance > 0)
-                                    <option value="wallet">Wallet ({{ $symbol }}{{ number_format($sale->customer->balance, 2) }})</option>
-                                @endif
-                            </select>
-                        </div>
-                    </div>
-                    <button class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Record payment</button>
-                </form>
+                        <button class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Record payment</button>
+                    </form>
+                @endif
             </x-card>
             @endpermission
         @endif

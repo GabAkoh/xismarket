@@ -348,6 +348,14 @@ class SaleService
             $amount = round((float) ($data['amount'] ?? 0), 2);
             $method = $data['method'] ?? 'cash';
 
+            // One payment per method per sale: reject a method already recorded on
+            // this sale, regardless of the amount.
+            if ($sale->payments()->where('method', $method)->exists()) {
+                throw new \RuntimeException(
+                    ucfirst($method).' has already been used on this sale. Settle the balance with a different payment method.'
+                );
+            }
+
             // Never accept more than the outstanding balance (no change on a settlement).
             $applied = round(min($amount, $balanceDue), 2);
             if ($applied <= 0) {
