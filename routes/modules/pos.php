@@ -5,6 +5,7 @@ use App\Http\Controllers\Pos\LoyaltyController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\RegisterController;
 use App\Http\Controllers\Pos\SalesController;
+use App\Http\Controllers\Pos\WalletController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth'])->group(function () {
@@ -33,6 +34,7 @@ Route::middleware(['web', 'auth'])->group(function () {
 
     // --- Customers ---
     Route::middleware('permission:customers.view')->group(function () {
+        Route::get('wallets', [WalletController::class, 'index'])->name('wallets.index');
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
         // Numeric constraint so it doesn't capture the literal "customers/create".
         Route::get('customers/{customer}', [CustomerController::class, 'show'])

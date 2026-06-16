@@ -37,6 +37,7 @@
                         ['route' => 'pos.index', 'label' => 'Register', 'perm' => 'pos.use'],
                         ['route' => 'sales.index', 'label' => 'Sales', 'perm' => 'sales.view'],
                         ['route' => 'customers.index', 'label' => 'Customers', 'perm' => 'customers.view'],
+                        ['route' => 'wallets.index', 'label' => 'Wallets', 'perm' => 'customers.view'],
                         ['route' => 'loyalty.settings', 'label' => 'Loyalty Program', 'perm' => 'customers.manage'],
                         ['route' => 'registers.index', 'label' => 'Registers & Shifts', 'perm' => 'registers.manage'],
                     ]],
