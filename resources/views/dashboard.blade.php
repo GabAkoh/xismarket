@@ -2,7 +2,7 @@
 @section('title', 'Dashboard')
 
 @section('content')
-@php $currency = $currentTenant?->currency ?? 'USD'; @endphp
+@php $currency = $currentTenant?->currencySymbol() ?? 'USD'; @endphp
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <div class="bg-white rounded-lg shadow-sm p-5">

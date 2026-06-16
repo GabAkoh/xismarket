@@ -2,7 +2,7 @@
 @section('title', 'Order confirmed')
 
 @section('content')
-@php $symbol = $store->currency ?? ''; @endphp
+@php $symbol = $store->currencySymbol() ?? ''; @endphp
 
 <div class="max-w-xl mx-auto">
     <div class="bg-white rounded-lg border border-slate-200 p-8 text-center">

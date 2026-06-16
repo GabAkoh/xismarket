@@ -1,4 +1,4 @@
-@php $symbol = $store->currency ?? ''; @endphp
+@php $symbol = $store->currencySymbol() ?? ''; @endphp
 <x-mail::message>
 # {{ $headline }}
 

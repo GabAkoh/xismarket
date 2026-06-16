@@ -28,7 +28,7 @@
                     </td>
                     <td class="text-slate-500">{{ $product->sku }}</td>
                     <td class="text-slate-500">{{ $product->category?->name ?? '—' }}</td>
-                    <td class="text-right text-slate-700">{{ $currentTenant->currency }} {{ number_format((float) $product->sale_price, 2) }}</td>
+                    <td class="text-right text-slate-700">{{ $currentTenant->currencySymbol() }} {{ number_format((float) $product->sale_price, 2) }}</td>
                     <td class="text-right text-slate-700">{{ rtrim(rtrim(number_format((float) ($product->total_stock ?? 0), 3), '0'), '.') }}</td>
                     <td>
                         @if ($product->is_active)

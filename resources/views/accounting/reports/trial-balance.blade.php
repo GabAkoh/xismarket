@@ -27,8 +27,8 @@
         <tfoot>
             <tr class="font-semibold text-slate-800 border-t">
                 <td class="py-3" colspan="3">Totals</td>
-                <td class="text-right tabular-nums">{{ $currentTenant->currency }} {{ number_format($totalDebit, 2) }}</td>
-                <td class="text-right tabular-nums">{{ $currentTenant->currency }} {{ number_format($totalCredit, 2) }}</td>
+                <td class="text-right tabular-nums">{{ $currentTenant->currencySymbol() }} {{ number_format($totalDebit, 2) }}</td>
+                <td class="text-right tabular-nums">{{ $currentTenant->currencySymbol() }} {{ number_format($totalCredit, 2) }}</td>
             </tr>
         </tfoot>
     </table>

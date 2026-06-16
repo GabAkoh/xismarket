@@ -2,7 +2,7 @@
 @section('title', 'Registers & Shifts')
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header title="Registers & Shifts">
     <a href="{{ route('registers.create') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Add register</a>

@@ -2,7 +2,7 @@
 @section('title', 'Sales')
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header title="Sales" />
 

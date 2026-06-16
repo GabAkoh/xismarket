@@ -2,7 +2,7 @@
 @section('title', 'Checkout')
 
 @section('content')
-@php $symbol = $store->currency ?? ''; @endphp
+@php $symbol = $store->currencySymbol() ?? ''; @endphp
 
 <h1 class="text-2xl font-bold text-slate-800 mb-5">Checkout</h1>
 

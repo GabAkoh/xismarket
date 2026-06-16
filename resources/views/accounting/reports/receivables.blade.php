@@ -3,7 +3,7 @@
 
 @section('content')
 @php
-    $symbol = $currentTenant->currency ?? '';
+    $symbol = $currentTenant->currencySymbol() ?? '';
     $labels = ['current' => 'Current (0–30)', 'd31_60' => '31–60 days', 'd61_90' => '61–90 days', 'd90' => 'Over 90 days'];
     $reconciles = abs($grandTotal - $arBalance) < 0.01;
 @endphp

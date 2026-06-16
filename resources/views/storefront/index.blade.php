@@ -2,7 +2,7 @@
 @section('title', $filtering ? 'Shop' : $store->name)
 
 @section('content')
-@php $symbol = $store->currency ?? ''; @endphp
+@php $symbol = $store->currencySymbol() ?? ''; @endphp
 
 @if ($filtering)
     {{-- ───────────────── Search / filter results ───────────────── --}}

@@ -21,11 +21,11 @@
         </select>
     </div>
     <div>
-        <label class="block text-sm font-medium text-slate-700">Cost price ({{ $currentTenant->currency }})</label>
+        <label class="block text-sm font-medium text-slate-700">Cost price ({{ $currentTenant->currencySymbol() }})</label>
         <input name="cost_price" type="number" step="0.01" min="0" value="{{ old('cost_price', $product->cost_price ?? '0.00') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
     </div>
     <div>
-        <label class="block text-sm font-medium text-slate-700">Sale price ({{ $currentTenant->currency }})</label>
+        <label class="block text-sm font-medium text-slate-700">Sale price ({{ $currentTenant->currencySymbol() }})</label>
         <input name="sale_price" type="number" step="0.01" min="0" value="{{ old('sale_price', $product->sale_price ?? '0.00') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
     </div>
     <div>

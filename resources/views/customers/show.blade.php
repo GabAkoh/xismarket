@@ -2,7 +2,7 @@
 @section('title', $customer->name)
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header :title="$customer->name" subtitle="Customer profile, wallet &amp; loyalty">
     <a href="{{ route('customers.statement', $customer) }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Statement</a>

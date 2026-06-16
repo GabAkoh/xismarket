@@ -2,7 +2,7 @@
 @section('title', 'Loyalty program')
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header title="Loyalty program" subtitle="Reward customers with points they can redeem for store discounts." />
 

@@ -2,7 +2,7 @@
 @section('title', 'New Order')
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <div x-data="orderBuilder()" class="flex flex-col" style="min-height: calc(100vh - 9rem);">
     <x-page-header title="New Order">

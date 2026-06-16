@@ -13,7 +13,7 @@
     $cartCount = app(\App\Services\Storefront\CartService::class)->count();
     $navCategories = \App\Models\Inventory\Category::orderBy('name')->take(6)->get(['id', 'name']);
     $promo = (bool) $store->setting('storefront.promo_enabled', true)
-        ? $store->setting('storefront.promo', 'Free delivery on orders over '.$store->currency.' 150 · Shop the latest arrivals today')
+        ? $store->setting('storefront.promo', 'Free delivery on orders over '.$store->currencySymbol().' 150 · Shop the latest arrivals today')
         : null;
 @endphp
 <body class="h-full flex flex-col text-slate-800">

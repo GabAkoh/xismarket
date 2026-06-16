@@ -20,7 +20,7 @@
         <label class="block text-sm font-medium text-slate-700">Message</label>
         <input name="promo" maxlength="255"
                value="{{ old('promo', $store->setting('storefront.promo')) }}"
-               placeholder="Free delivery on orders over {{ $store->currency }} 150 · Shop the latest arrivals today"
+               placeholder="Free delivery on orders over {{ $store->currencySymbol() }} 150 · Shop the latest arrivals today"
                class="mt-1 w-full rounded-md border border-slate-300 p-2">
     </x-card>
 

@@ -20,7 +20,7 @@
                     <td class="text-slate-500">{{ $order->supplier?->name ?? '—' }}</td>
                     <td class="text-slate-500">{{ $order->warehouse?->name ?? '—' }}</td>
                     <td class="text-right text-slate-500">{{ $order->items_count }}</td>
-                    <td class="text-right text-slate-700">{{ $currentTenant->currency }} {{ number_format((float) $order->total, 2) }}</td>
+                    <td class="text-right text-slate-700">{{ $currentTenant->currencySymbol() }} {{ number_format((float) $order->total, 2) }}</td>
                     <td>
                         @if ($order->isReceived())
                             <span class="text-xs text-green-600">● Received</span>

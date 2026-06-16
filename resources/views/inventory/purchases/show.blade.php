@@ -36,15 +36,15 @@
                 <tr>
                     <td class="py-3 text-slate-700">{{ $item->product?->name ?? '—' }}</td>
                     <td class="text-right text-slate-700">{{ rtrim(rtrim(number_format((float) $item->quantity, 3), '0'), '.') }}</td>
-                    <td class="text-right text-slate-500">{{ $currentTenant->currency }} {{ number_format((float) $item->unit_cost, 2) }}</td>
-                    <td class="text-right text-slate-700">{{ $currentTenant->currency }} {{ number_format((float) $item->line_total, 2) }}</td>
+                    <td class="text-right text-slate-500">{{ $currentTenant->currencySymbol() }} {{ number_format((float) $item->unit_cost, 2) }}</td>
+                    <td class="text-right text-slate-700">{{ $currentTenant->currencySymbol() }} {{ number_format((float) $item->line_total, 2) }}</td>
                 </tr>
             @endforeach
         </tbody>
         <tfoot>
             <tr class="border-t font-semibold">
                 <td class="py-3" colspan="3">Total</td>
-                <td class="text-right text-slate-800">{{ $currentTenant->currency }} {{ number_format((float) $purchase->total, 2) }}</td>
+                <td class="text-right text-slate-800">{{ $currentTenant->currencySymbol() }} {{ number_format((float) $purchase->total, 2) }}</td>
             </tr>
         </tfoot>
     </table>

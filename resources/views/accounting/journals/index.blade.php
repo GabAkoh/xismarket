@@ -19,7 +19,7 @@
                     <td class="py-3 text-slate-600">{{ $entry->entry_date->format('Y-m-d') }}</td>
                     <td class="text-slate-500">{{ $entry->reference ?? '—' }}</td>
                     <td class="font-medium text-slate-700">{{ $entry->memo ?: '—' }}</td>
-                    <td class="text-right tabular-nums text-slate-700">{{ $currentTenant->currency }} {{ number_format($entry->total_debit ?? 0, 2) }}</td>
+                    <td class="text-right tabular-nums text-slate-700">{{ $currentTenant->currencySymbol() }} {{ number_format($entry->total_debit ?? 0, 2) }}</td>
                     <td class="text-right">
                         <a href="{{ route('journals.show', $entry) }}" class="text-indigo-600 hover:underline">View</a>
                     </td>

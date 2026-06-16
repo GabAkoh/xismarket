@@ -30,7 +30,7 @@
                 @endforelse
                 <tr class="font-semibold text-slate-800 border-t">
                     <td class="py-2">Total assets</td>
-                    <td class="text-right tabular-nums">{{ $currentTenant->currency }} {{ number_format($totalAssets, 2) }}</td>
+                    <td class="text-right tabular-nums">{{ $currentTenant->currencySymbol() }} {{ number_format($totalAssets, 2) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -50,7 +50,7 @@
                     @endforelse
                     <tr class="font-semibold text-slate-800 border-t">
                         <td class="py-2">Total liabilities</td>
-                        <td class="text-right tabular-nums">{{ $currentTenant->currency }} {{ number_format($totalLiabilities, 2) }}</td>
+                        <td class="text-right tabular-nums">{{ $currentTenant->currencySymbol() }} {{ number_format($totalLiabilities, 2) }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -71,7 +71,7 @@
                     </tr>
                     <tr class="font-semibold text-slate-800 border-t">
                         <td class="py-2">Total equity</td>
-                        <td class="text-right tabular-nums">{{ $currentTenant->currency }} {{ number_format($totalEquity, 2) }}</td>
+                        <td class="text-right tabular-nums">{{ $currentTenant->currencySymbol() }} {{ number_format($totalEquity, 2) }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -82,7 +82,7 @@
 <x-card class="mt-4">
     <div class="flex items-center justify-between text-sm">
         <span class="text-slate-500">Liabilities + Equity</span>
-        <span class="tabular-nums font-semibold text-slate-800">{{ $currentTenant->currency }} {{ number_format($totalLiabilities + $totalEquity, 2) }}</span>
+        <span class="tabular-nums font-semibold text-slate-800">{{ $currentTenant->currencySymbol() }} {{ number_format($totalLiabilities + $totalEquity, 2) }}</span>
     </div>
     @php $balanced = round($totalAssets, 2) === round($totalLiabilities + $totalEquity, 2); @endphp
     <p class="mt-2 text-xs {{ $balanced ? 'text-green-600' : 'text-red-600' }}">

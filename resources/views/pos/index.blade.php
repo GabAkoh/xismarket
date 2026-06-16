@@ -2,7 +2,7 @@
 @section('title', 'Register')
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <div x-data="posRegister()" x-init="init()" class="flex flex-col" style="height: calc(100vh - 7rem);">
 

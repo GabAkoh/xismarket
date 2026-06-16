@@ -2,7 +2,7 @@
 @section('title', 'Receipt '.$sale->number)
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header title="Receipt {{ $sale->number }}">
     <button onclick="window.print()" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Print</button>

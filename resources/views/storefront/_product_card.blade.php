@@ -1,4 +1,4 @@
-@php $symbol = $store->currency ?? ''; @endphp
+@php $symbol = $store->currencySymbol() ?? ''; @endphp
 <div class="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition">
     <a href="{{ route('shop.product', ['product' => $product->id]) }}" class="block">
         <div class="aspect-square bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-4xl text-slate-300">

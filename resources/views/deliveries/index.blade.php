@@ -3,7 +3,7 @@
 
 @section('content')
 @php
-    $symbol = $currentTenant->currency ?? '';
+    $symbol = $currentTenant->currencySymbol() ?? '';
     $badges = [
         'pending' => 'bg-slate-100 text-slate-600', 'assigned' => 'bg-blue-100 text-blue-700',
         'out_for_delivery' => 'bg-amber-100 text-amber-700', 'delivered' => 'bg-green-100 text-green-700',

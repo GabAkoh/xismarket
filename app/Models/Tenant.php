@@ -32,4 +32,20 @@ class Tenant extends Model
     {
         return data_get($this->settings, $key, $default);
     }
+
+    /** Display symbol for the tenant's currency, falling back to the ISO code. */
+    public function currencySymbol(): string
+    {
+        return match ($this->currency) {
+            'NGN' => 'N',
+            'USD' => '$',
+            'EUR' => '€',
+            'GBP' => '£',
+            'GHS' => '₵',
+            'ZAR' => 'R',
+            'INR' => '₹',
+            'JPY' => '¥',
+            default => (string) ($this->currency ?? ''),
+        };
+    }
 }

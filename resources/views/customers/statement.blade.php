@@ -2,7 +2,7 @@
 @section('title', 'Statement · '.$customer->name)
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header title="Customer Statement">
     <button onclick="window.print()" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Print</button>

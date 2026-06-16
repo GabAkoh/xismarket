@@ -2,7 +2,7 @@
 @section('title', 'Customers')
 
 @section('content')
-@php $symbol = $currentTenant->currency ?? ''; @endphp
+@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 <x-page-header title="Customers">
     @if (Route::has('loyalty.settings'))
         <a href="{{ route('loyalty.settings') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Loyalty program</a>

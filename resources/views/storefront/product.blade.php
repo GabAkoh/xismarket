@@ -2,7 +2,7 @@
 @section('title', $product->name)
 
 @section('content')
-@php $symbol = $store->currency ?? ''; @endphp
+@php $symbol = $store->currencySymbol() ?? ''; @endphp
 
 <a href="{{ route('shop.home') }}" class="text-sm text-indigo-600 hover:underline">← Back to shop</a>
 
