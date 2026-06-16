@@ -17,7 +17,7 @@ class DemoSeeder extends Seeder
 
         if (! $tenant) {
             $result = app(TenantProvisioner::class)->provision(
-                tenantData: ['name' => 'NimiKiddies', 'currency' => 'USD'],
+                tenantData: ['name' => 'NimiKiddies', 'currency' => 'NGN'],
                 ownerData: [
                     'name' => 'Demo Owner',
                     'email' => 'owner@demo.test',
