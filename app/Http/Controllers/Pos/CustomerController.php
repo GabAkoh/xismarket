@@ -175,6 +175,26 @@ class CustomerController extends Controller
         return back()->with('status', 'Wallet topped up by '.number_format((float) $data['amount'], 2).'.');
     }
 
+    /** Pay store credit back out (cash/card/other) — debits the wallet. */
+    public function withdrawWallet(Request $request, Customer $customer, WalletService $wallet)
+    {
+        $this->authorizeTenant($customer);
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:1000000'],
+            'method' => ['required', 'string', 'in:cash,card,other'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        try {
+            $wallet->withdraw($customer, (float) $data['amount'], $data['method'], $data['reason'] ?? null);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('status', 'Withdrew '.number_format((float) $data['amount'], 2).' from the wallet.');
+    }
+
     /** Manually adjust a customer's loyalty points (add or remove). */
     public function adjustLoyalty(Request $request, Customer $customer, LoyaltyService $loyalty)
     {

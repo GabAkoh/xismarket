@@ -50,6 +50,7 @@ Route::middleware(['web', 'auth'])->group(function () {
 
         // Wallet (store credit) + loyalty points.
         Route::post('customers/{customer}/wallet', [CustomerController::class, 'topUpWallet'])->name('customers.wallet.topup');
+        Route::post('customers/{customer}/wallet/withdraw', [CustomerController::class, 'withdrawWallet'])->name('customers.wallet.withdraw');
         Route::post('customers/{customer}/loyalty', [CustomerController::class, 'adjustLoyalty'])->name('customers.loyalty.adjust');
 
         // Loyalty program settings (tenant-wide).

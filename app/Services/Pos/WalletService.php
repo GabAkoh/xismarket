@@ -94,6 +94,23 @@ class WalletService
         );
     }
 
+    /**
+     * Pay store credit back out (cash/card/other) — debits the wallet and posts
+     * the reversing journal: Dr 2200 Customer Deposits / Cr 1000 Cash. Throws if
+     * the balance is insufficient.
+     */
+    public function withdraw(Customer $customer, float $amount, string $method = 'cash', ?string $reason = null, ?int $userId = null): WalletTransaction
+    {
+        $amount = round($amount, 2);
+
+        return DB::transaction(function () use ($customer, $amount, $method, $reason, $userId) {
+            $txn = $this->debit($customer, $amount, $reason ?? 'Wallet withdrawal ('.$method.')', null, $userId);
+            $this->postWithdrawalJournal($amount, $reason);
+
+            return $txn;
+        });
+    }
+
     protected function record(Customer $customer, string $type, float $amount, float $balanceAfter, ?string $reason, ?Model $source, ?int $userId): WalletTransaction
     {
         return WalletTransaction::create([
@@ -125,6 +142,27 @@ class WalletService
             'lines' => [
                 ['account' => '1000', 'debit' => $amount, 'credit' => 0, 'memo' => 'Wallet top-up received'],
                 ['account' => self::LIABILITY_CODE, 'debit' => 0, 'credit' => $amount, 'memo' => 'Customer store credit'],
+            ],
+        ]);
+    }
+
+    /** Reverse a top-up: Dr 2200 Customer Deposits / Cr 1000 Cash (credit paid out). */
+    protected function postWithdrawalJournal(float $amount, ?string $reason): void
+    {
+        if (! class_exists(\App\Services\Accounting\PostingService::class)) {
+            return;
+        }
+
+        $this->ensureLiabilityAccount();
+
+        app(\App\Services\Accounting\PostingService::class)->post([
+            'date' => now(),
+            'memo' => $reason ?? 'Wallet withdrawal',
+            'reference' => null,
+            'source' => null,
+            'lines' => [
+                ['account' => self::LIABILITY_CODE, 'debit' => $amount, 'credit' => 0, 'memo' => 'Store credit withdrawn'],
+                ['account' => '1000', 'debit' => 0, 'credit' => $amount, 'memo' => 'Cash paid out'],
             ],
         ]);
     }

@@ -65,6 +65,31 @@
             </form>
         </x-card>
 
+        @if ((float) $customer->balance > 0)
+        <x-card title="Withdraw from wallet">
+            <form method="POST" action="{{ route('customers.wallet.withdraw', $customer) }}" class="space-y-3"
+                  onsubmit="return confirm('Pay this store credit back out and reduce the wallet balance?')">
+                @csrf
+                <div class="flex gap-2">
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Amount ({{ $symbol }})</label>
+                        <input type="number" name="amount" step="0.01" min="0.01" max="{{ number_format((float) $customer->balance, 2, '.', '') }}" required class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Paid out as</label>
+                        <select name="method" class="rounded-md border border-slate-300 p-2 text-sm">
+                            <option value="cash">Cash</option>
+                            <option value="card">Card</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <input type="text" name="reason" placeholder="Reason (optional)" class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                <button class="w-full rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Withdraw credit</button>
+            </form>
+        </x-card>
+        @endif
+
         <x-card title="Adjust loyalty points">
             <form method="POST" action="{{ route('customers.loyalty.adjust', $customer) }}" class="space-y-3">
                 @csrf
