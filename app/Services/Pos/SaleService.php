@@ -271,59 +271,125 @@ class SaleService
     }
 
     /**
-     * Refund a completed sale: reverse the stock movements (type 'return', +qty)
-     * and post a reversing journal entry, then mark the sale refunded.
+     * Refund an entire sale — convenience wrapper that returns every remaining
+     * (not-yet-returned) unit on the sale.
      */
     public function refund(Sale $sale): Sale
     {
-        $sale = DB::transaction(function () use ($sale) {
-            $sale->loadMissing('items', 'register');
-            $warehouse = $this->resolveWarehouse($sale->register);
+        $sale->loadMissing('items');
 
-            // Reverse stock for each line.
-            if (class_exists(\App\Services\Inventory\StockService::class)
-                && class_exists(\App\Models\Inventory\Product::class)) {
-                $stock = app(\App\Services\Inventory\StockService::class);
-                foreach ($sale->items as $item) {
-                    if (! $item->product_id) {
-                        continue;
-                    }
-                    $product = Product::find($item->product_id);
-                    if (! $product) {
-                        continue;
-                    }
-                    $stock->recordMovement(
-                        $product,
-                        $warehouse,
-                        'return',
-                        (float) $item->quantity,
-                        (float) $item->unit_cost,
-                        $sale,
-                        'Refund '.$sale->number,
-                    );
-                }
+        $quantities = [];
+        foreach ($sale->items as $item) {
+            $remaining = $item->returnableQuantity();
+            if ($remaining > 0) {
+                $quantities[$item->id] = $remaining;
+            }
+        }
+
+        return $this->processReturn($sale, $quantities);
+    }
+
+    /**
+     * Process a partial (line-level) or full return.
+     *
+     * For each returned line it restores stock (type 'return', +qty) and tallies
+     * the refund amounts apportioned to the returned quantity, then posts a single
+     * reversing journal entry. The sale becomes 'partially_refunded', or 'refunded'
+     * once every line is fully returned.
+     *
+     * Note: refund amounts are derived from each line's own economics (unit price,
+     * line discount, tax). Sale-level (cart) and loyalty discounts are not clawed
+     * back proportionally.
+     *
+     * @param  array<int|string, float>  $quantities  sale_item_id => quantity to return
+     */
+    public function processReturn(Sale $sale, array $quantities): Sale
+    {
+        $sale = DB::transaction(function () use ($sale, $quantities) {
+            $sale->loadMissing('items', 'register');
+
+            if ($sale->status === 'refunded') {
+                throw new \RuntimeException('This sale has already been fully returned.');
+            }
+            if ($sale->status === 'partially_paid') {
+                throw new \RuntimeException('Settle the outstanding balance before returning items.');
             }
 
-            // Reversing journal entry (mirror of the sale posting).
-            $cogsTotal = round((float) $sale->items->sum(
-                fn ($i) => round((float) $i->unit_cost * (float) $i->quantity, 2)
-            ), 2);
+            $warehouse = $this->resolveWarehouse($sale->register);
+            $stock = class_exists(\App\Services\Inventory\StockService::class)
+                ? app(\App\Services\Inventory\StockService::class)
+                : null;
 
-            $this->postRefundJournal(
-                $sale,
-                (float) $sale->netRevenue(),
-                (float) $sale->tax_total,
-                (float) $sale->total,
-                $cogsTotal,
-                now(),
-            );
+            $net = 0.0;
+            $tax = 0.0;
+            $cogs = 0.0;
+            $returnedAny = false;
 
-            $sale->update(['status' => 'refunded']);
+            foreach ($sale->items as $item) {
+                $qty = round((float) ($quantities[$item->id] ?? 0), 3);
+                if ($qty <= 0) {
+                    continue;
+                }
+
+                $returnable = $item->returnableQuantity();
+                if ($qty > $returnable + 0.0001) {
+                    throw new \RuntimeException(
+                        'Cannot return '.rtrim(rtrim(number_format($qty, 3), '0'), '.').' of '.$item->name.
+                        ' — only '.rtrim(rtrim(number_format($returnable, 3), '0'), '.').' returnable.'
+                    );
+                }
+
+                // Apportion the line's net/tax/cost to the returned quantity.
+                $lineQty = (float) $item->quantity;
+                $fraction = $lineQty > 0 ? $qty / $lineQty : 0.0;
+                $lineNet = round((float) $item->unit_price * $lineQty - (float) $item->discount, 2);
+                $rNet = round($lineNet * $fraction, 2);
+                $rTax = round($rNet * (float) $item->tax_rate, 2);
+
+                $net += $rNet;
+                $tax += $rTax;
+                $cogs += round((float) $item->unit_cost * $qty, 2);
+
+                if ($stock && $warehouse && $item->product_id) {
+                    $product = Product::find($item->product_id);
+                    if ($product) {
+                        $stock->recordMovement(
+                            $product, $warehouse, 'return', $qty,
+                            (float) $item->unit_cost, $sale, 'Return '.$sale->number,
+                        );
+                    }
+                }
+
+                $item->returned_quantity = round((float) $item->returned_quantity + $qty, 3);
+                $item->save();
+                $returnedAny = true;
+            }
+
+            if (! $returnedAny) {
+                throw new \RuntimeException('Enter a quantity to return for at least one item.');
+            }
+
+            $net = round($net, 2);
+            $tax = round($tax, 2);
+            $cogs = round($cogs, 2);
+            $total = round($net + $tax, 2);
+
+            // Unique-ish reference per return so multiple returns are distinguishable.
+            $seq = 1;
+            if (class_exists(\App\Models\Accounting\JournalEntry::class)) {
+                $seq = \App\Models\Accounting\JournalEntry::where('reference', 'like', $sale->number.'-R%')->count() + 1;
+            }
+
+            $this->postRefundJournal($sale, $net, $tax, $total, $cogs, now(), $sale->number.'-R'.$seq);
+
+            // Fully returned when no line has any returnable quantity left.
+            $fully = $sale->items->every(fn ($i) => $i->returnableQuantity() <= 0.0001);
+            $sale->update(['status' => $fully ? 'refunded' : 'partially_refunded']);
 
             return $sale;
         });
 
-        // Refunding removes the sale from the ranking — invalidate the cache.
+        // Returns change realised sales — invalidate the bestsellers cache.
         app(\App\Services\Storefront\BestsellerService::class)->forget($this->tenancy->id());
 
         return $sale;
@@ -543,8 +609,8 @@ class SaleService
         ]);
     }
 
-    /** Post the reversing journal for a refund (mirror image of the sale entry). */
-    protected function postRefundJournal(Sale $sale, float $net, float $tax, float $total, float $cogs, Carbon $date): void
+    /** Post the reversing journal for a refund/return (mirror of the sale entry). */
+    protected function postRefundJournal(Sale $sale, float $net, float $tax, float $total, float $cogs, Carbon $date, ?string $reference = null): void
     {
         if (! class_exists(\App\Services\Accounting\PostingService::class)) {
             return;
@@ -566,8 +632,8 @@ class SaleService
 
         app(\App\Services\Accounting\PostingService::class)->post([
             'date' => $date,
-            'memo' => 'POS refund '.$sale->number,
-            'reference' => $sale->number.'-R',
+            'memo' => 'POS return '.$sale->number,
+            'reference' => $reference ?? $sale->number.'-R',
             'source' => $sale,
             'lines' => $lines,
         ]);

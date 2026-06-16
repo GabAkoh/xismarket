@@ -72,7 +72,7 @@ class BestsellerService
             ->whereNotIn('sales.status', ['void', 'refunded'])
             ->whereNotNull('sale_items.product_id')
             ->groupBy('sale_items.product_id')
-            ->selectRaw('sale_items.product_id as pid, SUM(sale_items.quantity) as qty')
+            ->selectRaw('sale_items.product_id as pid, SUM(sale_items.quantity - sale_items.returned_quantity) as qty')
             ->pluck('qty', 'pid'));
 
         // Fulfilled online orders (revenue is recognised at fulfilment == completed).

@@ -62,23 +62,26 @@ class SalesController extends Controller
         return redirect()->route('sales.show', $sale)->with('status', $msg);
     }
 
-    public function refund(Sale $sale, SaleService $sales)
+    public function refund(Request $request, Sale $sale, SaleService $sales)
     {
         $this->authorizeTenant($sale);
 
-        if ($sale->status === 'refunded') {
-            return back()->with('error', 'This sale has already been refunded.');
+        $data = $request->validate([
+            'returns' => ['required', 'array'],
+            'returns.*' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        try {
+            $sale = $sales->processReturn($sale, $data['returns']);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
         }
 
-        if ($sale->status === 'partially_paid') {
-            return back()->with('error', 'Settle the outstanding balance before refunding this sale.');
-        }
+        $msg = $sale->status === 'refunded'
+            ? 'Sale '.$sale->number.' fully returned.'
+            : 'Return processed for sale '.$sale->number.'.';
 
-        $sales->refund($sale);
-
-        return redirect()
-            ->route('sales.show', $sale)
-            ->with('status', 'Sale '.$sale->number.' refunded.');
+        return redirect()->route('sales.show', $sale)->with('status', $msg);
     }
 
     protected function authorizeTenant(Sale $sale): void
