@@ -175,7 +175,7 @@
                     <div class="space-y-2">
                         <template x-for="(t, i) in tenders" :key="i">
                             <div class="flex items-center gap-2">
-                                <select x-model="t.method" class="rounded-md border border-slate-300 p-2 text-sm">
+                                <select x-model="t.method" @change="enforceUniqueMethod(t)" class="rounded-md border border-slate-300 p-2 text-sm">
                                     <template x-for="m in payMethods" :key="m">
                                         <option :value="m" :disabled="methodTaken(t, m)" x-text="methodLabel(m)"></option>
                                     </template>
@@ -328,6 +328,15 @@ function posRegister() {
         // True when method `m` is already used by a DIFFERENT line than `t`.
         methodTaken(t, m) {
             return m !== t.method && this.tenders.some(x => x !== t && x.method === m);
+        },
+        // Reject a duplicate selection: if this line's method collides with
+        // another line, snap it to the first method not used elsewhere.
+        enforceUniqueMethod(t) {
+            const usedByOthers = this.tenders.filter(x => x !== t).map(x => x.method);
+            if (usedByOthers.includes(t.method)) {
+                const free = this.payMethods.find(m => !usedByOthers.includes(m));
+                if (free) t.method = free;
+            }
         },
         get canAddTender() {
             return this.tenders.length < this.payMethods.length;
