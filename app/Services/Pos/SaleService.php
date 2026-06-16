@@ -306,7 +306,7 @@ class SaleService
     public function processReturn(Sale $sale, array $quantities): Sale
     {
         $sale = DB::transaction(function () use ($sale, $quantities) {
-            $sale->loadMissing('items', 'register');
+            $sale->loadMissing('items', 'register', 'customer');
 
             if ($sale->status === 'refunded') {
                 throw new \RuntimeException('This sale has already been fully returned.');
@@ -374,17 +374,88 @@ class SaleService
             $cogs = round($cogs, 2);
             $total = round($net + $tax, 2);
 
+            // Fully returned when no line has any returnable quantity left.
+            $fully = $sale->items->every(fn ($i) => $i->returnableQuantity() <= 0.0001);
+
+            // Cumulative fraction of the sale returned, on a per-line-total basis,
+            // used to apportion sale-level wallet/loyalty figures exactly (and in
+            // full once the whole sale is returned).
+            $basis = round((float) $sale->items->sum(fn ($i) => (float) $i->line_total), 2);
+            $returnedBasis = round((float) $sale->items->sum(
+                fn ($i) => (float) $i->quantity > 0
+                    ? round((float) $i->line_total * ((float) $i->returned_quantity / (float) $i->quantity), 2)
+                    : 0
+            ), 2);
+            $frac = $fully ? 1.0 : ($basis > 0 ? min(1.0, $returnedBasis / $basis) : 0.0);
+
+            $customer = $sale->customer;
+
+            // --- Reverse store credit (wallet) for the returned portion ---
+            $walletInc = 0.0;
+            if ($customer && (float) $sale->wallet_used > 0) {
+                $target = round((float) $sale->wallet_used * $frac, 2);
+                $walletInc = max(0, round($target - (float) $sale->wallet_refunded, 2));
+                if ($walletInc > 0) {
+                    app(WalletService::class)->credit($customer, $walletInc, 'Return '.$sale->number, $sale, null, false);
+                }
+            }
+
+            // --- Reverse loyalty: claw back earned points, return redeemed points ---
+            $earnedInc = 0;
+            $redeemInc = 0;
+            if ($customer) {
+                $loyalty = app(LoyaltyService::class);
+                if ((int) $sale->points_earned > 0) {
+                    $target = (int) round((int) $sale->points_earned * $frac);
+                    $earnedInc = max(0, $target - (int) $sale->points_earned_reversed);
+                    // Never claw back more points than the customer currently holds.
+                    $earnedInc = min($earnedInc, (int) Customer::whereKey($customer->id)->value('loyalty_points'));
+                    if ($earnedInc > 0) {
+                        $loyalty->adjust($customer, -$earnedInc, 'Reversed points earned — return '.$sale->number);
+                    }
+                }
+                if ((int) $sale->points_redeemed > 0) {
+                    $target = (int) round((int) $sale->points_redeemed * $frac);
+                    $redeemInc = max(0, $target - (int) $sale->points_redeemed_refunded);
+                    if ($redeemInc > 0) {
+                        $loyalty->adjust($customer, $redeemInc, 'Returned redeemed points — return '.$sale->number);
+                    }
+                }
+            }
+
             // Unique-ish reference per return so multiple returns are distinguishable.
             $seq = 1;
             if (class_exists(\App\Models\Accounting\JournalEntry::class)) {
                 $seq = \App\Models\Accounting\JournalEntry::where('reference', 'like', $sale->number.'-R%')->count() + 1;
             }
+            $ref = $sale->number.'-R'.$seq;
 
-            $this->postRefundJournal($sale, $net, $tax, $total, $cogs, now(), $sale->number.'-R'.$seq);
+            // Reversing journal — wallet portion restores store-credit liability,
+            // the remainder is refunded as cash.
+            $this->postRefundJournal($sale, $net, $tax, $total, $cogs, now(), $ref, $walletInc);
 
-            // Fully returned when no line has any returnable quantity left.
-            $fully = $sale->items->every(fn ($i) => $i->returnableQuantity() <= 0.0001);
-            $sale->update(['status' => $fully ? 'refunded' : 'partially_refunded']);
+            // --- Record the refund as negative payment(s) for drawer/ledger ---
+            $cashRefund = max(0, round($total - $walletInc, 2));
+            if ($walletInc > 0) {
+                Payment::create([
+                    'tenant_id' => $this->tenancy->id(), 'sale_id' => $sale->id,
+                    'method' => 'wallet', 'amount' => -$walletInc, 'reference' => $ref, 'paid_at' => now(),
+                ]);
+            }
+            if ($cashRefund > 0) {
+                Payment::create([
+                    'tenant_id' => $this->tenancy->id(), 'sale_id' => $sale->id,
+                    'method' => 'cash', 'amount' => -$cashRefund, 'reference' => $ref, 'paid_at' => now(),
+                ]);
+            }
+
+            $sale->update([
+                'status' => $fully ? 'refunded' : 'partially_refunded',
+                'refunded_total' => round((float) $sale->refunded_total + $total, 2),
+                'wallet_refunded' => round((float) $sale->wallet_refunded + $walletInc, 2),
+                'points_earned_reversed' => (int) $sale->points_earned_reversed + $earnedInc,
+                'points_redeemed_refunded' => (int) $sale->points_redeemed_refunded + $redeemInc,
+            ]);
 
             return $sale;
         });
@@ -610,16 +681,28 @@ class SaleService
     }
 
     /** Post the reversing journal for a refund/return (mirror of the sale entry). */
-    protected function postRefundJournal(Sale $sale, float $net, float $tax, float $total, float $cogs, Carbon $date, ?string $reference = null): void
+    protected function postRefundJournal(Sale $sale, float $net, float $tax, float $total, float $cogs, Carbon $date, ?string $reference = null, float $walletPortion = 0): void
     {
         if (! class_exists(\App\Services\Accounting\PostingService::class)) {
             return;
         }
 
+        // Split the refund: store-credit restores the liability, the rest is cash.
+        $walletPortion = round(min(max($walletPortion, 0), $total), 2);
+        $cashPortion = round($total - $walletPortion, 2);
+
         $lines = [
             ['account' => '4000', 'debit' => $net, 'credit' => 0, 'memo' => 'Reverse sales revenue'],
-            ['account' => '1000', 'debit' => 0, 'credit' => $total, 'memo' => 'Cash refunded'],
         ];
+
+        if ($cashPortion > 0) {
+            $lines[] = ['account' => '1000', 'debit' => 0, 'credit' => $cashPortion, 'memo' => 'Cash refunded'];
+        }
+
+        if ($walletPortion > 0) {
+            app(WalletService::class)->ensureLiabilityAccount();
+            $lines[] = ['account' => WalletService::LIABILITY_CODE, 'debit' => 0, 'credit' => $walletPortion, 'memo' => 'Store credit refunded'];
+        }
 
         if (round($tax, 2) > 0) {
             $lines[] = ['account' => '2100', 'debit' => round($tax, 2), 'credit' => 0, 'memo' => 'Reverse tax payable'];

@@ -17,6 +17,7 @@ class Sale extends Model
         'number', 'status', 'subtotal', 'discount_total', 'tax_total',
         'total', 'paid_total', 'change_due', 'balance_due', 'note', 'completed_at',
         'wallet_used', 'loyalty_discount', 'points_earned', 'points_redeemed',
+        'refunded_total', 'wallet_refunded', 'points_earned_reversed', 'points_redeemed_refunded',
     ];
 
     protected function casts(): array
@@ -33,6 +34,10 @@ class Sale extends Model
             'loyalty_discount' => 'decimal:2',
             'points_earned' => 'integer',
             'points_redeemed' => 'integer',
+            'refunded_total' => 'decimal:2',
+            'wallet_refunded' => 'decimal:2',
+            'points_earned_reversed' => 'integer',
+            'points_redeemed_refunded' => 'integer',
             'completed_at' => 'datetime',
         ];
     }

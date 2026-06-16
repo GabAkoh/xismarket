@@ -47,6 +47,9 @@
                 <div class="flex justify-between"><dt class="text-slate-500">Tax</dt><dd>{{ $symbol }}{{ number_format($sale->tax_total, 2) }}</dd></div>
                 <div class="flex justify-between font-bold text-slate-800 pt-1 border-t"><dt>Total</dt><dd>{{ $symbol }}{{ number_format($sale->total, 2) }}</dd></div>
                 <div class="flex justify-between"><dt class="text-slate-500">Paid</dt><dd>{{ $symbol }}{{ number_format($sale->paid_total, 2) }}</dd></div>
+                @if ((float) $sale->refunded_total > 0)
+                    <div class="flex justify-between text-red-600"><dt>Refunded</dt><dd>−{{ $symbol }}{{ number_format($sale->refunded_total, 2) }}</dd></div>
+                @endif
                 @if ($sale->balance_due > 0)
                     <div class="flex justify-between font-semibold text-red-600"><dt>Balance due</dt><dd>{{ $symbol }}{{ number_format($sale->balance_due, 2) }}</dd></div>
                 @else
@@ -148,9 +151,10 @@
         <x-card title="Payments">
             <ul class="text-sm space-y-1.5">
                 @forelse ($sale->payments as $payment)
-                    <li class="flex justify-between">
-                        <span class="text-slate-500 capitalize">{{ $payment->method }} @if($payment->reference)<span class="text-xs text-slate-400">({{ $payment->reference }})</span>@endif</span>
-                        <span>{{ $symbol }}{{ number_format($payment->amount, 2) }}</span>
+                    @php $isRefund = (float) $payment->amount < 0; @endphp
+                    <li class="flex justify-between {{ $isRefund ? 'text-red-600' : '' }}">
+                        <span class="capitalize {{ $isRefund ? '' : 'text-slate-500' }}">{{ $payment->method }}{{ $isRefund ? ' refund' : '' }} @if($payment->reference)<span class="text-xs text-slate-400">({{ $payment->reference }})</span>@endif</span>
+                        <span>{{ $isRefund ? '−' : '' }}{{ $symbol }}{{ number_format(abs((float) $payment->amount), 2) }}</span>
                     </li>
                 @empty
                     <li class="text-slate-400">No payments recorded.</li>
