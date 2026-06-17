@@ -4,7 +4,11 @@
 @section('content')
 @php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
-<x-page-header title="Wallets" subtitle="Customer store credit across the business" />
+<x-page-header title="Wallets" subtitle="Customer store credit across the business">
+    @permission('customers.manage')
+        <a href="{{ route('wallets.bulk') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Bulk top-up</a>
+    @endpermission
+</x-page-header>
 
 {{-- Summary --}}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

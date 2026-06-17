@@ -51,6 +51,8 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
 
         // Wallet (store credit) + loyalty points.
+        Route::get('wallets/bulk', [WalletController::class, 'bulkForm'])->name('wallets.bulk');
+        Route::post('wallets/bulk', [WalletController::class, 'bulkStore'])->name('wallets.bulk.store');
         Route::post('customers/{customer}/wallet', [CustomerController::class, 'topUpWallet'])->name('customers.wallet.topup');
         Route::post('customers/{customer}/wallet/withdraw', [CustomerController::class, 'withdrawWallet'])->name('customers.wallet.withdraw');
         Route::post('customers/{customer}/loyalty', [CustomerController::class, 'adjustLoyalty'])->name('customers.loyalty.adjust');
