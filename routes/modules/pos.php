@@ -22,6 +22,7 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('sales', [SalesController::class, 'index'])->name('sales.index');
         // Before sales/{sale} so the literal segment isn't treated as a sale id.
         Route::get('sales/returns', [SalesController::class, 'returns'])->name('sales.returns');
+        Route::get('sales/returns/export', [SalesController::class, 'returnsExport'])->name('sales.returns.export');
         Route::get('sales/{sale}', [SalesController::class, 'show'])->name('sales.show');
     });
 

@@ -39,6 +39,43 @@ class SalesController extends Controller
      */
     public function returns(Request $request)
     {
+        return view('sales.returns', $this->returnsData($request));
+    }
+
+    /** Download the returns report (current filter) as CSV. */
+    public function returnsExport(Request $request)
+    {
+        ['rows' => $rows, 'from' => $from, 'to' => $to] = $this->returnsData($request);
+
+        $filename = 'returns-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            // Explicit args (incl. $escape) — PHP 8.4 deprecates omitting them,
+            // and the warning would otherwise corrupt the streamed CSV.
+            fputcsv($out, ['Date', 'Sale', 'Reference', 'Customer', 'Cash', 'Store credit', 'Total'], ',', '"', '');
+            foreach ($rows as $r) {
+                fputcsv($out, [
+                    optional($r->date)->format('Y-m-d H:i'),
+                    $r->sale?->number ?? '',
+                    $r->reference,
+                    $r->sale?->customer?->name ?? 'Walk-in',
+                    number_format($r->cash, 2, '.', ''),
+                    number_format($r->wallet, 2, '.', ''),
+                    number_format($r->total, 2, '.', ''),
+                ], ',', '"', '');
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Build the returns report data for the request's date range.
+     *
+     * @return array{rows: \Illuminate\Support\Collection, summary: array, from: Carbon, to: Carbon}
+     */
+    protected function returnsData(Request $request): array
+    {
         $from = $request->filled('from')
             ? Carbon::parse($request->input('from'))->startOfDay()
             : now()->startOfMonth();
@@ -77,7 +114,7 @@ class SalesController extends Controller
             'wallet' => round((float) $rows->sum('wallet'), 2),
         ];
 
-        return view('sales.returns', compact('rows', 'summary', 'from', 'to'));
+        return compact('rows', 'summary', 'from', 'to');
     }
 
     public function show(Sale $sale)

@@ -5,6 +5,8 @@
 @php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header title="Returns &amp; refunds" subtitle="Refunds processed across sales">
+    <a href="{{ route('sales.returns.export', ['from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
+       class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Export CSV</a>
     <a href="{{ route('sales.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to sales</a>
 </x-page-header>
 
