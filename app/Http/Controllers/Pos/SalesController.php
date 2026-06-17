@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
+use App\Models\Pos\Payment;
 use App\Models\Pos\Sale;
 use App\Services\Pos\SaleService;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class SalesController extends Controller
 {
@@ -28,6 +30,54 @@ class SalesController extends Controller
         $statuses = ['completed', 'partially_paid', 'refunded', 'partially_refunded', 'void'];
 
         return view('sales.index', compact('sales', 'statuses'));
+    }
+
+    /**
+     * Returns & refunds report. Each return is recorded as negative payment
+     * rows sharing a reference ({number}-R{n}); grouping them gives one row per
+     * return event with its cash/store-credit split.
+     */
+    public function returns(Request $request)
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : now()->endOfDay();
+
+        $payments = Payment::query()
+            ->where('amount', '<', 0)
+            ->whereBetween('paid_at', [$from, $to])
+            ->with('sale.customer')
+            ->get();
+
+        $rows = $payments
+            ->groupBy('reference')
+            ->map(function ($group) {
+                $total = round(abs((float) $group->sum('amount')), 2);
+                $wallet = round(abs((float) $group->where('method', 'wallet')->sum('amount')), 2);
+
+                return (object) [
+                    'reference' => $group->first()->reference,
+                    'date' => $group->max('paid_at'),
+                    'sale' => $group->first()->sale,
+                    'total' => $total,
+                    'wallet' => $wallet,
+                    'cash' => round($total - $wallet, 2),
+                ];
+            })
+            ->sortByDesc('date')
+            ->values();
+
+        $summary = [
+            'count' => $rows->count(),
+            'total' => round((float) $rows->sum('total'), 2),
+            'cash' => round((float) $rows->sum('cash'), 2),
+            'wallet' => round((float) $rows->sum('wallet'), 2),
+        ];
+
+        return view('sales.returns', compact('rows', 'summary', 'from', 'to'));
     }
 
     public function show(Sale $sale)

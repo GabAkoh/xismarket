@@ -4,7 +4,9 @@
 @section('content')
 @php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
-<x-page-header title="Sales" />
+<x-page-header title="Sales">
+    <a href="{{ route('sales.returns') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Returns &amp; refunds</a>
+</x-page-header>
 
 <x-card class="mb-4">
     <form method="GET" action="{{ route('sales.index') }}" class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
