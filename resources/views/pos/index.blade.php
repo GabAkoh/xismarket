@@ -74,8 +74,12 @@
                 <button type="button" @click="clearCart()" x-show="cart.length" class="text-xs text-red-500 hover:underline">Clear</button>
             </div>
 
+            {{-- Scrollable cart body: lines + checkout scroll together so the whole
+                 cart (including the Complete button) is always reachable. --}}
+            <div class="flex-1 overflow-y-auto min-h-0">
+
             {{-- Cart lines --}}
-            <div class="flex-1 overflow-y-auto p-4 space-y-2">
+            <div class="p-4 space-y-2">
                 <p x-show="cart.length === 0" class="text-sm text-slate-400 text-center py-8">Scan or click a product to add it.</p>
                 <template x-for="(line, i) in cart" :key="line.id">
                     <div class="rounded-md border border-slate-100 p-2">
@@ -216,6 +220,7 @@
                     <span x-show="submitting">Processing…</span>
                 </button>
             </div>
+            </div>{{-- /scrollable cart body --}}
         </div>
     </div>
 
