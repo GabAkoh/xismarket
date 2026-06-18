@@ -10,6 +10,25 @@
 <form method="POST" action="{{ route('storefront.settings.update') }}" enctype="multipart/form-data" class="max-w-3xl space-y-6">
     @csrf @method('PUT')
 
+    {{-- Branding --}}
+    <x-card>
+        <h2 class="text-sm font-semibold text-slate-700 mb-3">Logo</h2>
+        @php $logo = $store->setting('storefront.logo'); @endphp
+        @if ($logo)
+            <div class="mb-2 flex items-center gap-3">
+                <img src="{{ asset('storage/'.$logo) }}" alt="Logo" class="h-10 rounded border border-slate-200 bg-slate-50 object-contain px-2">
+                <label class="flex items-center gap-2 text-sm text-slate-600">
+                    <input type="checkbox" name="remove_logo" value="1">
+                    Remove logo
+                </label>
+            </div>
+        @endif
+        <input type="file" name="logo" accept="image/*"
+               class="w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+        <p class="mt-1 text-xs text-slate-400">Shown in the shop header in place of the store name. JPG, PNG, WEBP or GIF up to 2&nbsp;MB.</p>
+        @error('logo')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+    </x-card>
+
     {{-- Promo bar --}}
     <x-card>
         <h2 class="text-sm font-semibold text-slate-700 mb-3">Promotion bar</h2>

@@ -32,6 +32,7 @@ class StorefrontSettingsController extends Controller
             'story_title' => ['nullable', 'string', 'max:150'],
             'story_body' => ['nullable', 'string', 'max:2000'],
             'hero_image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:4096'],
+            'logo' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:2048'],
             'testimonials' => ['nullable', 'array', 'max:12'],
             'testimonials.*.name' => ['nullable', 'string', 'max:100'],
             'testimonials.*.text' => ['nullable', 'string', 'max:500'],
@@ -65,6 +66,21 @@ class StorefrontSettingsController extends Controller
         }
         if ($heroImage) {
             $storefront['hero_image'] = $heroImage;
+        }
+
+        // Logo — same replace/remove handling as the hero image.
+        $logo = $existing['logo'] ?? null;
+        if ($request->hasFile('logo')) {
+            $logo = $request->file('logo')->store('storefront', 'public');
+            if (! empty($existing['logo'])) {
+                Storage::disk('public')->delete($existing['logo']);
+            }
+        } elseif ($request->boolean('remove_logo') && ! empty($existing['logo'])) {
+            Storage::disk('public')->delete($existing['logo']);
+            $logo = null;
+        }
+        if ($logo) {
+            $storefront['logo'] = $logo;
         }
 
         // Testimonials — keep only rows that have both a name and a quote.

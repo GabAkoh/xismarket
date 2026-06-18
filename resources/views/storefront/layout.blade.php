@@ -24,7 +24,14 @@
 
     <header class="bg-white border-b border-slate-200 sticky top-0 z-20">
         <div class="max-w-6xl mx-auto px-4 h-16 flex items-center gap-4">
-            <a href="{{ route('shop.home') }}" class="text-xl font-extrabold text-indigo-600 shrink-0">{{ $store->name }}</a>
+            @php $storeLogo = $store->setting('storefront.logo'); @endphp
+            <a href="{{ route('shop.home') }}" class="shrink-0">
+                @if ($storeLogo)
+                    <img src="{{ asset('storage/'.$storeLogo) }}" alt="{{ $store->name }}" class="h-10 w-auto object-contain">
+                @else
+                    <span class="text-xl font-extrabold text-indigo-600">{{ $store->name }}</span>
+                @endif
+            </a>
             <form method="GET" action="{{ route('shop.home') }}" class="flex-1 max-w-md hidden sm:block">
                 <input name="q" value="{{ request('q') }}" placeholder="Search products…"
                        class="w-full rounded-full border border-slate-300 px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
