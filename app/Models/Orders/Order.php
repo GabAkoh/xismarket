@@ -22,7 +22,7 @@ class Order extends Model
         'status', 'payment_status', 'payment_method', 'payment_reference', 'paid_at',
         'subtotal', 'discount_total', 'tax_total',
         'delivery_fee', 'total', 'paid_total', 'contact_name', 'contact_phone',
-        'address', 'city', 'notes', 'user_id', 'placed_at', 'completed_at',
+        'address', 'city', 'notes', 'user_id', 'placed_at', 'completed_at', 'refunded_at',
     ];
 
     protected function casts(): array
@@ -37,6 +37,7 @@ class Order extends Model
             'placed_at' => 'datetime',
             'completed_at' => 'datetime',
             'paid_at' => 'datetime',
+            'refunded_at' => 'datetime',
         ];
     }
 

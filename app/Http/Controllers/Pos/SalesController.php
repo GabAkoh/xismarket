@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
+use App\Models\Orders\Order;
 use App\Models\Pos\Payment;
 use App\Models\Pos\Sale;
 use App\Services\Pos\SaleService;
@@ -53,13 +54,14 @@ class SalesController extends Controller
             $out = fopen('php://output', 'w');
             // Explicit args (incl. $escape) — PHP 8.4 deprecates omitting them,
             // and the warning would otherwise corrupt the streamed CSV.
-            fputcsv($out, ['Date', 'Sale', 'Reference', 'Customer', 'Cash', 'Store credit', 'Total'], ',', '"', '');
+            fputcsv($out, ['Date', 'Source', 'Number', 'Reference', 'Customer', 'Cash', 'Store credit', 'Total'], ',', '"', '');
             foreach ($rows as $r) {
                 fputcsv($out, [
                     optional($r->date)->format('Y-m-d H:i'),
-                    $r->sale?->number ?? '',
+                    $r->type,
+                    $r->number,
                     $r->reference,
-                    $r->sale?->customer?->name ?? 'Walk-in',
+                    $r->customer,
                     number_format($r->cash, 2, '.', ''),
                     number_format($r->wallet, 2, '.', ''),
                     number_format($r->total, 2, '.', ''),
@@ -83,29 +85,56 @@ class SalesController extends Controller
             ? Carbon::parse($request->input('to'))->endOfDay()
             : now()->endOfDay();
 
-        $payments = Payment::query()
+        // POS sale returns — negative payment rows grouped by return reference.
+        $posRows = Payment::query()
             ->where('amount', '<', 0)
             ->whereBetween('paid_at', [$from, $to])
             ->with('sale.customer')
-            ->get();
-
-        $rows = $payments
+            ->get()
             ->groupBy('reference')
             ->map(function ($group) {
                 $total = round(abs((float) $group->sum('amount')), 2);
                 $wallet = round(abs((float) $group->where('method', 'wallet')->sum('amount')), 2);
+                $sale = $group->first()->sale;
 
                 return (object) [
-                    'reference' => $group->first()->reference,
+                    'type' => 'POS',
                     'date' => $group->max('paid_at'),
-                    'sale' => $group->first()->sale,
-                    'total' => $total,
-                    'wallet' => $wallet,
+                    'number' => $sale?->number ?? '—',
+                    'reference' => $group->first()->reference,
+                    'customer' => $sale?->customer?->name ?? 'Walk-in',
+                    'url' => $sale ? route('sales.show', $sale) : null,
                     'cash' => round($total - $wallet, 2),
+                    'wallet' => $wallet,
+                    'total' => $total,
                 ];
             })
-            ->sortByDesc('date')
             ->values();
+
+        // Online-order refunds (full-order; no store-credit component).
+        $orderRows = Order::query()
+            ->where('payment_status', 'refunded')
+            ->whereNotNull('refunded_at')
+            ->whereBetween('refunded_at', [$from, $to])
+            ->with('customer')
+            ->get()
+            ->map(function ($order) {
+                $total = round((float) $order->total, 2);
+
+                return (object) [
+                    'type' => 'Online',
+                    'date' => $order->refunded_at,
+                    'number' => $order->number,
+                    'reference' => $order->number.'-R',
+                    'customer' => $order->customer?->name ?? 'Guest',
+                    'url' => route('orders.show', $order),
+                    'cash' => $total,
+                    'wallet' => 0.0,
+                    'total' => $total,
+                ];
+            });
+
+        $rows = $posRows->concat($orderRows)->sortByDesc('date')->values();
 
         $summary = [
             'count' => $rows->count(),

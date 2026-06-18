@@ -4,7 +4,7 @@
 @section('content')
 @php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
-<x-page-header title="Returns &amp; refunds" subtitle="Refunds processed across sales">
+<x-page-header title="Returns &amp; refunds" subtitle="Refunds across POS sales and online orders">
     <a href="{{ route('sales.returns.export', ['from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Export CSV</a>
     <a href="{{ route('sales.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to sales</a>
@@ -49,7 +49,7 @@
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
-                <th class="py-2">When</th><th>Sale</th><th>Customer</th>
+                <th class="py-2">When</th><th>Source</th><th>Reference</th><th>Customer</th>
                 <th class="text-right">Cash</th><th class="text-right">Store credit</th><th class="text-right">Total</th>
             </tr>
         </thead>
@@ -58,20 +58,23 @@
                 <tr>
                     <td class="py-3 text-slate-500">{{ optional($r->date)->format('d M Y H:i') }}</td>
                     <td>
-                        @if ($r->sale)
-                            <a href="{{ route('sales.show', $r->sale) }}" class="font-medium text-indigo-600 hover:underline">{{ $r->sale->number }}</a>
-                            <span class="text-xs text-slate-400">· {{ $r->reference }}</span>
-                        @else
-                            <span class="text-slate-500">{{ $r->reference ?: '—' }}</span>
-                        @endif
+                        <span class="text-xs px-2 py-0.5 rounded-full {{ $r->type === 'Online' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600' }}">{{ $r->type }}</span>
                     </td>
-                    <td class="text-slate-500">{{ $r->sale?->customer?->name ?? 'Walk-in' }}</td>
+                    <td>
+                        @if ($r->url)
+                            <a href="{{ $r->url }}" class="font-medium text-indigo-600 hover:underline">{{ $r->number }}</a>
+                        @else
+                            <span class="text-slate-700">{{ $r->number }}</span>
+                        @endif
+                        <span class="text-xs text-slate-400">· {{ $r->reference }}</span>
+                    </td>
+                    <td class="text-slate-500">{{ $r->customer }}</td>
                     <td class="text-right text-slate-600">{{ $symbol }} {{ number_format($r->cash, 2) }}</td>
                     <td class="text-right text-slate-600">{{ $symbol }} {{ number_format($r->wallet, 2) }}</td>
                     <td class="text-right font-semibold text-red-600">{{ $symbol }} {{ number_format($r->total, 2) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="py-6 text-center text-slate-400">No returns in this period.</td></tr>
+                <tr><td colspan="7" class="py-6 text-center text-slate-400">No returns in this period.</td></tr>
             @endforelse
         </tbody>
     </table>

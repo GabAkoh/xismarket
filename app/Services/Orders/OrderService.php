@@ -276,7 +276,7 @@ class OrderService
                 $this->postRefundJournal($order);
             }
 
-            $order->update(['payment_status' => 'refunded']);
+            $order->update(['payment_status' => 'refunded', 'refunded_at' => now()]);
 
             return $order;
         });
