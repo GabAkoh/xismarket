@@ -171,6 +171,20 @@ class OrderController extends Controller
             ->with('status', 'Order '.$order->number.' cancelled.');
     }
 
+    public function refund(Order $order, OrderService $orders)
+    {
+        $this->authorizeTenant($order);
+
+        try {
+            $orders->refund($order);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('orders.show', $order)
+            ->with('status', 'Order '.$order->number.' refunded.');
+    }
+
     /** (Re)send the order receipt to the customer's email. */
     public function emailReceipt(Order $order)
     {

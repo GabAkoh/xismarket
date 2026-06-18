@@ -126,6 +126,19 @@
             @elseif ($order->isCompleted())
                 <p class="text-sm text-green-700">✓ Fulfilled on {{ optional($order->completed_at)->format('d M Y H:i') }}.</p>
             @endif
+
+            {{-- Refund: available for any paid order (reverses stock + books if it was fulfilled) --}}
+            @permission('orders.fulfill')
+                @if ($order->isPaid())
+                    <form method="POST" action="{{ route('orders.refund', $order) }}" class="mt-2"
+                          onsubmit="return confirm('Refund this order? {{ $order->isCompleted() ? 'Stock will be restored and the sale reversed in the books.' : 'The payment will be reversed.' }}')">
+                        @csrf
+                        <button class="w-full rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">Refund order</button>
+                    </form>
+                @elseif ($order->payment_status === 'refunded')
+                    <p class="mt-2 text-sm text-red-600">↩ Refunded.</p>
+                @endif
+            @endpermission
         </x-card>
 
         <x-card title="Details">

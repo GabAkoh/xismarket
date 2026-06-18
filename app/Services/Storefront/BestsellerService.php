@@ -79,6 +79,7 @@ class BestsellerService
         $accumulate(OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->where('orders.status', 'completed')
+            ->where('orders.payment_status', '!=', 'refunded')
             ->whereNotNull('order_items.product_id')
             ->groupBy('order_items.product_id')
             ->selectRaw('order_items.product_id as pid, SUM(order_items.quantity) as qty')

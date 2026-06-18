@@ -252,6 +252,41 @@ class OrderService
         return $order;
     }
 
+    /**
+     * Refund a paid order. If it was fulfilled, stock is restored and the
+     * fulfilment journal is reversed; an unfulfilled paid order simply has its
+     * payment reversed (no journal was posted until fulfilment). Marking the
+     * payment 'refunded' also blocks any later fulfilment.
+     */
+    public function refund(Order $order): Order
+    {
+        $order = DB::transaction(function () use ($order) {
+            if ($order->payment_status === 'refunded') {
+                throw new \RuntimeException('This order has already been refunded.');
+            }
+            if (! $order->isPaid()) {
+                throw new \RuntimeException('Only a paid order can be refunded.');
+            }
+
+            $order->loadMissing('items');
+
+            // Stock + accounting were only touched at fulfilment.
+            if ($order->isCompleted()) {
+                $this->restock($order);
+                $this->postRefundJournal($order);
+            }
+
+            $order->update(['payment_status' => 'refunded']);
+
+            return $order;
+        });
+
+        // A refunded order no longer counts toward bestsellers — invalidate.
+        app(\App\Services\Storefront\BestsellerService::class)->forget($this->tenancy->id());
+
+        return $order;
+    }
+
     /** Generate the next per-tenant sequential order number (ORD-0001 …). */
     protected function nextNumber(): string
     {
@@ -309,6 +344,43 @@ class OrderService
         }
     }
 
+    /** Restore stock for each line of a refunded (previously fulfilled) order. */
+    protected function restock(Order $order): void
+    {
+        if (! class_exists(\App\Services\Inventory\StockService::class)
+            || ! class_exists(\App\Models\Inventory\Warehouse::class)
+            || ! class_exists(Product::class)) {
+            return;
+        }
+
+        $warehouse = \App\Models\Inventory\Warehouse::default();
+        if (! $warehouse) {
+            return;
+        }
+
+        $stock = app(\App\Services\Inventory\StockService::class);
+
+        foreach ($order->items as $item) {
+            if (! $item->product_id) {
+                continue;
+            }
+            $product = Product::find($item->product_id);
+            if (! $product || ! $product->track_stock) {
+                continue;
+            }
+
+            $stock->recordMovement(
+                $product,
+                $warehouse,
+                'return',
+                (float) $item->quantity,
+                (float) $item->unit_cost,
+                $order,
+                'Refund '.$order->number,
+            );
+        }
+    }
+
     /**
      * Post the fulfilment double-entry journal through the Accounting
      * PostingService. Guarded so Orders stays decoupled from the Accounting
@@ -357,6 +429,46 @@ class OrderService
             'date' => now(),
             'memo' => 'Order fulfilment '.$order->number,
             'reference' => $order->number,
+            'source' => $order,
+            'lines' => $lines,
+        ]);
+    }
+
+    /** Post the reversing journal for an order refund (mirror of fulfilment). */
+    protected function postRefundJournal(Order $order): void
+    {
+        if (! class_exists(\App\Services\Accounting\PostingService::class)) {
+            return;
+        }
+
+        $net = round((float) $order->subtotal - (float) $order->discount_total, 2);
+        $tax = round((float) $order->tax_total, 2);
+        $fee = round((float) $order->delivery_fee, 2);
+        $total = round((float) $order->total, 2);
+        $cogs = round((float) $order->items->sum(
+            fn ($i) => round((float) $i->unit_cost * (float) $i->quantity, 2)
+        ), 2);
+
+        $lines = [];
+        $lines[] = ['account' => '4000', 'debit' => $net, 'credit' => 0, 'memo' => 'Reverse sales revenue'];
+
+        if ($tax > 0) {
+            $lines[] = ['account' => '2100', 'debit' => $tax, 'credit' => 0, 'memo' => 'Reverse tax payable'];
+        }
+        if ($fee > 0) {
+            $this->ensureDeliveryIncomeAccount();
+            $lines[] = ['account' => '4200', 'debit' => $fee, 'credit' => 0, 'memo' => 'Reverse delivery income'];
+        }
+        $lines[] = ['account' => '1000', 'debit' => 0, 'credit' => $total, 'memo' => 'Order refund paid'];
+        if ($cogs > 0) {
+            $lines[] = ['account' => '1300', 'debit' => $cogs, 'credit' => 0, 'memo' => 'Inventory returned'];
+            $lines[] = ['account' => '5000', 'debit' => 0, 'credit' => $cogs, 'memo' => 'Reverse COGS'];
+        }
+
+        app(\App\Services\Accounting\PostingService::class)->post([
+            'date' => now(),
+            'memo' => 'Order refund '.$order->number,
+            'reference' => $order->number.'-R',
             'source' => $order,
             'lines' => $lines,
         ]);

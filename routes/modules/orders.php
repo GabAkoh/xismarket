@@ -43,5 +43,7 @@ Route::middleware(['web', 'auth'])->group(function () {
             ->whereNumber('order')->name('orders.fulfill');
         Route::post('orders/{order}/cancel', [OrderController::class, 'cancel'])
             ->whereNumber('order')->name('orders.cancel');
+        Route::post('orders/{order}/refund', [OrderController::class, 'refund'])
+            ->whereNumber('order')->name('orders.refund');
     });
 });
