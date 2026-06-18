@@ -1,5 +1,7 @@
 @php $symbol = $store->currencySymbol() ?? ''; @endphp
 <x-mail::message>
+@include('emails._logo')
+
 # {{ $headline }}
 
 Hi {{ $order->contact_name ?: 'there' }},

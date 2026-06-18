@@ -1,5 +1,7 @@
 @php $symbol = $store->currencySymbol() ?? ''; @endphp
 <x-mail::message>
+@include('emails._logo')
+
 # Thank you, {{ $order->contact_name ?: 'customer' }}!
 
 Your order **{{ $order->number }}** has been received{{ $order->payment_status === 'paid' ? ' and paid' : '' }}.
