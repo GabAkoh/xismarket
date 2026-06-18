@@ -11,7 +11,12 @@
 
 <div class="max-w-md mx-auto bg-white rounded-lg shadow-sm p-6 print:shadow-none" id="receipt">
     <div class="text-center border-b border-dashed border-slate-200 pb-4 mb-4">
-        <h2 class="text-lg font-bold text-slate-800">{{ $currentTenant->name }}</h2>
+        @php $logo = $currentTenant->setting('storefront.logo'); @endphp
+        @if ($logo)
+            <img src="{{ asset('storage/'.$logo) }}" alt="{{ $currentTenant->name }}" class="h-12 w-auto object-contain mx-auto mb-1">
+        @else
+            <h2 class="text-lg font-bold text-slate-800">{{ $currentTenant->name }}</h2>
+        @endif
         <p class="text-xs text-slate-500 mt-1">Receipt {{ $sale->number }}</p>
         <p class="text-xs text-slate-400">{{ optional($sale->completed_at)->format('d M Y H:i') }}</p>
         @if ($sale->status !== 'completed')
