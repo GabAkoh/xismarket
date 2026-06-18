@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
+use App\Http\Controllers\Inventory\ProductImportController;
 use App\Http\Controllers\Inventory\PurchaseOrderController;
 use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Inventory\SupplierController;
@@ -14,6 +15,10 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('products', [ProductController::class, 'index'])->name('products.index');
     });
     Route::middleware('permission:products.manage')->group(function () {
+        // Import (literal segments — before products/{product} routes).
+        Route::get('products/import', [ProductImportController::class, 'form'])->name('products.import');
+        Route::post('products/import', [ProductImportController::class, 'import'])->name('products.import.store');
+
         Route::get('products/create', [ProductController::class, 'create'])->name('products.create');
         Route::post('products', [ProductController::class, 'store'])->name('products.store');
         Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');

@@ -4,6 +4,7 @@
 @section('content')
 <x-page-header title="Products">
     @permission('products.manage')
+        <a href="{{ route('products.import') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Import from Shopify</a>
         <a href="{{ route('products.create') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Add product</a>
     @endpermission
 </x-page-header>
