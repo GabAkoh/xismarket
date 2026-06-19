@@ -12,8 +12,8 @@
 @endphp
 
 <x-page-header title="Sales report" subtitle="Totals, payment mix and trends for the selected period">
-    <a href="{{ route('sales.report.export', ['from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
-       class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Export CSV</a>
+    <a href="{{ route('sales.report.export', ['section' => 'all', 'from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
+       class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Export all (CSV)</a>
     <a href="{{ route('sales.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to sales</a>
 </x-page-header>
 

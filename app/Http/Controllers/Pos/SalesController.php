@@ -163,6 +163,10 @@ class SalesController extends Controller
         $from = $data['from'];
         $to = $data['to'];
 
+        if ($request->input('section') === 'all') {
+            return $this->reportExportAll($data);
+        }
+
         $num = fn ($v) => number_format((float) $v, 2, '.', '');
         $qty = fn ($v) => rtrim(rtrim(number_format((float) $v, 3), '0'), '.');
 
@@ -188,6 +192,68 @@ class SalesController extends Controller
             foreach ($rows as $row) {
                 fputcsv($out, $row, ',', '"', '');
             }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** One CSV holding every section of the report (summary + each breakdown). */
+    protected function reportExportAll(array $data)
+    {
+        $from = $data['from'];
+        $to = $data['to'];
+        $s = $data['summary'];
+
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $qty = fn ($v) => rtrim(rtrim(number_format((float) $v, 3), '0'), '.');
+
+        $filename = 'sales-report-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($data, $s, $from, $to, $num, $qty) {
+            $out = fopen('php://output', 'w');
+            $put = fn ($row) => fputcsv($out, $row, ',', '"', '');
+            // Title row, header row, data rows, then a blank separator.
+            $section = function (string $title, array $header, $rows) use ($put) {
+                $put([$title]);
+                $put($header);
+                foreach ($rows as $row) {
+                    $put($row);
+                }
+                $put([]);
+            };
+
+            $put(['Sales report', $from->toDateString().' to '.$to->toDateString()]);
+            $put([]);
+
+            $section('Summary', ['Metric', 'Value'], [
+                ['Sales', $s['count']],
+                ['Average sale', $num($s['avg'])],
+                ['Gross', $num($s['gross'])],
+                ['Discounts', $num($s['discounts'])],
+                ['Tax', $num($s['tax'])],
+                ['Net revenue', $num($s['net'])],
+                ['Cost of goods', $num($s['cogs'])],
+                ['Gross profit', $num($s['profit'])],
+                ['Revenue reversed (returns)', $num($s['returns_net'])],
+                ['Tax reversed (returns)', $num($s['returns_tax'])],
+                ['Total refunded', $num($s['returns_total'])],
+                ['COGS recovered (returns)', $num($s['returns_cogs'])],
+                ['Net sales after returns', $num($s['net_after_returns'])],
+                ['Gross profit after returns', $num($s['profit_after_returns'])],
+                ['Collected', $num($s['collected'])],
+                ['Outstanding (credit)', $num($s['outstanding'])],
+            ]);
+
+            $section('Payment methods', ['Method', 'Count', 'Amount'],
+                $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)]));
+            $section('Top products', ['Product', 'Qty', 'Revenue'],
+                $data['top']->map(fn ($p) => [$p->name, $qty($p->qty), $num($p->revenue)]));
+            $section('Sales by cashier', ['Cashier', 'Sales', 'Net', 'Total'],
+                $data['cashiers']->map(fn ($c) => [$c->name, $c->n, $num($c->net), $num($c->total)]));
+            $section('Sales by register', ['Register', 'Sales', 'Net', 'Total'],
+                $data['registers']->map(fn ($r) => [$r->name, $r->n, $num($r->net), $num($r->total)]));
+            $section('Daily breakdown', ['Date', 'Sales', 'Net', 'Tax', 'Total'],
+                $data['daily']->map(fn ($d) => [$d->d, $d->n, $num($d->net), $num($d->tax), $num($d->total)]));
+
             fclose($out);
         }, $filename, ['Content-Type' => 'text/csv']);
     }
