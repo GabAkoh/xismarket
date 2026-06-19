@@ -291,7 +291,18 @@ class SalesController extends Controller
             ->limit(10)
             ->get();
 
-        return compact('summary', 'methods', 'daily', 'top', 'from', 'to');
+        // Per-cashier breakdown.
+        $cashiers = Sale::query()->tap($inRange)
+            ->selectRaw('user_id, COUNT(*) as n,
+                COALESCE(SUM(subtotal - discount_total), 0) as net,
+                COALESCE(SUM(total), 0) as total')
+            ->groupBy('user_id')
+            ->orderByDesc('total')
+            ->get();
+        $names = \App\Models\User::whereIn('id', $cashiers->pluck('user_id')->filter())->pluck('name', 'id');
+        $cashiers->each(fn ($c) => $c->name = $names[$c->user_id] ?? 'Unknown');
+
+        return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'from', 'to');
     }
 
     public function show(Sale $sale)

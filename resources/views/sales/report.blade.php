@@ -117,6 +117,37 @@
     </x-card>
 </div>
 
+{{-- Sales by cashier --}}
+@php $maxCashier = $cashiers->max('total') ?: 1; @endphp
+<x-card title="Sales by cashier" class="mb-6">
+    <table class="w-full text-sm">
+        <thead class="text-left text-slate-400 border-b">
+            <tr>
+                <th class="py-2">Cashier</th><th class="text-right">Sales</th>
+                <th class="text-right">Net</th><th class="text-right">Total</th>
+                <th class="pl-4 w-1/3">&nbsp;</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y">
+            @forelse ($cashiers as $c)
+                <tr>
+                    <td class="py-2 text-slate-700">{{ $c->name }}</td>
+                    <td class="py-2 text-right text-slate-500">{{ number_format($c->n) }}</td>
+                    <td class="py-2 text-right text-slate-600">{{ $money($c->net) }}</td>
+                    <td class="py-2 text-right font-semibold text-slate-700">{{ $money($c->total) }}</td>
+                    <td class="pl-4">
+                        <div class="h-2 rounded bg-indigo-100">
+                            <div class="h-2 rounded bg-indigo-500" style="width: {{ max(2, round((float) $c->total / $maxCashier * 100)) }}%"></div>
+                        </div>
+                    </td>
+                </tr>
+            @empty
+                <tr><td colspan="5" class="py-6 text-center text-slate-400">No sales in this period.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+</x-card>
+
 {{-- Daily trend --}}
 <x-card title="Daily breakdown">
     <table class="w-full text-sm">
