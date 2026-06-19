@@ -41,10 +41,13 @@ class Tenant extends Model
     ];
 
     /**
-     * Configured POS payment methods as [['key' => ..., 'label' => ...], ...].
+     * Configured POS payment methods as
+     * [['key' => ..., 'label' => ..., 'credit' => bool], ...].
      * 'wallet' (store credit) is a reserved built-in and is never in this list.
+     * A method flagged 'credit' records the tendered amount as a balance owing
+     * (accounts receivable) rather than money received.
      *
-     * @return array<int, array{key:string, label:string}>
+     * @return array<int, array{key:string, label:string, credit:bool}>
      */
     public function paymentMethods(): array
     {
@@ -58,7 +61,9 @@ class Tenant extends Model
             $key = trim((string) ($m['key'] ?? ''));
             $label = trim((string) ($m['label'] ?? ''));
 
-            return ($key !== '' && $label !== '') ? ['key' => $key, 'label' => $label] : null;
+            return ($key !== '' && $label !== '')
+                ? ['key' => $key, 'label' => $label, 'credit' => ! empty($m['credit'])]
+                : null;
         }, $methods)));
     }
 
@@ -72,6 +77,15 @@ class Tenant extends Model
     public function paymentMethodLabels(): array
     {
         return array_column($this->paymentMethods(), 'label', 'key');
+    }
+
+    /** Keys of methods that leave a balance owing instead of paying the sale. */
+    public function creditPaymentMethodKeys(): array
+    {
+        return array_values(array_map(
+            fn ($m) => $m['key'],
+            array_filter($this->paymentMethods(), fn ($m) => ! empty($m['credit'])),
+        ));
     }
 
     /** Display symbol for the tenant's currency, falling back to the ISO code. */

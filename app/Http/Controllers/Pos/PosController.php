@@ -70,10 +70,11 @@ class PosController extends Controller
         // How many product columns the register grid shows (configurable).
         $gridColumns = max(2, min(8, (int) $this->tenancy->current()->setting('pos.grid_columns', 4)));
 
-        // Configurable tender options.
+        // Configurable tender options (and which of them are "credit" — owed, not paid).
         $payMethods = $this->tenancy->current()->paymentMethods();
+        $creditMethods = $this->tenancy->current()->creditPaymentMethodKeys();
 
-        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty', 'gridColumns', 'payMethods'));
+        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty', 'gridColumns', 'payMethods', 'creditMethods'));
     }
 
     /** Process a checkout and redirect to the printable receipt. */

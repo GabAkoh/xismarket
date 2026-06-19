@@ -218,6 +218,11 @@
                     <span class="text-slate-500">Change due</span>
                     <span class="font-semibold text-slate-700" x-text="money(changeDue)"></span>
                 </div>
+                <div class="flex justify-between text-sm font-semibold text-amber-600" x-show="balanceOwing > 0">
+                    <span>Balance owing</span>
+                    <span x-text="money(balanceOwing)"></span>
+                </div>
+                <p x-show="creditNeedsCustomer" x-cloak class="text-xs text-red-500">Select a customer to record a credit sale.</p>
                 <div class="flex justify-between text-sm font-semibold text-red-600" x-show="cart.length && !fullyPaid">
                     <span>Amount due</span>
                     <span x-text="money(amountDue)"></span>
@@ -230,7 +235,8 @@
                 <button type="button" @click="submit()"
                         :disabled="!canSubmit"
                         class="w-full rounded-md bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                    <span x-show="!submitting && fullyPaid">Complete sale · <span x-text="money(total)"></span></span>
+                    <span x-show="!submitting && fullyPaid && balanceOwing <= 0">Complete sale · <span x-text="money(total)"></span></span>
+                    <span x-show="!submitting && fullyPaid && balanceOwing > 0">Complete · <span x-text="money(balanceOwing)"></span> on credit</span>
                     <span x-show="!submitting && !fullyPaid">Enter full payment</span>
                     <span x-show="submitting">Processing…</span>
                 </button>
@@ -287,6 +293,7 @@ function posRegister() {
         // A method may appear at most once across the lines.
         payMethods: @json(array_values(array_column($payMethods, 'key'))),
         payMethodLabels: @json(array_column($payMethods, 'label', 'key')),
+        creditMethods: @json(array_values($creditMethods)),
         tenders: [{ method: @json($payMethods[0]['key'] ?? 'cash'), amount: null }],
         submitting: false,
 
@@ -447,28 +454,47 @@ function posRegister() {
         get remainderDue() {
             return Math.max(0, Math.round((this.total - this.walletApplied) * 100) / 100);
         },
-        // Sum of all tender lines entered by the cashier (cash + card + other).
+        isCredit(method) { return this.creditMethods.includes(method); },
+        // Real money tendered now (excludes credit tenders, which are owed not paid).
         get tenderedTotal() {
-            return Math.round(this.tenders.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0) * 100) / 100;
+            return Math.round(this.tenders.reduce((s, t) =>
+                s + (this.isCredit(t.method) ? 0 : (parseFloat(t.amount) || 0)), 0) * 100) / 100;
         },
-        // Total collected now = wallet + every tender line.
+        // Amount the cashier put on credit (an IOU, not money received).
+        get creditTendered() {
+            return Math.round(this.tenders.reduce((s, t) =>
+                s + (this.isCredit(t.method) ? (parseFloat(t.amount) || 0) : 0), 0) * 100) / 100;
+        },
+        // Total collected now = wallet + real tender lines.
         get amountPaid() {
             return Math.round((this.walletApplied + this.tenderedTotal) * 100) / 100;
         },
-        get amountDue() {
-            return Math.max(0, Math.round((this.total - this.amountPaid) * 100) / 100);
+        // The portion left owing = unpaid total, capped to what was put on credit.
+        get balanceOwing() {
+            return Math.round(Math.min(this.creditTendered, Math.max(0, this.total - this.amountPaid)) * 100) / 100;
         },
-        // Any overpayment is handed back as change (assumed cash).
+        // Sale is covered once real payment + credit meets the total.
+        get coveredTotal() {
+            return Math.round((this.amountPaid + this.creditTendered) * 100) / 100;
+        },
+        get amountDue() {
+            return Math.max(0, Math.round((this.total - this.coveredTotal) * 100) / 100);
+        },
+        // Change only comes from real over-payment, never from a credit tender.
         get changeDue() {
-            return Math.max(0, Math.round((this.amountPaid - this.total) * 100) / 100);
+            return Math.max(0, Math.round((this.amountPaid - (this.total - this.balanceOwing)) * 100) / 100);
         },
         get fullyPaid() {
-            return this.amountPaid + 0.001 >= this.total;
+            return this.coveredTotal + 0.001 >= this.total;
         },
-        // A sale can only be submitted once it is paid in full.
+        // A credit sale (balance owing) must be tied to a customer.
+        get creditNeedsCustomer() {
+            return this.balanceOwing > 0.001 && !this.customerId;
+        },
+        // A sale can only be submitted once it is fully covered (paid and/or on credit).
         get canSubmit() {
             if (this.cart.length === 0 || this.submitting) return false;
-            return this.fullyPaid;
+            return this.fullyPaid && !this.creditNeedsCustomer;
         },
         get paymentsList() {
             const list = [];
@@ -488,7 +514,8 @@ function posRegister() {
         submit() {
             if (!this.canSubmit) return;
             if (this.cart.some(l => l.qty <= 0)) { alert('Every line needs a quantity greater than zero.'); return; }
-            if (!this.fullyPaid) { alert('The sale must be paid in full. Amount still due: ' + this.money(this.amountDue)); return; }
+            if (this.creditNeedsCustomer) { alert('Select a customer to record a credit sale.'); return; }
+            if (!this.fullyPaid) { alert('The sale must be fully covered. Still uncovered: ' + this.money(this.amountDue)); return; }
             this.submitting = true;
             this.$nextTick(() => this.$refs.checkoutForm.submit());
         },

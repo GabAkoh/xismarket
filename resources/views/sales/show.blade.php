@@ -64,6 +64,10 @@
                 // A method already recorded on this sale can't be used again (any amount).
                 $usedMethods = $sale->payments->pluck('method')->all();
                 $methodOptions = $currentTenant->paymentMethodLabels();
+                // A credit settlement is real money — don't offer credit methods here.
+                foreach ($currentTenant->creditPaymentMethodKeys() as $creditKey) {
+                    unset($methodOptions[$creditKey]);
+                }
                 if ($sale->customer && $sale->customer->balance > 0) {
                     $methodOptions['wallet'] = 'Wallet ('.$symbol.number_format($sale->customer->balance, 2).')';
                 }

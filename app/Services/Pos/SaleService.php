@@ -155,34 +155,56 @@ class SaleService
             }
             $walletUsed = round(min($walletUsed, $total), 2);
 
+            // "Credit" tenders aren't money received — they record an amount the
+            // customer owes (accounts receivable). Capped to the sale total.
+            $creditKeys = $this->tenancy->current()?->creditPaymentMethodKeys() ?? [];
+            $creditOwed = 0.0;
+            foreach ($data['payments'] ?? [] as $p) {
+                if (in_array($p['method'] ?? null, $creditKeys, true)) {
+                    $creditOwed += round((float) ($p['amount'] ?? 0), 2);
+                }
+            }
+            $creditOwed = round(min($creditOwed, $total), 2);
+
             // Points earned on the realised net revenue.
             $pointsEarned = ($customer && $settings->is_active)
                 ? $settings->pointsFor($netRevenue)
                 : 0;
 
             // --- Payments ---
-            // Wallet counts at its clamped value; other methods at the tendered amount.
+            // Real money received = wallet (clamped) + non-wallet, non-credit tenders.
             $nonWalletPaid = 0.0;
             foreach ($data['payments'] ?? [] as $p) {
-                if (($p['method'] ?? null) === 'wallet') {
+                $method = $p['method'] ?? null;
+                if ($method === 'wallet' || in_array($method, $creditKeys, true)) {
                     continue;
                 }
                 $nonWalletPaid += round((float) ($p['amount'] ?? 0), 2);
             }
             $paidTotal = round($walletUsed + round($nonWalletPaid, 2), 2);
 
-            // A sale must be paid in full — partial payments are not allowed.
-            if ($paidTotal + 0.001 < $total) {
+            // The sale must be fully accounted for — real payment plus any amount
+            // put on credit has to cover the total.
+            if ($paidTotal + $creditOwed + 0.001 < $total) {
                 throw new \RuntimeException(
-                    'Payment is insufficient: '.number_format($paidTotal, 2)
-                    .' paid against a total of '.number_format($total, 2)
-                    .'. The full amount must be paid to complete the sale.'
+                    'Payment is insufficient: '.number_format($paidTotal + $creditOwed, 2)
+                    .' tendered against a total of '.number_format($total, 2)
+                    .'. The full amount must be paid or put on credit to complete the sale.'
                 );
             }
 
-            $status = 'completed';
-            $balanceDue = 0.0;
-            $changeDue = round(max(0, $paidTotal - $total), 2);
+            // The unpaid portion (up to what was put on credit) is owed by the customer.
+            $balanceDue = round(min($creditOwed, max(0.0, $total - $paidTotal)), 2);
+
+            if ($balanceDue > 0.001 && ! $customer) {
+                throw new \RuntimeException(
+                    'A credit sale (balance owing) requires a customer. Select a customer or collect full payment.'
+                );
+            }
+
+            $status = $balanceDue > 0.001 ? 'partially_paid' : 'completed';
+            // Change only ever comes from real over-payment, never from a credit tender.
+            $changeDue = round(max(0.0, $paidTotal - ($total - $balanceDue)), 2);
 
             // --- Persist the Sale ---
             $sale = Sale::create([
@@ -224,9 +246,11 @@ class SaleService
                     'paid_at' => $completedAt,
                 ]);
             }
-            // ...then every non-wallet payment at its tendered amount.
+            // ...then every non-wallet payment at its tendered amount. Credit tenders
+            // are not money received — they're captured as balance_due, not a Payment.
             foreach ($data['payments'] ?? [] as $p) {
-                if (($p['method'] ?? null) === 'wallet') {
+                $method = $p['method'] ?? null;
+                if ($method === 'wallet' || in_array($method, $creditKeys, true)) {
                     continue;
                 }
                 $amount = round((float) ($p['amount'] ?? 0), 2);

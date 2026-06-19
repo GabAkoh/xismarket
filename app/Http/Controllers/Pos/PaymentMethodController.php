@@ -30,6 +30,7 @@ class PaymentMethodController extends Controller
             'methods' => ['required', 'array', 'min:1'],
             'methods.*.key' => ['nullable', 'string', 'max:40'],
             'methods.*.label' => ['nullable', 'string', 'max:40'],
+            'methods.*.credit' => ['nullable'],
         ]);
 
         // Build a clean, de-duplicated list. Keep the submitted key when present
@@ -51,7 +52,11 @@ class PaymentMethodController extends Controller
             }
 
             $seen[$key] = true;
-            $methods[] = ['key' => $key, 'label' => $label];
+            $methods[] = [
+                'key' => $key,
+                'label' => $label,
+                'credit' => filter_var($row['credit'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ];
         }
 
         if ($methods === []) {

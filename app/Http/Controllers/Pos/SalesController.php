@@ -159,7 +159,12 @@ class SalesController extends Controller
     {
         $this->authorizeTenant($sale);
 
-        $allowed = array_merge($this->tenancy->current()->paymentMethodKeys(), ['wallet']);
+        $tenant = $this->tenancy->current();
+        // Settle a credit sale with real money (or wallet) — not another credit method.
+        $allowed = array_merge(
+            array_values(array_diff($tenant->paymentMethodKeys(), $tenant->creditPaymentMethodKeys())),
+            ['wallet'],
+        );
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'method' => ['required', 'string', \Illuminate\Validation\Rule::in($allowed)],
