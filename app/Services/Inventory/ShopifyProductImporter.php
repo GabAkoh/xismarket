@@ -217,7 +217,9 @@ class ShopifyProductImporter
         $result[$product->wasRecentlyCreated ? 'created' : 'updated']++;
 
         // Queue the image for a concurrent download pass after all rows are read.
-        if ($downloadImages) {
+        // Skip products that already have an image (re-imports keep their existing
+        // image rather than re-downloading it).
+        if ($downloadImages && ! $product->image_path) {
             $url = trim((string) ($col($row, 'variantimage') ?: $ctx['image']));
             if ($url !== '' && preg_match('#^https?://#i', $url)) {
                 $pendingImages[$url][] = $product->id;
