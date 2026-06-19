@@ -16,9 +16,39 @@ use Illuminate\Support\Str;
  * with product-level fields (Title, Body, Type, …) only on the first row of
  * each Handle. We import one product per variant, inheriting those
  * product-level fields, and optionally download the variant/product image.
+ *
+ * Header matching is lenient: headers are normalised (case/space/punctuation
+ * insensitive) and resolved from a list of common aliases, so exports or
+ * hand-edited files using e.g. "SKU"/"Price"/"Name"/"Cost"/"Quantity" still work.
  */
 class ShopifyProductImporter
 {
+    /**
+     * Logical field => accepted header aliases (already normalised: lowercase,
+     * alphanumeric only). The first alias found in the header row wins.
+     *
+     * @var array<string, array<int, string>>
+     */
+    protected const FIELDS = [
+        'handle' => ['handle'],
+        'title' => ['title', 'name', 'productname', 'producttitle', 'product'],
+        'body' => ['bodyhtml', 'body', 'description', 'desc', 'details'],
+        'type' => ['type', 'producttype', 'productcategory', 'category', 'categories', 'collection'],
+        'published' => ['published', 'visible'],
+        'status' => ['status'],
+        'option1' => ['option1value', 'option1', 'variant', 'variantname'],
+        'option2' => ['option2value', 'option2'],
+        'option3' => ['option3value', 'option3'],
+        'sku' => ['variantsku', 'sku', 'skucode', 'itemnumber'],
+        'barcode' => ['variantbarcode', 'barcode', 'upc', 'ean', 'gtin'],
+        'price' => ['variantprice', 'price', 'saleprice', 'retailprice', 'sellingprice', 'unitprice'],
+        'cost' => ['costperitem', 'cost', 'costprice', 'unitcost', 'buyprice', 'purchaseprice'],
+        'invqty' => ['variantinventoryqty', 'inventoryqty', 'inventoryquantity', 'quantity', 'qty', 'stock', 'stockquantity', 'inventory', 'onhand'],
+        'tracker' => ['variantinventorytracker', 'inventorytracker'],
+        'image' => ['imagesrc', 'image', 'imageurl', 'imagelink', 'photo'],
+        'variantimage' => ['variantimage'],
+    ];
+
     /** @var array<string, int> slug => category id */
     protected array $categoryCache = [];
 
@@ -53,19 +83,41 @@ class ShopifyProductImporter
             return $result;
         }
 
-        $map = [];
+        // Resolve each logical field to a column index via normalised aliases.
+        $norm = [];
         foreach ($header as $i => $h) {
-            $h = trim(preg_replace('/^\xEF\xBB\xBF/', '', (string) $h)); // strip UTF-8 BOM
-            $map[$h] = $i;
+            $key = $this->normalize((string) $h);
+            if ($key !== '' && ! isset($norm[$key])) {
+                $norm[$key] = $i;
+            }
         }
-        if (! isset($map['Handle']) && ! isset($map['Title'])) {
+        $idx = [];
+        foreach (self::FIELDS as $field => $aliases) {
+            $idx[$field] = null;
+            foreach ($aliases as $alias) {
+                if (isset($norm[$alias])) {
+                    $idx[$field] = $norm[$alias];
+                    break;
+                }
+            }
+        }
+
+        if ($idx['title'] === null) {
             fclose($fh);
-            $result['errors'][] = 'This file does not look like a Shopify product export (no Handle/Title columns).';
+            $result['errors'][] = 'No product name column found (expected Title, Name, or similar).';
+
+            return $result;
+        }
+        if ($idx['sku'] === null && $idx['price'] === null) {
+            fclose($fh);
+            $result['errors'][] = 'No SKU or Price column found — nothing to import.';
 
             return $result;
         }
 
-        $col = fn (array $row, string $name) => isset($map[$name], $row[$map[$name]]) ? trim((string) $row[$map[$name]]) : '';
+        $col = fn (array $row, string $field) => $idx[$field] !== null && isset($row[$idx[$field]])
+            ? trim((string) $row[$idx[$field]])
+            : '';
 
         $warehouse = class_exists(Warehouse::class) ? Warehouse::default() : null;
         $context = [];
@@ -73,25 +125,25 @@ class ShopifyProductImporter
 
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
             $rowNum++;
-            $handle = $col($row, 'Handle');
-            if ($handle === '' && $col($row, 'Title') === '') {
+            $handle = $col($row, 'handle');
+            if ($handle === '' && $col($row, 'title') === '') {
                 continue;
             }
 
             // First row of a Handle carries the product-level fields.
-            if ($col($row, 'Title') !== '') {
+            if ($col($row, 'title') !== '') {
                 $context[$handle] = [
-                    'title' => $col($row, 'Title'),
-                    'description' => trim(strip_tags($col($row, 'Body (HTML)'))),
-                    'category' => $col($row, 'Type') ?: $col($row, 'Product Category'),
-                    'active' => $this->isActive($col($row, 'Status'), $col($row, 'Published')),
-                    'image' => $col($row, 'Image Src'),
+                    'title' => $col($row, 'title'),
+                    'description' => trim(strip_tags($col($row, 'body'))),
+                    'category' => $col($row, 'type'),
+                    'active' => $this->isActive($col($row, 'status'), $col($row, 'published')),
+                    'image' => $col($row, 'image'),
                 ];
             }
             $ctx = $context[$handle] ?? null;
 
             // Only variant rows (a SKU or price) become products; skip image-only rows.
-            if (! $ctx || ($col($row, 'Variant SKU') === '' && $col($row, 'Variant Price') === '')) {
+            if (! $ctx || ($col($row, 'sku') === '' && $col($row, 'price') === '')) {
                 continue;
             }
 
@@ -108,38 +160,46 @@ class ShopifyProductImporter
         return $result;
     }
 
+    /** Lowercase + strip everything but a-z0-9 (and the UTF-8 BOM) for header matching. */
+    protected function normalize(string $header): string
+    {
+        $header = preg_replace('/^\xEF\xBB\xBF/', '', $header);
+
+        return strtolower(preg_replace('/[^a-z0-9]/i', '', $header));
+    }
+
     protected function importVariant(array $row, callable $col, array $ctx, string $handle, int $rowNum, ?Warehouse $warehouse, bool $downloadImages, array &$result): void
     {
         // Distinguish variants by their option values (skip Shopify's "Default Title").
         $opts = array_values(array_filter(
-            [$col($row, 'Option1 Value'), $col($row, 'Option2 Value'), $col($row, 'Option3 Value')],
+            [$col($row, 'option1'), $col($row, 'option2'), $col($row, 'option3')],
             fn ($v) => $v !== '' && strtolower($v) !== 'default title',
         ));
         $name = $ctx['title'].($opts ? ' - '.implode(' / ', $opts) : '');
 
-        $sku = $col($row, 'Variant SKU');
+        $sku = $col($row, 'sku');
         if ($sku === '') {
             $sku = strtoupper(Str::slug($handle.'-'.implode('-', $opts))) ?: 'SHOPIFY-'.$rowNum;
         }
 
-        $cost = (float) ($col($row, 'Cost per item') ?: 0);
-        $invQty = $col($row, 'Variant Inventory Qty');
-        $trackStock = $col($row, 'Variant Inventory Tracker') === 'shopify' || $invQty !== '';
+        $cost = (float) ($col($row, 'cost') ?: 0);
+        $invQty = $col($row, 'invqty');
+        $trackStock = $col($row, 'tracker') === 'shopify' || $invQty !== '';
 
         $values = [
             'name' => $name !== '' ? $name : $sku,
-            'barcode' => $col($row, 'Variant Barcode') ?: null,
+            'barcode' => $col($row, 'barcode') ?: null,
             'description' => $ctx['description'] ?: null,
             'category_id' => $this->categoryId($ctx['category']),
             'cost_price' => $cost,
-            'sale_price' => (float) ($col($row, 'Variant Price') ?: 0),
+            'sale_price' => (float) ($col($row, 'price') ?: 0),
             'tax_rate' => 0,
             'track_stock' => $trackStock,
             'is_active' => $ctx['active'],
         ];
 
         if ($downloadImages) {
-            $stored = $this->fetchImage($col($row, 'Variant Image') ?: $ctx['image']);
+            $stored = $this->fetchImage($col($row, 'variantimage') ?: $ctx['image']);
             if ($stored) {
                 $values['image_path'] = $stored;
                 $result['images']++;
@@ -161,10 +221,10 @@ class ShopifyProductImporter
     protected function isActive(string $status, string $published): bool
     {
         if ($status !== '') {
-            return strtolower($status) === 'active';
+            return in_array(strtolower($status), ['active', 'published', 'enabled', 'visible', '1', 'true', 'yes'], true);
         }
 
-        return in_array(strtolower($published), ['true', '1'], true);
+        return in_array(strtolower($published), ['true', '1', 'yes'], true);
     }
 
     protected function categoryId(?string $name): ?int
