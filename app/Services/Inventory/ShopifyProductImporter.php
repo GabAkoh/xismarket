@@ -63,7 +63,7 @@ class ShopifyProductImporter
     /**
      * @return array{created:int, updated:int, images:int, skipped:int, errors:array<int,string>}
      */
-    public function import(string $path, bool $downloadImages = true): array
+    public function import(string $path, bool $downloadImages = true, bool $refreshImages = false): array
     {
         $result = ['created' => 0, 'updated' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
 
@@ -159,7 +159,7 @@ class ShopifyProductImporter
             }
 
             try {
-                $this->importVariant($row, $col, $ctx, $handle, $rowNum, $warehouse, $downloadImages, $pendingImages, $result);
+                $this->importVariant($row, $col, $ctx, $handle, $rowNum, $warehouse, $downloadImages, $refreshImages, $pendingImages, $result);
             } catch (\Throwable $e) {
                 $result['skipped']++;
                 $result['errors'][] = "Row {$rowNum}: ".$e->getMessage();
@@ -183,7 +183,7 @@ class ShopifyProductImporter
         return strtolower(preg_replace('/[^a-z0-9]/i', '', $header));
     }
 
-    protected function importVariant(array $row, callable $col, array $ctx, string $handle, int $rowNum, ?Warehouse $warehouse, bool $downloadImages, array &$pendingImages, array &$result): void
+    protected function importVariant(array $row, callable $col, array $ctx, string $handle, int $rowNum, ?Warehouse $warehouse, bool $downloadImages, bool $refreshImages, array &$pendingImages, array &$result): void
     {
         // Distinguish variants by their option values (skip Shopify's "Default Title").
         $opts = array_values(array_filter(
@@ -218,8 +218,8 @@ class ShopifyProductImporter
 
         // Queue the image for a concurrent download pass after all rows are read.
         // Skip products that already have an image (re-imports keep their existing
-        // image rather than re-downloading it).
-        if ($downloadImages && ! $product->image_path) {
+        // image) unless a refresh was requested.
+        if ($downloadImages && ($refreshImages || ! $product->image_path)) {
             $url = trim((string) ($col($row, 'variantimage') ?: $ctx['image']));
             if ($url !== '' && preg_match('#^https?://#i', $url)) {
                 $pendingImages[$url][] = $product->id;
@@ -293,8 +293,17 @@ class ShopifyProductImporter
                 }
 
                 // One download serves every variant/product that shared the URL.
-                Product::whereIn('id', $pending[$url])->update(['image_path' => $stored]);
-                $result['images'] += count($pending[$url]);
+                $ids = $pending[$url];
+                $replaced = Product::whereIn('id', $ids)->pluck('image_path')->filter()->unique();
+                Product::whereIn('id', $ids)->update(['image_path' => $stored]);
+                $result['images'] += count($ids);
+
+                // Drop any image files we just replaced (a --refresh-images re-run).
+                foreach ($replaced as $old) {
+                    if ($old !== $stored) {
+                        Storage::disk('public')->delete($old);
+                    }
+                }
             }
         }
     }

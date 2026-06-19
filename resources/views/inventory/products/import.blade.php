@@ -46,6 +46,11 @@
             Download product images from Shopify
         </label>
 
+        <label class="mt-2 flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" name="refresh_images" value="1">
+            Re-download images for products that already have one
+        </label>
+
         <div class="mt-4 rounded-md bg-slate-50 border border-slate-100 p-3 text-xs text-slate-500 space-y-1">
             <p class="font-semibold text-slate-600">How it works</p>
             <p>In Shopify: <span class="font-medium">Products → Export → Current page / All products → Plain CSV</span>, then upload the file here.</p>

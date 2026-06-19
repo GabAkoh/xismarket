@@ -27,11 +27,17 @@ class ImportShopifyProductsJob implements ShouldQueue
 
     public int $tries = 1;
 
+    /** Declared (not promoted) with a default so already-queued jobs deserialize safely. */
+    public bool $refreshImages = false;
+
     public function __construct(
         public int $tenantId,
         public string $path,            // path on the 'local' disk
         public bool $downloadImages,
-    ) {}
+        bool $refreshImages = false,
+    ) {
+        $this->refreshImages = $refreshImages;
+    }
 
     /** Cache key holding the most recent import result for a tenant. */
     public static function resultKey(int $tenantId): string
@@ -52,7 +58,7 @@ class ImportShopifyProductsJob implements ShouldQueue
         $tenancy->set($tenant);
 
         try {
-            $result = $importer->import(Storage::disk('local')->path($this->path), $this->downloadImages);
+            $result = $importer->import(Storage::disk('local')->path($this->path), $this->downloadImages, $this->refreshImages);
 
             // Stash the outcome so the import page can show it after the job runs.
             Cache::put(self::resultKey($this->tenantId), $result + ['finished_at' => now()->toDateTimeString()], now()->addDay());

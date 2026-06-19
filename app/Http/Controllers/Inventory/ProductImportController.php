@@ -40,6 +40,7 @@ class ProductImportController extends Controller
             $this->tenancy->id(),
             $path,
             $request->boolean('download_images'),
+            $request->boolean('refresh_images'),
         );
 
         return back()

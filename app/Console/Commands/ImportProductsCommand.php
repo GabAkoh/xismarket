@@ -16,6 +16,7 @@ class ImportProductsCommand extends Command
         {file : Path to the Shopify products CSV (absolute, or relative to the project root)}
         {--tenant= : Tenant id or slug (defaults to the only tenant)}
         {--images : Download product images}
+        {--refresh-images : Re-download images even for products that already have one}
         {--sync : Run the import now instead of queueing it}';
 
     protected $description = 'Import products from a Shopify CSV export (no upload needed)';
@@ -35,12 +36,13 @@ class ImportProductsCommand extends Command
         }
 
         $images = (bool) $this->option('images');
+        $refresh = (bool) $this->option('refresh-images');
 
         if ($this->option('sync')) {
             $tenancy->set($tenant);
             $this->info("Importing into {$tenant->name} (running now)…");
 
-            $result = app(ShopifyProductImporter::class)->import($abs, $images);
+            $result = app(ShopifyProductImporter::class)->import($abs, $images, $refresh);
 
             $this->table(
                 ['Created', 'Updated', 'Images', 'Skipped'],
@@ -60,9 +62,9 @@ class ImportProductsCommand extends Command
         $dest = 'imports/cli-'.Str::random(16).'.csv';
         Storage::disk('local')->writeStream($dest, fopen($abs, 'r'));
 
-        ImportShopifyProductsJob::dispatch($tenant->id, $dest, $images);
+        ImportShopifyProductsJob::dispatch($tenant->id, $dest, $images, $refresh);
 
-        $this->info("Queued import into {$tenant->name}.".($images ? ' (with images)' : ''));
+        $this->info("Queued import into {$tenant->name}.".($images ? ($refresh ? ' (with images, refreshing)' : ' (with images)') : ''));
         $this->line('Make sure the queue worker is running; watch progress with:');
         $this->line('  docker compose logs -f worker');
 
