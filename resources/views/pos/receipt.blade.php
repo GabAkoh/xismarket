@@ -17,6 +17,13 @@
         @else
             <h2 class="text-lg font-bold text-slate-800">{{ $currentTenant->name }}</h2>
         @endif
+        @if ($currentTenant->address || $currentTenant->phone)
+            <p class="text-xs text-slate-500 mt-1">
+                @if ($currentTenant->address){{ $currentTenant->address }}@endif
+                @if ($currentTenant->address && $currentTenant->phone) · @endif
+                @if ($currentTenant->phone){{ $currentTenant->phone }}@endif
+            </p>
+        @endif
         <p class="text-xs text-slate-500 mt-1">Receipt {{ $sale->number }}</p>
         <p class="text-xs text-slate-400">{{ optional($sale->completed_at)->format('d M Y H:i') }}</p>
         @if ($sale->status !== 'completed')

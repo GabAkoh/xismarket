@@ -10,6 +10,24 @@
 <form method="POST" action="{{ route('storefront.settings.update') }}" enctype="multipart/form-data" class="max-w-3xl space-y-6">
     @csrf @method('PUT')
 
+    {{-- Business details (shown on the storefront, receipts and order emails) --}}
+    <x-card>
+        <h2 class="text-sm font-semibold text-slate-700 mb-3">Business details</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Phone</label>
+                <input name="phone" maxlength="50" value="{{ old('phone', $store->phone) }}"
+                       class="mt-1 w-full rounded-md border border-slate-300 p-2">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Address</label>
+                <input name="address" maxlength="255" value="{{ old('address', $store->address) }}"
+                       class="mt-1 w-full rounded-md border border-slate-300 p-2">
+            </div>
+        </div>
+        <p class="mt-1 text-xs text-slate-400">Displayed in the shop footer, on POS receipts, and on order emails.</p>
+    </x-card>
+
     {{-- Branding --}}
     <x-card>
         <h2 class="text-sm font-semibold text-slate-700 mb-3">Logo</h2>

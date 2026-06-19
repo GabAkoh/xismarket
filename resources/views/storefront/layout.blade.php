@@ -71,9 +71,18 @@
     </main>
 
     <footer class="border-t border-slate-200 bg-white">
-        <div class="max-w-6xl mx-auto px-4 py-6 text-sm text-slate-400 flex flex-wrap justify-between gap-2">
-            <span>© {{ $store->name }}</span>
-            <span>Powered by xismarket</span>
+        <div class="max-w-6xl mx-auto px-4 py-6 text-sm text-slate-400">
+            <div class="flex flex-wrap justify-between gap-2">
+                <span>© {{ $store->name }}</span>
+                <span>Powered by xismarket</span>
+            </div>
+            @if ($store->address || $store->phone)
+                <div class="mt-2 text-xs text-slate-400">
+                    @if ($store->address)📍 {{ $store->address }}@endif
+                    @if ($store->address && $store->phone) · @endif
+                    @if ($store->phone)📞 {{ $store->phone }}@endif
+                </div>
+            @endif
         </div>
     </footer>
 </body>

@@ -26,6 +26,8 @@ class StorefrontSettingsController extends Controller
     public function update(Request $request)
     {
         $data = $request->validate([
+            'phone' => ['nullable', 'string', 'max:50'],
+            'address' => ['nullable', 'string', 'max:255'],
             'promo' => ['nullable', 'string', 'max:255'],
             'hero_title' => ['nullable', 'string', 'max:150'],
             'hero_subtitle' => ['nullable', 'string', 'max:500'],
@@ -95,7 +97,11 @@ class StorefrontSettingsController extends Controller
 
         $settings = $store->settings ?? [];
         $settings['storefront'] = $storefront;
-        $store->update(['settings' => $settings]);
+        $store->update([
+            'settings' => $settings,
+            'phone' => $data['phone'] ?? null,
+            'address' => $data['address'] ?? null,
+        ]);
 
         return redirect()->route('storefront.settings')->with('status', 'Storefront content updated.');
     }

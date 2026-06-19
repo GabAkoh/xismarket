@@ -39,4 +39,8 @@ Visit {{ $store->name }}
 
 Thanks,<br>
 {{ $store->name ?? config('app.name') }}
+@if ($store && ($store->address || $store->phone))
+
+<small>{{ $store->address }}@if($store->address && $store->phone) · @endif{{ $store->phone }}</small>
+@endif
 </x-mail::message>
