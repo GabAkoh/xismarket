@@ -68,7 +68,7 @@ class PosController extends Controller
         $loyalty = \App\Models\Pos\LoyaltySetting::current();
 
         // How many product columns the register grid shows (configurable).
-        $gridColumns = max(2, min(8, (int) $this->tenancy->current()->setting('pos.grid_columns', 6)));
+        $gridColumns = max(2, min(8, (int) $this->tenancy->current()->setting('pos.grid_columns', 4)));
 
         return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty', 'gridColumns'));
     }

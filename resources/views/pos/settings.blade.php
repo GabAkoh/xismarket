@@ -2,7 +2,7 @@
 @section('title', 'Register display')
 
 @section('content')
-@php $current = max(2, min(8, (int) $store->setting('pos.grid_columns', 6))); @endphp
+@php $current = max(2, min(8, (int) $store->setting('pos.grid_columns', 4))); @endphp
 
 <x-page-header title="Register display" subtitle="Control how the POS register shows products." />
 
