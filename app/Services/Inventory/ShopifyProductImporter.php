@@ -31,6 +31,12 @@ class ShopifyProductImporter
     {
         $result = ['created' => 0, 'updated' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
 
+        if (! is_file($path) || ! is_readable($path)) {
+            $result['errors'][] = 'Import file not found or unreadable: '.$path;
+
+            return $result;
+        }
+
         $fh = fopen($path, 'r');
         if ($fh === false) {
             $result['errors'][] = 'Could not open the uploaded file.';

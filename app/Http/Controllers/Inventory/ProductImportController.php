@@ -26,6 +26,10 @@ class ProductImportController extends Controller
         // it in the background so large files / image downloads don't block here.
         $path = $request->file('file')->store('imports', 'local');
 
+        if (! $path) {
+            return back()->with('error', 'Could not save the uploaded file — please try the import again.');
+        }
+
         ImportShopifyProductsJob::dispatch(
             $this->tenancy->id(),
             $path,
