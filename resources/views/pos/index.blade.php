@@ -51,6 +51,14 @@
                     <template x-for="p in filteredProducts" :key="p.id">
                         <button type="button" @click="addToCart(p)"
                                 class="text-left rounded-lg border border-slate-200 p-3 hover:border-indigo-400 hover:shadow transition">
+                            <div class="mb-2 aspect-square w-full overflow-hidden rounded-md bg-slate-100 flex items-center justify-center">
+                                <template x-if="p.image">
+                                    <img :src="p.image" :alt="p.name" class="h-full w-full object-cover" loading="lazy">
+                                </template>
+                                <template x-if="!p.image">
+                                    <span class="text-2xl text-slate-300">📦</span>
+                                </template>
+                            </div>
                             <div class="font-medium text-slate-700 text-sm leading-tight" x-text="p.name"></div>
                             <div class="text-xs text-slate-400 mt-1" x-text="p.sku"></div>
                             <div class="mt-2 flex items-center justify-between">

@@ -47,6 +47,7 @@ class PosController extends Controller
                     // Stored as a percent (e.g. 8.0); expose as a fraction for the cart math.
                     'tax_rate' => (float) $p->tax_rate / 100,
                     'category' => $p->category?->name,
+                    'image' => $p->image_path ? asset('storage/'.$p->image_path) : null,
                     'track_stock' => (bool) $p->track_stock,
                     'stock' => $warehouse && method_exists($p, 'stockIn') ? $p->stockIn($warehouse) : null,
                 ];
