@@ -114,6 +114,15 @@ class ShopifyProductImporter
 
             return $result;
         }
+        // A header row always carries a Handle (Shopify) or a SKU column. If neither
+        // is present the file is almost certainly missing its header row (e.g. a split
+        // chunk whose first line is data) — refuse it rather than import nothing.
+        if ($idx['handle'] === null && $idx['sku'] === null) {
+            fclose($fh);
+            $result['errors'][] = 'Could not find a Handle or SKU column — the header row may be missing. Re-export from Shopify (Products → Export) and upload the file with its header row intact.';
+
+            return $result;
+        }
         if ($idx['sku'] === null && $idx['price'] === null) {
             fclose($fh);
             $result['errors'][] = 'No SKU or Price column found — nothing to import.';
@@ -175,6 +184,12 @@ class ShopifyProductImporter
         return $result;
     }
 
+    /** Strip Shopify's leading apostrophe (a spreadsheet text-format guard) from a code. */
+    protected function cleanCode(string $value): string
+    {
+        return ltrim(trim($value), "'");
+    }
+
     /** Lowercase + strip everything but a-z0-9 (and the UTF-8 BOM) for header matching. */
     protected function normalize(string $header): string
     {
@@ -192,7 +207,9 @@ class ShopifyProductImporter
         ));
         $name = $ctx['title'].($opts ? ' - '.implode(' / ', $opts) : '');
 
-        $sku = $col($row, 'sku');
+        // Shopify prefixes numeric SKUs/barcodes with an apostrophe to force text
+        // format in spreadsheets — strip it so SKUs are clean and don't duplicate.
+        $sku = $this->cleanCode($col($row, 'sku'));
         if ($sku === '') {
             $sku = strtoupper(Str::slug($handle.'-'.implode('-', $opts))) ?: 'SHOPIFY-'.$rowNum;
         }
@@ -203,7 +220,7 @@ class ShopifyProductImporter
 
         $values = [
             'name' => $name !== '' ? $name : $sku,
-            'barcode' => $col($row, 'barcode') ?: null,
+            'barcode' => $this->cleanCode($col($row, 'barcode')) ?: null,
             'description' => $ctx['description'] ?: null,
             'category_id' => $this->categoryId($ctx['category']),
             'cost_price' => $cost,
