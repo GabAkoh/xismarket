@@ -67,7 +67,10 @@ class PosController extends Controller
 
         $loyalty = \App\Models\Pos\LoyaltySetting::current();
 
-        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty'));
+        // How many product columns the register grid shows (configurable).
+        $gridColumns = max(2, min(8, (int) $this->tenancy->current()->setting('pos.grid_columns', 6)));
+
+        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty', 'gridColumns'));
     }
 
     /** Process a checkout and redirect to the printable receipt. */

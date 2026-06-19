@@ -3,6 +3,7 @@
 use App\Http\Controllers\Pos\CustomerController;
 use App\Http\Controllers\Pos\LoyaltyController;
 use App\Http\Controllers\Pos\PosController;
+use App\Http\Controllers\Pos\PosSettingsController;
 use App\Http\Controllers\Pos\RegisterController;
 use App\Http\Controllers\Pos\SalesController;
 use App\Http\Controllers\Pos\WalletController;
@@ -76,5 +77,9 @@ Route::middleware(['web', 'auth'])->group(function () {
 
         Route::post('registers/{register}/shift/open', [RegisterController::class, 'openShift'])->name('registers.shift.open');
         Route::post('registers/{register}/shift/close', [RegisterController::class, 'closeShift'])->name('registers.shift.close');
+
+        // Register display preferences (e.g. product grid density).
+        Route::get('pos/settings', [PosSettingsController::class, 'edit'])->name('pos.settings');
+        Route::put('pos/settings', [PosSettingsController::class, 'update'])->name('pos.settings.update');
     });
 });

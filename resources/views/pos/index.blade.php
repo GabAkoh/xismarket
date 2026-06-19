@@ -47,7 +47,14 @@
                 <p x-show="scanError" x-cloak class="mt-1 text-xs text-red-500" x-text="scanError"></p>
             </div>
             <div class="flex-1 overflow-y-auto p-4">
-                <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                @php
+                    // Responsive ramp down from the configured wide-screen column count
+                    // (Tailwind CDN generates these literal classes at runtime).
+                    $xl = $gridColumns;
+                    $lg = max(3, $xl - 1);
+                    $sm = max(2, $xl - 2);
+                @endphp
+                <div class="grid grid-cols-2 sm:grid-cols-{{ $sm }} lg:grid-cols-{{ $lg }} xl:grid-cols-{{ $xl }} gap-2">
                     <template x-for="p in filteredProducts" :key="p.id">
                         <button type="button" @click="addToCart(p)"
                                 class="text-left rounded-lg border border-slate-200 p-2 hover:border-indigo-400 hover:shadow transition">
