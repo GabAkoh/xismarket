@@ -6,6 +6,9 @@ use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
 use App\Models\Inventory\Warehouse;
 use App\Support\Tenancy;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -48,6 +51,9 @@ class ShopifyProductImporter
         'image' => ['imagesrc', 'image', 'imageurl', 'imagelink', 'photo'],
         'variantimage' => ['variantimage'],
     ];
+
+    /** How many image downloads to run at once. */
+    protected const IMAGE_CONCURRENCY = 20;
 
     /** @var array<string, int> slug => category id */
     protected array $categoryCache = [];
@@ -123,6 +129,11 @@ class ShopifyProductImporter
         $context = [];
         $rowNum = 1;
 
+        // image URL => [product ids that should use it]. Downloads run concurrently
+        // after the rows are processed, and the same URL is fetched only once even
+        // when several variants of a product share it.
+        $pendingImages = [];
+
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
             $rowNum++;
             $handle = $col($row, 'handle');
@@ -148,7 +159,7 @@ class ShopifyProductImporter
             }
 
             try {
-                $this->importVariant($row, $col, $ctx, $handle, $rowNum, $warehouse, $downloadImages, $result);
+                $this->importVariant($row, $col, $ctx, $handle, $rowNum, $warehouse, $downloadImages, $pendingImages, $result);
             } catch (\Throwable $e) {
                 $result['skipped']++;
                 $result['errors'][] = "Row {$rowNum}: ".$e->getMessage();
@@ -156,6 +167,10 @@ class ShopifyProductImporter
         }
 
         fclose($fh);
+
+        if ($downloadImages && $pendingImages) {
+            $this->downloadImages($pendingImages, $result);
+        }
 
         return $result;
     }
@@ -168,7 +183,7 @@ class ShopifyProductImporter
         return strtolower(preg_replace('/[^a-z0-9]/i', '', $header));
     }
 
-    protected function importVariant(array $row, callable $col, array $ctx, string $handle, int $rowNum, ?Warehouse $warehouse, bool $downloadImages, array &$result): void
+    protected function importVariant(array $row, callable $col, array $ctx, string $handle, int $rowNum, ?Warehouse $warehouse, bool $downloadImages, array &$pendingImages, array &$result): void
     {
         // Distinguish variants by their option values (skip Shopify's "Default Title").
         $opts = array_values(array_filter(
@@ -198,16 +213,16 @@ class ShopifyProductImporter
             'is_active' => $ctx['active'],
         ];
 
-        if ($downloadImages) {
-            $stored = $this->fetchImage($col($row, 'variantimage') ?: $ctx['image']);
-            if ($stored) {
-                $values['image_path'] = $stored;
-                $result['images']++;
-            }
-        }
-
         $product = Product::updateOrCreate(['sku' => $sku], $values);
         $result[$product->wasRecentlyCreated ? 'created' : 'updated']++;
+
+        // Queue the image for a concurrent download pass after all rows are read.
+        if ($downloadImages) {
+            $url = trim((string) ($col($row, 'variantimage') ?: $ctx['image']));
+            if ($url !== '' && preg_match('#^https?://#i', $url)) {
+                $pendingImages[$url][] = $product->id;
+            }
+        }
 
         // Opening stock — only on first import to avoid double-counting on re-runs.
         if ($product->wasRecentlyCreated && $trackStock && $warehouse && is_numeric($invQty) && (float) $invQty != 0
@@ -242,28 +257,56 @@ class ShopifyProductImporter
         return $this->categoryCache[$slug] = Category::firstOrCreate(['slug' => $slug], ['name' => $name])->id;
     }
 
-    /** Download an image URL to the public disk; returns the stored path or null. */
-    protected function fetchImage(?string $url): ?string
+    /**
+     * Download all queued images concurrently (in batches) and attach each stored
+     * image to every product that referenced its URL.
+     *
+     * @param  array<string, array<int, int>>  $pending  url => product ids
+     */
+    protected function downloadImages(array $pending, array &$result): void
     {
-        $url = trim((string) $url);
-        if ($url === '' || ! preg_match('#^https?://#i', $url)) {
-            return null;
-        }
+        foreach (array_chunk(array_keys($pending), self::IMAGE_CONCURRENCY) as $batch) {
+            $responses = Http::pool(fn (Pool $pool) => array_map(
+                fn (string $url) => $pool->as($url)
+                    ->timeout(15)
+                    ->withUserAgent('xismarket-importer')
+                    ->get($url),
+                $batch,
+            ));
 
-        $ctx = stream_context_create(['http' => ['timeout' => 15, 'user_agent' => 'xismarket-importer']]);
-        $bytes = @file_get_contents($url, false, $ctx);
-        if ($bytes === false || strlen($bytes) === 0) {
-            return null;
-        }
+            foreach ($batch as $url) {
+                $response = $responses[$url] ?? null;
+                if (! $response instanceof Response || ! $response->successful()) {
+                    continue;
+                }
 
+                $bytes = $response->body();
+                if ($bytes === '') {
+                    continue;
+                }
+
+                $stored = $this->storeImageBytes($url, $bytes);
+                if ($stored === null) {
+                    continue;
+                }
+
+                // One download serves every variant/product that shared the URL.
+                Product::whereIn('id', $pending[$url])->update(['image_path' => $stored]);
+                $result['images'] += count($pending[$url]);
+            }
+        }
+    }
+
+    /** Persist downloaded image bytes to the public disk; returns the stored path. */
+    protected function storeImageBytes(string $url, string $bytes): ?string
+    {
         $ext = strtolower(pathinfo((string) parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
         if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
             $ext = 'jpg';
         }
 
         $name = 'products/shopify-'.Str::random(32).'.'.$ext;
-        Storage::disk('public')->put($name, $bytes);
 
-        return $name;
+        return Storage::disk('public')->put($name, $bytes) ? $name : null;
     }
 }
