@@ -6,14 +6,30 @@
     <a href="{{ route('products.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to products</a>
 </x-page-header>
 
-@if (session('importErrors') && count(session('importErrors')))
-    <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-        <p class="font-semibold mb-1">Some rows were skipped:</p>
-        <ul class="list-disc list-inside space-y-0.5">
-            @foreach (array_slice(session('importErrors'), 0, 20) as $err)
-                <li>{{ $err }}</li>
-            @endforeach
-        </ul>
+{{-- After queueing, reload once so the background job's summary appears. --}}
+@if (session('justQueued'))
+    <script>setTimeout(function () { window.location.reload(); }, 6000);</script>
+@endif
+
+@if (! empty($lastImport))
+    @php $hasIssues = ($lastImport['skipped'] ?? 0) > 0 || ! empty($lastImport['errors']); @endphp
+    <div class="mb-4 rounded-md border p-4 {{ $hasIssues ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200' }}">
+        <p class="text-sm font-semibold text-slate-700">
+            Last import result
+            <span class="ml-1 text-xs font-normal text-slate-400">{{ $lastImport['finished_at'] ?? '' }}</span>
+        </p>
+        <div class="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600">
+            <span><strong class="text-slate-800">{{ number_format($lastImport['created'] ?? 0) }}</strong> created</span>
+            <span><strong class="text-slate-800">{{ number_format($lastImport['updated'] ?? 0) }}</strong> updated</span>
+            <span><strong class="text-slate-800">{{ number_format($lastImport['images'] ?? 0) }}</strong> images</span>
+            <span><strong class="text-slate-800">{{ number_format($lastImport['skipped'] ?? 0) }}</strong> skipped</span>
+        </div>
+        @if (! empty($lastImport['errors']))
+            <ul class="mt-2 list-disc list-inside text-xs text-amber-800 space-y-0.5">
+                @foreach (array_slice($lastImport['errors'], 0, 15) as $err)<li>{{ $err }}</li>@endforeach
+                @if (count($lastImport['errors']) > 15)<li>… and {{ count($lastImport['errors']) - 15 }} more.</li>@endif
+            </ul>
+        @endif
     </div>
 @endif
 

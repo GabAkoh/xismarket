@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ImportShopifyProductsJob;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ProductImportController extends Controller
 {
@@ -13,7 +14,9 @@ class ProductImportController extends Controller
 
     public function form()
     {
-        return view('inventory.products.import');
+        $lastImport = Cache::get(ImportShopifyProductsJob::resultKey($this->tenancy->id()));
+
+        return view('inventory.products.import', compact('lastImport'));
     }
 
     public function import(Request $request)
@@ -30,12 +33,17 @@ class ProductImportController extends Controller
             return back()->with('error', 'Could not save the uploaded file — please try the import again.');
         }
 
+        // Forget the previous result so the page reflects this run once it finishes.
+        Cache::forget(ImportShopifyProductsJob::resultKey($this->tenancy->id()));
+
         ImportShopifyProductsJob::dispatch(
             $this->tenancy->id(),
             $path,
             $request->boolean('download_images'),
         );
 
-        return back()->with('status', 'Import queued — your products will appear shortly as it processes in the background.');
+        return back()
+            ->with('status', 'Import queued — the summary will appear here once it finishes (usually a few seconds).')
+            ->with('justQueued', true);
     }
 }

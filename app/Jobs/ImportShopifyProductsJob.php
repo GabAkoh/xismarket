@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -32,6 +33,12 @@ class ImportShopifyProductsJob implements ShouldQueue
         public bool $downloadImages,
     ) {}
 
+    /** Cache key holding the most recent import result for a tenant. */
+    public static function resultKey(int $tenantId): string
+    {
+        return "shopify-import-result:{$tenantId}";
+    }
+
     public function handle(ShopifyProductImporter $importer, Tenancy $tenancy): void
     {
         $tenant = Tenant::find($this->tenantId);
@@ -46,6 +53,10 @@ class ImportShopifyProductsJob implements ShouldQueue
 
         try {
             $result = $importer->import(Storage::disk('local')->path($this->path), $this->downloadImages);
+
+            // Stash the outcome so the import page can show it after the job runs.
+            Cache::put(self::resultKey($this->tenantId), $result + ['finished_at' => now()->toDateTimeString()], now()->addDay());
+
             Log::info('Shopify import complete', [
                 'tenant' => $this->tenantId,
                 'created' => $result['created'], 'updated' => $result['updated'],
