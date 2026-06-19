@@ -480,7 +480,9 @@ function posRegister() {
         },
 
         money(v) {
-            return '{{ $symbol }}' + (Math.round((v || 0) * 100) / 100).toFixed(2);
+            const n = Math.round((v || 0) * 100) / 100;
+            // Group thousands with two decimals, e.g. N1,234.50
+            return '{{ $symbol }}' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         },
         submit() {
             if (!this.canSubmit) return;
