@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Orders\Order;
 use App\Models\Pos\Payment;
 use App\Models\Pos\Sale;
+use App\Models\Pos\SaleItem;
 use App\Services\Pos\SaleService;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
@@ -144,6 +145,121 @@ class SalesController extends Controller
         ];
 
         return compact('rows', 'summary', 'from', 'to');
+    }
+
+    /** Sales summary report (totals, payment mix, daily trend, top products). */
+    public function report(Request $request)
+    {
+        return view('sales.report', $this->reportData($request));
+    }
+
+    /** Download the per-day sales breakdown (current filter) as CSV. */
+    public function reportExport(Request $request)
+    {
+        ['daily' => $daily, 'from' => $from, 'to' => $to] = $this->reportData($request);
+
+        $filename = 'sales-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($daily) {
+            $out = fopen('php://output', 'w');
+            // Explicit args (incl. $escape) — PHP 8.4 deprecates omitting them.
+            fputcsv($out, ['Date', 'Sales', 'Net', 'Tax', 'Total'], ',', '"', '');
+            foreach ($daily as $d) {
+                fputcsv($out, [
+                    $d->d,
+                    $d->n,
+                    number_format((float) $d->net, 2, '.', ''),
+                    number_format((float) $d->tax, 2, '.', ''),
+                    number_format((float) $d->total, 2, '.', ''),
+                ], ',', '"', '');
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Build the sales report for the request's date range. Excludes voided sales;
+     * sales are bucketed by completed_at.
+     *
+     * @return array{summary: array, methods: \Illuminate\Support\Collection, daily: \Illuminate\Support\Collection, top: \Illuminate\Support\Collection, from: Carbon, to: Carbon}
+     */
+    protected function reportData(Request $request): array
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : now()->endOfDay();
+
+        $inRange = fn ($q) => $q->where('status', '!=', 'void')->whereBetween('completed_at', [$from, $to]);
+
+        // Headline totals.
+        $t = Sale::query()->tap($inRange)->selectRaw('
+            COUNT(*) as count,
+            COALESCE(SUM(subtotal), 0) as gross,
+            COALESCE(SUM(discount_total), 0) as discounts,
+            COALESCE(SUM(tax_total), 0) as tax,
+            COALESCE(SUM(total), 0) as total,
+            COALESCE(SUM(balance_due), 0) as outstanding,
+            COALESCE(SUM(refunded_total), 0) as refunded
+        ')->first();
+
+        $cogs = (float) SaleItem::whereHas('sale', $inRange)
+            ->selectRaw('COALESCE(SUM(unit_cost * quantity), 0) as cogs')
+            ->value('cogs');
+
+        $net = round((float) $t->gross - (float) $t->discounts, 2);   // ex-tax revenue
+
+        $summary = [
+            'count' => (int) $t->count,
+            'gross' => round((float) $t->gross, 2),
+            'discounts' => round((float) $t->discounts, 2),
+            'tax' => round((float) $t->tax, 2),
+            'total' => round((float) $t->total, 2),
+            'net' => $net,
+            'cogs' => round($cogs, 2),
+            'profit' => round($net - $cogs, 2),
+            // Money actually kept = billed minus what's still owed (excludes change).
+            'collected' => round((float) $t->total - (float) $t->outstanding, 2),
+            'outstanding' => round((float) $t->outstanding, 2),
+            'refunded' => round((float) $t->refunded, 2),
+            'avg' => (int) $t->count > 0 ? round((float) $t->total / (int) $t->count, 2) : 0.0,
+        ];
+
+        // Payment mix (positive payments only; refunds are negative).
+        $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
+        $methods = Payment::whereHas('sale', $inRange)
+            ->where('amount', '>', 0)
+            ->selectRaw('method, COALESCE(SUM(amount), 0) as amount, COUNT(*) as n')
+            ->groupBy('method')
+            ->orderByDesc('amount')
+            ->get()
+            ->map(fn ($m) => (object) [
+                'label' => $labels[$m->method] ?? ucfirst(str_replace('_', ' ', $m->method)),
+                'amount' => round((float) $m->amount, 2),
+                'n' => (int) $m->n,
+            ]);
+
+        // Per-day breakdown.
+        $daily = Sale::query()->tap($inRange)
+            ->selectRaw('DATE(completed_at) as d, COUNT(*) as n,
+                COALESCE(SUM(subtotal - discount_total), 0) as net,
+                COALESCE(SUM(tax_total), 0) as tax,
+                COALESCE(SUM(total), 0) as total')
+            ->groupBy('d')
+            ->orderBy('d')
+            ->get();
+
+        // Top products by revenue.
+        $top = SaleItem::whereHas('sale', $inRange)
+            ->selectRaw('product_id, name, COALESCE(SUM(quantity), 0) as qty, COALESCE(SUM(line_total), 0) as revenue')
+            ->groupBy('product_id', 'name')
+            ->orderByDesc('revenue')
+            ->limit(10)
+            ->get();
+
+        return compact('summary', 'methods', 'daily', 'top', 'from', 'to');
     }
 
     public function show(Sale $sale)

@@ -22,9 +22,11 @@ Route::middleware(['web', 'auth'])->group(function () {
     // --- Sales history ---
     Route::middleware('permission:sales.view')->group(function () {
         Route::get('sales', [SalesController::class, 'index'])->name('sales.index');
-        // Before sales/{sale} so the literal segment isn't treated as a sale id.
+        // Before sales/{sale} so the literal segments aren't treated as a sale id.
         Route::get('sales/returns', [SalesController::class, 'returns'])->name('sales.returns');
         Route::get('sales/returns/export', [SalesController::class, 'returnsExport'])->name('sales.returns.export');
+        Route::get('sales/report', [SalesController::class, 'report'])->name('sales.report');
+        Route::get('sales/report/export', [SalesController::class, 'reportExport'])->name('sales.report.export');
         Route::get('sales/{sale}', [SalesController::class, 'show'])->name('sales.show');
     });
 
