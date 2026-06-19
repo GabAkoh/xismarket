@@ -42,7 +42,7 @@
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Gross profit</p>
         <p class="mt-1 text-2xl font-bold text-green-600">{{ $money($summary['profit_after_returns']) }}</p>
-        <p class="text-xs text-slate-400 mt-1">after returns &amp; cost</p>
+        <p class="text-xs text-slate-400 mt-1">{{ number_format($summary['margin_after_returns'], 1) }}% margin · after returns</p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Sales</p>
@@ -65,7 +65,7 @@
             <div class="flex justify-between"><dt class="text-slate-500">Tax</dt><dd class="font-medium text-slate-700">{{ $money($summary['tax']) }}</dd></div>
             <div class="flex justify-between border-t border-dashed border-slate-200 pt-1.5"><dt class="text-slate-600">Net revenue</dt><dd class="font-semibold text-slate-800">{{ $money($summary['net']) }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Cost of goods</dt><dd class="font-medium text-slate-700">−{{ $money($summary['cogs']) }}</dd></div>
-            <div class="flex justify-between"><dt class="text-slate-600">Gross profit</dt><dd class="font-semibold text-green-600">{{ $money($summary['profit']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-600">Gross profit <span class="text-xs font-normal text-slate-400">({{ number_format($summary['margin'], 1) }}%)</span></dt><dd class="font-semibold text-green-600">{{ $money($summary['profit']) }}</dd></div>
         </dl>
     </x-card>
 
@@ -76,7 +76,7 @@
             <div class="flex justify-between border-t border-dashed border-slate-200 pt-1.5"><dt class="text-slate-600">Total refunded</dt><dd class="font-semibold text-red-600">−{{ $money($summary['returns_total']) }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Cost of goods recovered</dt><dd class="font-medium text-slate-700">+{{ $money($summary['returns_cogs']) }}</dd></div>
             <div class="flex justify-between border-t border-dashed border-slate-200 pt-1.5"><dt class="text-slate-600">Net sales after returns</dt><dd class="font-semibold text-slate-800">{{ $money($summary['net_after_returns']) }}</dd></div>
-            <div class="flex justify-between"><dt class="text-slate-600">Gross profit after returns</dt><dd class="font-semibold text-green-600">{{ $money($summary['profit_after_returns']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-600">Gross profit after returns <span class="text-xs font-normal text-slate-400">({{ number_format($summary['margin_after_returns'], 1) }}%)</span></dt><dd class="font-semibold text-green-600">{{ $money($summary['profit_after_returns']) }}</dd></div>
         </dl>
     </x-card>
 </div>

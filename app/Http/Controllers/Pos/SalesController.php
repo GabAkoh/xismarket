@@ -233,12 +233,14 @@ class SalesController extends Controller
                 ['Net revenue', $num($s['net'])],
                 ['Cost of goods', $num($s['cogs'])],
                 ['Gross profit', $num($s['profit'])],
+                ['Gross margin %', $num($s['margin'])],
                 ['Revenue reversed (returns)', $num($s['returns_net'])],
                 ['Tax reversed (returns)', $num($s['returns_tax'])],
                 ['Total refunded', $num($s['returns_total'])],
                 ['COGS recovered (returns)', $num($s['returns_cogs'])],
                 ['Net sales after returns', $num($s['net_after_returns'])],
                 ['Gross profit after returns', $num($s['profit_after_returns'])],
+                ['Gross margin % after returns', $num($s['margin_after_returns'])],
                 ['Collected', $num($s['collected'])],
                 ['Outstanding (credit)', $num($s['outstanding'])],
             ]);
@@ -318,6 +320,9 @@ class SalesController extends Controller
         }
         $returnsTotal = round($returnsNet + $returnsTax, 2);
 
+        $netAfterReturns = round($net - $returnsNet, 2);
+        $profitAfterReturns = round($profit - ($returnsNet - $returnsCogs), 2);
+
         $summary = [
             'count' => (int) $t->count,
             'gross' => round((float) $t->gross, 2),
@@ -336,8 +341,11 @@ class SalesController extends Controller
             'returns_tax' => $returnsTax,
             'returns_cogs' => $returnsCogs,
             'returns_total' => $returnsTotal,
-            'net_after_returns' => round($net - $returnsNet, 2),
-            'profit_after_returns' => round($profit - ($returnsNet - $returnsCogs), 2),
+            'net_after_returns' => $netAfterReturns,
+            'profit_after_returns' => $profitAfterReturns,
+            // Gross profit as a % of net revenue.
+            'margin' => $net > 0 ? round($profit / $net * 100, 1) : 0.0,
+            'margin_after_returns' => $netAfterReturns > 0 ? round($profitAfterReturns / $netAfterReturns * 100, 1) : 0.0,
         ];
 
         // Payment mix (positive payments only; refunds are negative).
