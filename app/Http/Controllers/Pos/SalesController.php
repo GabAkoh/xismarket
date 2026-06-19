@@ -201,15 +201,41 @@ class SalesController extends Controller
             COALESCE(SUM(discount_total), 0) as discounts,
             COALESCE(SUM(tax_total), 0) as tax,
             COALESCE(SUM(total), 0) as total,
-            COALESCE(SUM(balance_due), 0) as outstanding,
-            COALESCE(SUM(refunded_total), 0) as refunded
+            COALESCE(SUM(balance_due), 0) as outstanding
         ')->first();
 
-        $cogs = (float) SaleItem::whereHas('sale', $inRange)
+        $cogs = round((float) SaleItem::whereHas('sale', $inRange)
             ->selectRaw('COALESCE(SUM(unit_cost * quantity), 0) as cogs')
-            ->value('cogs');
+            ->value('cogs'), 2);
 
         $net = round((float) $t->gross - (float) $t->discounts, 2);   // ex-tax revenue
+        $profit = round($net - $cogs, 2);
+
+        // Returns processed in this period, taken from the reversing journal entries
+        // (both POS returns and online-order refunds debit revenue / credit COGS,
+        // reference "…-R"). Sourcing returns here keeps the net-of-returns figures
+        // consistent with the P&L. Guarded — the Accounting module is optional.
+        $returnsNet = $returnsTax = $returnsCogs = 0.0;
+        $accountClass = \App\Models\Accounting\Account::class;
+        $lineClass = \App\Models\Accounting\JournalLine::class;
+        if (class_exists($accountClass) && class_exists($lineClass)) {
+            $returnSum = function (string $code, string $side) use ($from, $to, $accountClass, $lineClass) {
+                $account = $accountClass::where('code', $code)->first();
+                if (! $account) {
+                    return 0.0;
+                }
+
+                return (float) $lineClass::where('account_id', $account->id)
+                    ->whereHas('entry', fn ($e) => $e
+                        ->whereBetween('entry_date', [$from, $to])
+                        ->where('reference', 'like', '%-R%'))
+                    ->sum($side);
+            };
+            $returnsNet = round($returnSum('4000', 'debit'), 2);    // revenue reversed
+            $returnsTax = round($returnSum('2100', 'debit'), 2);    // tax reversed
+            $returnsCogs = round($returnSum('5000', 'credit'), 2);  // COGS recovered
+        }
+        $returnsTotal = round($returnsNet + $returnsTax, 2);
 
         $summary = [
             'count' => (int) $t->count,
@@ -218,13 +244,19 @@ class SalesController extends Controller
             'tax' => round((float) $t->tax, 2),
             'total' => round((float) $t->total, 2),
             'net' => $net,
-            'cogs' => round($cogs, 2),
-            'profit' => round($net - $cogs, 2),
+            'cogs' => $cogs,
+            'profit' => $profit,
             // Money actually kept = billed minus what's still owed (excludes change).
             'collected' => round((float) $t->total - (float) $t->outstanding, 2),
             'outstanding' => round((float) $t->outstanding, 2),
-            'refunded' => round((float) $t->refunded, 2),
             'avg' => (int) $t->count > 0 ? round((float) $t->total / (int) $t->count, 2) : 0.0,
+            // Returns in the period + net-of-returns bottom lines.
+            'returns_net' => $returnsNet,
+            'returns_tax' => $returnsTax,
+            'returns_cogs' => $returnsCogs,
+            'returns_total' => $returnsTotal,
+            'net_after_returns' => round($net - $returnsNet, 2),
+            'profit_after_returns' => round($profit - ($returnsNet - $returnsCogs), 2),
         ];
 
         // Payment mix (positive payments only; refunds are negative).

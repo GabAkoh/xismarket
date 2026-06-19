@@ -29,17 +29,17 @@
     </form>
 </x-card>
 
-{{-- Headline KPIs --}}
+{{-- Headline KPIs (net of returns) --}}
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Net sales</p>
-        <p class="mt-1 text-2xl font-bold text-slate-800">{{ $money($summary['net']) }}</p>
-        <p class="text-xs text-slate-400 mt-1">ex-tax revenue</p>
+        <p class="mt-1 text-2xl font-bold text-slate-800">{{ $money($summary['net_after_returns']) }}</p>
+        <p class="text-xs text-slate-400 mt-1">ex-tax, after returns</p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Gross profit</p>
-        <p class="mt-1 text-2xl font-bold text-green-600">{{ $money($summary['profit']) }}</p>
-        <p class="text-xs text-slate-400 mt-1">net − cost of goods</p>
+        <p class="mt-1 text-2xl font-bold text-green-600">{{ $money($summary['profit_after_returns']) }}</p>
+        <p class="text-xs text-slate-400 mt-1">after returns &amp; cost</p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Sales</p>
@@ -53,17 +53,30 @@
     </div>
 </div>
 
-{{-- Secondary figures --}}
-<x-card class="mb-6">
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
-        <div><p class="text-slate-400">Gross</p><p class="font-semibold text-slate-700">{{ $money($summary['gross']) }}</p></div>
-        <div><p class="text-slate-400">Discounts</p><p class="font-semibold text-slate-700">−{{ $money($summary['discounts']) }}</p></div>
-        <div><p class="text-slate-400">Tax</p><p class="font-semibold text-slate-700">{{ $money($summary['tax']) }}</p></div>
-        <div><p class="text-slate-400">Total billed</p><p class="font-semibold text-slate-700">{{ $money($summary['total']) }}</p></div>
-        <div><p class="text-slate-400">Cost of goods</p><p class="font-semibold text-slate-700">{{ $money($summary['cogs']) }}</p></div>
-        <div><p class="text-slate-400">Refunded</p><p class="font-semibold text-red-600">−{{ $money($summary['refunded']) }}</p></div>
-    </div>
-</x-card>
+{{-- Sales vs returns breakdown --}}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <x-card title="Sales (this period)">
+        <dl class="text-sm space-y-1.5">
+            <div class="flex justify-between"><dt class="text-slate-500">Gross</dt><dd class="font-medium text-slate-700">{{ $money($summary['gross']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Discounts</dt><dd class="font-medium text-slate-700">−{{ $money($summary['discounts']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Tax</dt><dd class="font-medium text-slate-700">{{ $money($summary['tax']) }}</dd></div>
+            <div class="flex justify-between border-t border-dashed border-slate-200 pt-1.5"><dt class="text-slate-600">Net revenue</dt><dd class="font-semibold text-slate-800">{{ $money($summary['net']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Cost of goods</dt><dd class="font-medium text-slate-700">−{{ $money($summary['cogs']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-600">Gross profit</dt><dd class="font-semibold text-green-600">{{ $money($summary['profit']) }}</dd></div>
+        </dl>
+    </x-card>
+
+    <x-card title="Returns (this period)">
+        <dl class="text-sm space-y-1.5">
+            <div class="flex justify-between"><dt class="text-slate-500">Revenue reversed</dt><dd class="font-medium text-red-600">−{{ $money($summary['returns_net']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Tax reversed</dt><dd class="font-medium text-red-600">−{{ $money($summary['returns_tax']) }}</dd></div>
+            <div class="flex justify-between border-t border-dashed border-slate-200 pt-1.5"><dt class="text-slate-600">Total refunded</dt><dd class="font-semibold text-red-600">−{{ $money($summary['returns_total']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-500">Cost of goods recovered</dt><dd class="font-medium text-slate-700">+{{ $money($summary['returns_cogs']) }}</dd></div>
+            <div class="flex justify-between border-t border-dashed border-slate-200 pt-1.5"><dt class="text-slate-600">Net sales after returns</dt><dd class="font-semibold text-slate-800">{{ $money($summary['net_after_returns']) }}</dd></div>
+            <div class="flex justify-between"><dt class="text-slate-600">Gross profit after returns</dt><dd class="font-semibold text-green-600">{{ $money($summary['profit_after_returns']) }}</dd></div>
+        </dl>
+    </x-card>
+</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     {{-- Payment mix --}}
