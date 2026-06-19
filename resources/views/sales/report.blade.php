@@ -117,36 +117,70 @@
     </x-card>
 </div>
 
-{{-- Sales by cashier --}}
-@php $maxCashier = $cashiers->max('total') ?: 1; @endphp
-<x-card title="Sales by cashier" class="mb-6">
-    <table class="w-full text-sm">
-        <thead class="text-left text-slate-400 border-b">
-            <tr>
-                <th class="py-2">Cashier</th><th class="text-right">Sales</th>
-                <th class="text-right">Net</th><th class="text-right">Total</th>
-                <th class="pl-4 w-1/3">&nbsp;</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y">
-            @forelse ($cashiers as $c)
+{{-- Sales by cashier / register --}}
+@php
+    $maxCashier = $cashiers->max('total') ?: 1;
+    $maxRegister = $registers->max('total') ?: 1;
+@endphp
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <x-card title="Sales by cashier">
+        <table class="w-full text-sm">
+            <thead class="text-left text-slate-400 border-b">
                 <tr>
-                    <td class="py-2 text-slate-700">{{ $c->name }}</td>
-                    <td class="py-2 text-right text-slate-500">{{ number_format($c->n) }}</td>
-                    <td class="py-2 text-right text-slate-600">{{ $money($c->net) }}</td>
-                    <td class="py-2 text-right font-semibold text-slate-700">{{ $money($c->total) }}</td>
-                    <td class="pl-4">
-                        <div class="h-2 rounded bg-indigo-100">
-                            <div class="h-2 rounded bg-indigo-500" style="width: {{ max(2, round((float) $c->total / $maxCashier * 100)) }}%"></div>
-                        </div>
-                    </td>
+                    <th class="py-2">Cashier</th><th class="text-right">Sales</th>
+                    <th class="text-right">Net</th><th class="text-right">Total</th>
+                    <th class="pl-4 w-1/4">&nbsp;</th>
                 </tr>
-            @empty
-                <tr><td colspan="5" class="py-6 text-center text-slate-400">No sales in this period.</td></tr>
-            @endforelse
-        </tbody>
-    </table>
-</x-card>
+            </thead>
+            <tbody class="divide-y">
+                @forelse ($cashiers as $c)
+                    <tr>
+                        <td class="py-2 text-slate-700">{{ $c->name }}</td>
+                        <td class="py-2 text-right text-slate-500">{{ number_format($c->n) }}</td>
+                        <td class="py-2 text-right text-slate-600">{{ $money($c->net) }}</td>
+                        <td class="py-2 text-right font-semibold text-slate-700">{{ $money($c->total) }}</td>
+                        <td class="pl-4">
+                            <div class="h-2 rounded bg-indigo-100">
+                                <div class="h-2 rounded bg-indigo-500" style="width: {{ max(2, round((float) $c->total / $maxCashier * 100)) }}%"></div>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="py-6 text-center text-slate-400">No sales in this period.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </x-card>
+
+    <x-card title="Sales by register">
+        <table class="w-full text-sm">
+            <thead class="text-left text-slate-400 border-b">
+                <tr>
+                    <th class="py-2">Register</th><th class="text-right">Sales</th>
+                    <th class="text-right">Net</th><th class="text-right">Total</th>
+                    <th class="pl-4 w-1/4">&nbsp;</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y">
+                @forelse ($registers as $r)
+                    <tr>
+                        <td class="py-2 text-slate-700">{{ $r->name }}</td>
+                        <td class="py-2 text-right text-slate-500">{{ number_format($r->n) }}</td>
+                        <td class="py-2 text-right text-slate-600">{{ $money($r->net) }}</td>
+                        <td class="py-2 text-right font-semibold text-slate-700">{{ $money($r->total) }}</td>
+                        <td class="pl-4">
+                            <div class="h-2 rounded bg-indigo-100">
+                                <div class="h-2 rounded bg-indigo-500" style="width: {{ max(2, round((float) $r->total / $maxRegister * 100)) }}%"></div>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="py-6 text-center text-slate-400">No sales in this period.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </x-card>
+</div>
 
 {{-- Daily trend --}}
 <x-card title="Daily breakdown">

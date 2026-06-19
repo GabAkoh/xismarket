@@ -302,7 +302,18 @@ class SalesController extends Controller
         $names = \App\Models\User::whereIn('id', $cashiers->pluck('user_id')->filter())->pluck('name', 'id');
         $cashiers->each(fn ($c) => $c->name = $names[$c->user_id] ?? 'Unknown');
 
-        return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'from', 'to');
+        // Per-register breakdown.
+        $registers = Sale::query()->tap($inRange)
+            ->selectRaw('register_id, COUNT(*) as n,
+                COALESCE(SUM(subtotal - discount_total), 0) as net,
+                COALESCE(SUM(total), 0) as total')
+            ->groupBy('register_id')
+            ->orderByDesc('total')
+            ->get();
+        $regNames = \App\Models\Pos\Register::whereIn('id', $registers->pluck('register_id')->filter())->pluck('name', 'id');
+        $registers->each(fn ($r) => $r->name = $regNames[$r->register_id] ?? 'No register');
+
+        return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'registers', 'from', 'to');
     }
 
     public function show(Sale $sale)
