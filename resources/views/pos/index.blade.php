@@ -285,8 +285,9 @@ function posRegister() {
         useWallet: 0,
         // Split tender: one or more payment lines, each { method, amount }.
         // A method may appear at most once across the lines.
-        payMethods: ['cash', 'card', 'other'],
-        tenders: [{ method: 'cash', amount: null }],
+        payMethods: @json(array_values(array_column($payMethods, 'key'))),
+        payMethodLabels: @json(array_column($payMethods, 'label', 'key')),
+        tenders: [{ method: @json($payMethods[0]['key'] ?? 'cash'), amount: null }],
         submitting: false,
 
         init() {
@@ -339,12 +340,12 @@ function posRegister() {
         removeLine(i) { this.cart.splice(i, 1); },
         clearCart() {
             this.cart = []; this.cartDiscount = 0;
-            this.tenders = [{ method: 'cash', amount: null }];
+            this.tenders = [{ method: this.payMethods[0] || 'cash', amount: null }];
             this.redeemPoints = 0; this.useWallet = 0;
         },
 
         // --- Split-tender payment lines (each method usable only once) ---
-        methodLabel(m) { return m.charAt(0).toUpperCase() + m.slice(1); },
+        methodLabel(m) { return this.payMethodLabels[m] || (m.charAt(0).toUpperCase() + m.slice(1)); },
         // True when method `m` is already used by a DIFFERENT line than `t`.
         methodTaken(t, m) {
             return m !== t.method && this.tenders.some(x => x !== t && x.method === m);

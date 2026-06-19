@@ -159,9 +159,10 @@ class SalesController extends Controller
     {
         $this->authorizeTenant($sale);
 
+        $allowed = array_merge($this->tenancy->current()->paymentMethodKeys(), ['wallet']);
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
-            'method' => ['required', 'string', 'in:cash,card,other,wallet'],
+            'method' => ['required', 'string', \Illuminate\Validation\Rule::in($allowed)],
             'reference' => ['nullable', 'string', 'max:255'],
         ]);
 

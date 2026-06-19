@@ -63,7 +63,7 @@
             @php
                 // A method already recorded on this sale can't be used again (any amount).
                 $usedMethods = $sale->payments->pluck('method')->all();
-                $methodOptions = ['cash' => 'Cash', 'card' => 'Card', 'other' => 'Other'];
+                $methodOptions = $currentTenant->paymentMethodLabels();
                 if ($sale->customer && $sale->customer->balance > 0) {
                     $methodOptions['wallet'] = 'Wallet ('.$symbol.number_format($sale->customer->balance, 2).')';
                 }

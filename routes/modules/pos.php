@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Pos\CustomerController;
 use App\Http\Controllers\Pos\LoyaltyController;
+use App\Http\Controllers\Pos\PaymentMethodController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Pos\PosSettingsController;
 use App\Http\Controllers\Pos\RegisterController;
@@ -81,5 +82,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         // Register display preferences (e.g. product grid density).
         Route::get('pos/settings', [PosSettingsController::class, 'edit'])->name('pos.settings');
         Route::put('pos/settings', [PosSettingsController::class, 'update'])->name('pos.settings.update');
+
+        // Payment method (tender) configuration.
+        Route::get('pos/payment-methods', [PaymentMethodController::class, 'edit'])->name('payment-methods.settings');
+        Route::put('pos/payment-methods', [PaymentMethodController::class, 'update'])->name('payment-methods.update');
     });
 });

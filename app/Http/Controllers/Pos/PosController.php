@@ -70,7 +70,10 @@ class PosController extends Controller
         // How many product columns the register grid shows (configurable).
         $gridColumns = max(2, min(8, (int) $this->tenancy->current()->setting('pos.grid_columns', 4)));
 
-        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty', 'gridColumns'));
+        // Configurable tender options.
+        $payMethods = $this->tenancy->current()->paymentMethods();
+
+        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty', 'gridColumns', 'payMethods'));
     }
 
     /** Process a checkout and redirect to the printable receipt. */
@@ -90,7 +93,7 @@ class PosController extends Controller
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
             'payments' => ['required', 'array', 'min:1'],
             // 'distinct' guards against the same method being submitted twice.
-            'payments.*.method' => ['required', 'string', 'in:cash,card,other,wallet', 'distinct'],
+            'payments.*.method' => ['required', 'string', \Illuminate\Validation\Rule::in($this->allowedPaymentMethods()), 'distinct'],
             'payments.*.amount' => ['required', 'numeric', 'min:0'],
             'payments.*.reference' => ['nullable', 'string', 'max:255'],
         ], [
@@ -116,6 +119,12 @@ class PosController extends Controller
         $sale->load('items', 'payments', 'customer', 'register', 'user');
 
         return view('pos.receipt', compact('sale'));
+    }
+
+    /** Valid payment method keys for checkout: the configured tenders plus wallet. */
+    protected function allowedPaymentMethods(): array
+    {
+        return array_merge($this->tenancy->current()->paymentMethodKeys(), ['wallet']);
     }
 
     protected function warehouseFor(?Register $register): ?Warehouse

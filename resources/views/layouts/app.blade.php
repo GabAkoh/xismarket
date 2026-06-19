@@ -41,6 +41,7 @@
                         ['route' => 'loyalty.settings', 'label' => 'Loyalty Program', 'perm' => 'customers.manage'],
                         ['route' => 'registers.index', 'label' => 'Registers & Shifts', 'perm' => 'registers.manage'],
                         ['route' => 'pos.settings', 'label' => 'Register Display', 'perm' => 'registers.manage'],
+                        ['route' => 'payment-methods.settings', 'label' => 'Payment Methods', 'perm' => 'registers.manage'],
                     ]],
                     ['heading' => 'Online Orders', 'links' => [
                         ['route' => 'orders.index', 'label' => 'Orders', 'perm' => 'orders.view'],
