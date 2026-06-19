@@ -16,6 +16,24 @@ services:
     networks:
       - xismarket
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: xismarket-worker
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan queue:work --sleep=3 --tries=1 --timeout=1810
+    volumes:
+      - ./:/var/www
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - xismarket
+
   nginx:
     image: nginx:1.27-alpine
     container_name: xismarket-nginx

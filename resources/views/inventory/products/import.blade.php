@@ -35,6 +35,7 @@
             <p>In Shopify: <span class="font-medium">Products → Export → Current page / All products → Plain CSV</span>, then upload the file here.</p>
             <p>Each variant becomes its own product (matched/updated by SKU). Title, type→category, price, cost, barcode, stock and status are mapped automatically. Tax rate defaults to 0 — set it afterwards.</p>
             <p>Re-importing the same file updates existing products (it won't duplicate them or re-add stock).</p>
+            <p>The import runs in the background — products appear progressively as it processes.</p>
         </div>
     </x-card>
 
