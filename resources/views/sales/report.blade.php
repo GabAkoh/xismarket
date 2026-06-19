@@ -6,6 +6,9 @@
     $symbol = $currentTenant->currencySymbol() ?? '';
     $money = fn ($v) => $symbol.' '.number_format((float) $v, 2);
     $maxDay = $daily->max('total') ?: 1;
+    $exportUrl = fn ($section) => route('sales.report.export', [
+        'section' => $section, 'from' => $from->toDateString(), 'to' => $to->toDateString(),
+    ]);
 @endphp
 
 <x-page-header title="Sales report" subtitle="Totals, payment mix and trends for the selected period">
@@ -81,6 +84,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     {{-- Payment mix --}}
     <x-card title="Payment methods">
+        <x-slot:actions><a href="{{ $exportUrl('methods') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($methods as $m)
@@ -98,6 +102,7 @@
 
     {{-- Top products --}}
     <x-card title="Top products">
+        <x-slot:actions><a href="{{ $exportUrl('products') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr><th class="py-2">Product</th><th class="text-right">Qty</th><th class="text-right">Revenue</th></tr>
@@ -124,6 +129,7 @@
 @endphp
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="Sales by cashier">
+        <x-slot:actions><a href="{{ $exportUrl('cashiers') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -153,6 +159,7 @@
     </x-card>
 
     <x-card title="Sales by register">
+        <x-slot:actions><a href="{{ $exportUrl('registers') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -184,6 +191,7 @@
 
 {{-- Daily trend --}}
 <x-card title="Daily breakdown">
+    <x-slot:actions><a href="{{ $exportUrl('daily') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>

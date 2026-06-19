@@ -153,25 +153,40 @@ class SalesController extends Controller
         return view('sales.report', $this->reportData($request));
     }
 
-    /** Download the per-day sales breakdown (current filter) as CSV. */
+    /**
+     * Download a report breakdown (current filter) as CSV. The ?section= param
+     * selects which table: daily (default), methods, products, cashiers, registers.
+     */
     public function reportExport(Request $request)
     {
-        ['daily' => $daily, 'from' => $from, 'to' => $to] = $this->reportData($request);
+        $data = $this->reportData($request);
+        $from = $data['from'];
+        $to = $data['to'];
 
-        $filename = 'sales-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $qty = fn ($v) => rtrim(rtrim(number_format((float) $v, 3), '0'), '.');
 
-        return response()->streamDownload(function () use ($daily) {
+        [$name, $header, $rows] = match ($request->input('section')) {
+            'methods' => ['payment-methods', ['Method', 'Count', 'Amount'],
+                $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)])],
+            'products' => ['top-products', ['Product', 'Qty', 'Revenue'],
+                $data['top']->map(fn ($p) => [$p->name, $qty($p->qty), $num($p->revenue)])],
+            'cashiers' => ['cashiers', ['Cashier', 'Sales', 'Net', 'Total'],
+                $data['cashiers']->map(fn ($c) => [$c->name, $c->n, $num($c->net), $num($c->total)])],
+            'registers' => ['registers', ['Register', 'Sales', 'Net', 'Total'],
+                $data['registers']->map(fn ($r) => [$r->name, $r->n, $num($r->net), $num($r->total)])],
+            default => ['sales', ['Date', 'Sales', 'Net', 'Tax', 'Total'],
+                $data['daily']->map(fn ($d) => [$d->d, $d->n, $num($d->net), $num($d->tax), $num($d->total)])],
+        };
+
+        $filename = $name.'-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($header, $rows) {
             $out = fopen('php://output', 'w');
             // Explicit args (incl. $escape) — PHP 8.4 deprecates omitting them.
-            fputcsv($out, ['Date', 'Sales', 'Net', 'Tax', 'Total'], ',', '"', '');
-            foreach ($daily as $d) {
-                fputcsv($out, [
-                    $d->d,
-                    $d->n,
-                    number_format((float) $d->net, 2, '.', ''),
-                    number_format((float) $d->tax, 2, '.', ''),
-                    number_format((float) $d->total, 2, '.', ''),
-                ], ',', '"', '');
+            fputcsv($out, $header, ',', '"', '');
+            foreach ($rows as $row) {
+                fputcsv($out, $row, ',', '"', '');
             }
             fclose($out);
         }, $filename, ['Content-Type' => 'text/csv']);
