@@ -47,25 +47,25 @@
                 <p x-show="scanError" x-cloak class="mt-1 text-xs text-red-500" x-text="scanError"></p>
             </div>
             <div class="flex-1 overflow-y-auto p-4">
-                <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                     <template x-for="p in filteredProducts" :key="p.id">
                         <button type="button" @click="addToCart(p)"
-                                class="text-left rounded-lg border border-slate-200 p-3 hover:border-indigo-400 hover:shadow transition">
-                            <div class="mb-2 aspect-square w-full overflow-hidden rounded-md bg-slate-100 flex items-center justify-center">
+                                class="text-left rounded-lg border border-slate-200 p-2 hover:border-indigo-400 hover:shadow transition">
+                            <div class="mb-1.5 aspect-square w-full overflow-hidden rounded bg-slate-100 flex items-center justify-center">
                                 <template x-if="p.image">
                                     <img :src="p.image" :alt="p.name" class="h-full w-full object-cover" loading="lazy">
                                 </template>
                                 <template x-if="!p.image">
-                                    <span class="text-2xl text-slate-300">📦</span>
+                                    <span class="text-xl text-slate-300">📦</span>
                                 </template>
                             </div>
-                            <div class="font-medium text-slate-700 text-sm leading-tight" x-text="p.name"></div>
-                            <div class="text-xs text-slate-400 mt-1" x-text="p.sku"></div>
-                            <div class="mt-2 flex items-center justify-between">
-                                <span class="font-semibold text-indigo-600 text-sm" x-text="money(p.price)"></span>
+                            <div class="font-medium text-slate-700 text-xs leading-tight line-clamp-2" x-text="p.name"></div>
+                            <div class="text-[11px] text-slate-400 mt-0.5 truncate" x-text="p.sku"></div>
+                            <div class="mt-1 flex items-center justify-between gap-1">
+                                <span class="font-semibold text-indigo-600 text-xs" x-text="money(p.price)"></span>
                                 <template x-if="p.track_stock && p.stock !== null">
-                                    <span class="text-xs" :class="p.stock > 0 ? 'text-slate-400' : 'text-red-500'"
-                                          x-text="(p.stock ?? 0) + ' in stock'"></span>
+                                    <span class="text-[11px] whitespace-nowrap" :class="p.stock > 0 ? 'text-slate-400' : 'text-red-500'"
+                                          x-text="(p.stock ?? 0)"></span>
                                 </template>
                             </div>
                         </button>
