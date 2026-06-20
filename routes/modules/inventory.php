@@ -13,6 +13,9 @@ Route::middleware(['web', 'auth'])->group(function () {
     // Products
     Route::middleware('permission:inventory.view')->group(function () {
         Route::get('products', [ProductController::class, 'index'])->name('products.index');
+        // Literal segments — before any products/{product} route.
+        Route::get('products/report', [ProductController::class, 'report'])->name('products.report');
+        Route::get('products/report/export', [ProductController::class, 'reportExport'])->name('products.report.export');
     });
     Route::middleware('permission:products.manage')->group(function () {
         // Import (literal segments — before products/{product} routes).

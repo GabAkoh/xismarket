@@ -51,6 +51,141 @@ class ProductController extends Controller
         return view('inventory.products.index', compact('products', 'attentionCount', 'sellableCount'));
     }
 
+    /** Inventory/products report: stock state and sales activity, filterable. */
+    public function report(Request $request)
+    {
+        $data = $this->reportQuery($request);
+        $data['categories'] = Category::orderBy('name')->get(['id', 'name']);
+
+        return view('inventory.products.report', $data);
+    }
+
+    /** Download the products report (current filters) as CSV. */
+    public function reportExport(Request $request)
+    {
+        $data = $this->reportQuery($request, paginate: false);
+        $symbol = $this->tenancy->current()->currencySymbol();
+
+        $filename = 'products-report-'.now()->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($data) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Product', 'SKU', 'Category', 'Status', 'Stock', 'Reorder level',
+                'State', 'Units sold', 'Last sold', 'Stock value (cost)'], ',', '"', '');
+            foreach ($data['rows'] as $p) {
+                fputcsv($out, [
+                    $p->name, $p->sku, $p->category?->name ?? '', $p->is_active ? 'Active' : 'Inactive',
+                    rtrim(rtrim(number_format((float) $p->total_stock, 3), '0'), '.'),
+                    rtrim(rtrim(number_format((float) $p->reorder_level, 3), '0'), '.'),
+                    $this->stockState($p),
+                    rtrim(rtrim(number_format((float) $p->units_sold, 3), '0'), '.'),
+                    $this->lastSold($p) ? \Illuminate\Support\Carbon::parse($this->lastSold($p))->toDateString() : '',
+                    number_format((float) $p->total_stock * (float) $p->cost_price, 2, '.', ''),
+                ], ',', '"', '');
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Most-recent sale date for a report row (POS or online), or null. */
+    protected function lastSold($p): ?string
+    {
+        return collect([$p->pos_last, $p->onl_last])->filter()->max() ?: null;
+    }
+
+    /** Stock-state label for a report row. */
+    protected function stockState($p): string
+    {
+        if ((float) $p->total_stock <= 0) {
+            return 'Out of stock';
+        }
+        if ((float) $p->reorder_level > 0 && (float) $p->total_stock <= (float) $p->reorder_level) {
+            return 'Reorder';
+        }
+
+        return 'OK';
+    }
+
+    /**
+     * Shared query for the products report: products with current stock + reorder
+     * level and units sold (POS + online) over a sales window, filterable by
+     * category, status and stock state.
+     */
+    protected function reportQuery(Request $request, bool $paginate = true): array
+    {
+        $from = $request->filled('from')
+            ? \Illuminate\Support\Carbon::parse($request->input('from'))->startOfDay()
+            : now()->subDays(90)->startOfDay();
+        $to = $request->filled('to')
+            ? \Illuminate\Support\Carbon::parse($request->input('to'))->endOfDay()
+            : now()->endOfDay();
+
+        $stockSub = DB::table('product_stocks')
+            ->select('product_id', DB::raw('SUM(quantity) as qty'), DB::raw('SUM(reorder_level) as reorder'))
+            ->groupBy('product_id');
+        $posSub = DB::table('sale_items')
+            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->where('sales.status', '!=', 'void')->whereBetween('sales.completed_at', [$from, $to])
+            ->select('sale_items.product_id', DB::raw('SUM(sale_items.quantity) as qty'), DB::raw('MAX(sales.completed_at) as last'))
+            ->groupBy('sale_items.product_id');
+        $onlSub = DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->where('orders.status', '!=', 'cancelled')->whereBetween('orders.placed_at', [$from, $to])
+            ->select('order_items.product_id', DB::raw('SUM(order_items.quantity) as qty'), DB::raw('MAX(orders.placed_at) as last'))
+            ->groupBy('order_items.product_id');
+
+        $base = Product::query()
+            ->leftJoinSub($stockSub, 'ps', 'ps.product_id', '=', 'products.id')
+            ->leftJoinSub($posSub, 'pos', 'pos.product_id', '=', 'products.id')
+            ->leftJoinSub($onlSub, 'onl', 'onl.product_id', '=', 'products.id');
+
+        if ($request->filled('category')) {
+            $base->where('products.category_id', $request->integer('category'));
+        }
+        if ($request->input('status') === 'active') {
+            $base->where('products.is_active', 1);
+        } elseif ($request->input('status') === 'inactive') {
+            $base->where('products.is_active', 0);
+        }
+        match ($request->input('stock')) {
+            'out' => $base->whereRaw('COALESCE(ps.qty, 0) <= 0'),
+            'reorder' => $base->whereRaw('COALESCE(ps.reorder, 0) > 0 AND COALESCE(ps.qty, 0) <= COALESCE(ps.reorder, 0)'),
+            'in' => $base->whereRaw('COALESCE(ps.qty, 0) > 0'),
+            default => null,
+        };
+
+        $summary = (clone $base)->selectRaw('
+            COUNT(*) as products,
+            SUM(CASE WHEN COALESCE(ps.qty, 0) <= 0 THEN 1 ELSE 0 END) as out_of_stock,
+            SUM(CASE WHEN COALESCE(ps.reorder, 0) > 0 AND COALESCE(ps.qty, 0) <= COALESCE(ps.reorder, 0) THEN 1 ELSE 0 END) as reorder,
+            COALESCE(SUM(COALESCE(ps.qty, 0) * products.cost_price), 0) as stock_value,
+            COALESCE(SUM(COALESCE(ps.qty, 0) * products.sale_price), 0) as retail_value,
+            COALESCE(SUM(COALESCE(pos.qty, 0) + COALESCE(onl.qty, 0)), 0) as units_sold
+        ')->first();
+
+        $rows = (clone $base)->with('category')->select('products.*',
+            DB::raw('COALESCE(ps.qty, 0) as total_stock'),
+            DB::raw('COALESCE(ps.reorder, 0) as reorder_level'),
+            DB::raw('COALESCE(pos.qty, 0) + COALESCE(onl.qty, 0) as units_sold'),
+            DB::raw('pos.last as pos_last'),
+            DB::raw('onl.last as onl_last'),
+        )->orderByDesc(DB::raw('COALESCE(pos.qty, 0) + COALESCE(onl.qty, 0)'))->orderBy('products.name');
+
+        $rows = $paginate ? $rows->paginate(30)->withQueryString() : $rows->get();
+
+        return [
+            'rows' => $rows,
+            'summary' => $summary,
+            'from' => $from,
+            'to' => $to,
+            'filters' => [
+                'category' => $request->input('category'),
+                'status' => $request->input('status'),
+                'stock' => $request->input('stock'),
+            ],
+        ];
+    }
+
     /** Apply an action to many products at once (from the Products list selection). */
     public function bulk(Request $request)
     {
