@@ -19,8 +19,14 @@
            class="rounded-full px-3 py-1 {{ $filter === 'attention' ? 'bg-amber-500 text-white' : 'text-amber-600 hover:bg-amber-50' }}">
             ⚠ Needs attention ({{ number_format($attentionCount) }})
         </a>
+        <a href="{{ route('products.index', ['filter' => 'unsellable']) }}"
+           class="rounded-full px-3 py-1 {{ $filter === 'unsellable' ? 'bg-red-500 text-white' : 'text-red-600 hover:bg-red-50' }}">
+            No price / out of stock ({{ number_format($sellableCount) }})
+        </a>
         @if ($filter === 'attention')
             <span class="text-xs text-slate-400">No cost price and no stock — set a cost, restock, or deactivate.</span>
+        @elseif ($filter === 'unsellable')
+            <span class="text-xs text-slate-400">Zero sale price or nothing on hand — these can't be sold as-is.</span>
         @endif
     </div>
 
@@ -39,8 +45,11 @@
                                 <span class="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-400">{{ strtoupper(substr($product->name, 0, 1)) }}</span>
                             @endif
                             <span>{{ $product->name }}</span>
-                            @if ((float) $product->cost_price == 0 && (float) ($product->total_stock ?? 0) <= 0)
-                                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 whitespace-nowrap" title="No cost price and no stock">⚠ No cost &amp; stock</span>
+                            @if ((float) $product->sale_price == 0)
+                                <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 whitespace-nowrap" title="No sale price set">No sale price</span>
+                            @endif
+                            @if ((float) ($product->total_stock ?? 0) <= 0)
+                                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 whitespace-nowrap" title="No stock on hand">Out of stock</span>
                             @endif
                         </div>
                     </td>

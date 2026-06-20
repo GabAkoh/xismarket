@@ -30,15 +30,23 @@ class ProductController extends Controller
         $needsAttention = fn ($q) => $q->where('products.cost_price', 0)
             ->where(DB::raw('COALESCE(ps.qty, 0)'), '<=', 0);
 
-        $attentionCount = $needsAttention(clone $query)->count();
+        // "Not sellable" = no sale price OR no stock on hand (can't ring it up / nothing to sell).
+        $notSellable = fn ($q) => $q->where(fn ($w) => $w
+            ->where('products.sale_price', 0)
+            ->orWhere(DB::raw('COALESCE(ps.qty, 0)'), '<=', 0));
 
-        if ($request->input('filter') === 'attention') {
-            $needsAttention($query);
-        }
+        $attentionCount = $needsAttention(clone $query)->count();
+        $sellableCount = $notSellable(clone $query)->count();
+
+        match ($request->input('filter')) {
+            'attention' => $needsAttention($query),
+            'unsellable' => $notSellable($query),
+            default => null,
+        };
 
         $products = $query->orderBy('products.name')->paginate(20)->withQueryString();
 
-        return view('inventory.products.index', compact('products', 'attentionCount'));
+        return view('inventory.products.index', compact('products', 'attentionCount', 'sellableCount'));
     }
 
     public function create()
