@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Inventory;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory\Product;
 use App\Models\Inventory\PurchaseOrder;
+use App\Models\Inventory\PurchaseOrderItem;
 use App\Models\Inventory\Supplier;
 use App\Models\Inventory\Warehouse;
 use App\Services\Inventory\StockService;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -26,6 +28,155 @@ class PurchaseOrderController extends Controller
             ->paginate(20);
 
         return view('inventory.purchases.index', compact('orders'));
+    }
+
+    /** Purchasing/spend summary report (totals, status/supplier/warehouse mix, top items). */
+    public function report(Request $request)
+    {
+        return view('inventory.purchases.report', $this->reportData($request));
+    }
+
+    /** Download a PO-report breakdown as CSV (?section=daily|status|suppliers|warehouses|products|all). */
+    public function reportExport(Request $request)
+    {
+        $data = $this->reportData($request);
+        $from = $data['from'];
+        $to = $data['to'];
+
+        if ($request->input('section') === 'all') {
+            return $this->reportExportAll($data);
+        }
+
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $qty = fn ($v) => rtrim(rtrim(number_format((float) $v, 3), '0'), '.');
+
+        [$name, $header, $rows] = match ($request->input('section')) {
+            'status' => ['po-status', ['Status', 'Orders', 'Value'],
+                $data['statusRows']->map(fn ($s) => [$s->status, $s->n, $num($s->total)])],
+            'suppliers' => ['suppliers', ['Supplier', 'Orders', 'Value'],
+                $data['suppliers']->map(fn ($s) => [$s->label, $s->n, $num($s->total)])],
+            'warehouses' => ['warehouses', ['Warehouse', 'Orders', 'Value'],
+                $data['warehouses']->map(fn ($w) => [$w->label, $w->n, $num($w->total)])],
+            'products' => ['top-items', ['Product', 'Qty', 'Cost'],
+                $data['top']->map(fn ($p) => [$p->name, $qty($p->qty), $num($p->cost)])],
+            default => ['purchases', ['Date', 'Orders', 'Value'],
+                $data['daily']->map(fn ($d) => [$d->d, $d->n, $num($d->total)])],
+        };
+
+        $filename = $name.'-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($header, $rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $header, ',', '"', '');
+            foreach ($rows as $row) {
+                fputcsv($out, $row, ',', '"', '');
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** One CSV holding every section of the purchase-orders report. */
+    protected function reportExportAll(array $data)
+    {
+        $from = $data['from'];
+        $to = $data['to'];
+        $s = $data['summary'];
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $qty = fn ($v) => rtrim(rtrim(number_format((float) $v, 3), '0'), '.');
+
+        $filename = 'purchases-report-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($data, $s, $from, $to, $num, $qty) {
+            $out = fopen('php://output', 'w');
+            $put = fn ($row) => fputcsv($out, $row, ',', '"', '');
+            $section = function (string $title, array $header, $rows) use ($put) {
+                $put([$title]);
+                $put($header);
+                foreach ($rows as $row) {
+                    $put($row);
+                }
+                $put([]);
+            };
+
+            $put(['Purchase orders report', $from->toDateString().' to '.$to->toDateString()]);
+            $put([]);
+            $section('Summary', ['Metric', 'Value'], [
+                ['Purchase orders', $s['count']],
+                ['Average order', $num($s['avg'])],
+                ['Purchase value', $num($s['total'])],
+                ['Received (count)', $s['received_count']],
+                ['Received value', $num($s['received_total'])],
+                ['Pending (count)', $s['pending_count']],
+                ['Pending value', $num($s['pending_total'])],
+            ]);
+            $section('Status', ['Status', 'Orders', 'Value'],
+                $data['statusRows']->map(fn ($x) => [$x->status, $x->n, $num($x->total)]));
+            $section('Suppliers', ['Supplier', 'Orders', 'Value'],
+                $data['suppliers']->map(fn ($x) => [$x->label, $x->n, $num($x->total)]));
+            $section('Warehouses', ['Warehouse', 'Orders', 'Value'],
+                $data['warehouses']->map(fn ($x) => [$x->label, $x->n, $num($x->total)]));
+            $section('Top items', ['Product', 'Qty', 'Cost'],
+                $data['top']->map(fn ($x) => [$x->name, $qty($x->qty), $num($x->cost)]));
+            $section('Daily breakdown', ['Date', 'Orders', 'Value'],
+                $data['daily']->map(fn ($x) => [$x->d, $x->n, $num($x->total)]));
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Build the purchase-orders report for the request's date range (bucketed by order_date). */
+    protected function reportData(Request $request): array
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : now()->endOfDay();
+        $fromD = $from->toDateString();
+        $toD = $to->toDateString();
+
+        $inRange = fn () => PurchaseOrder::query()->whereBetween('order_date', [$fromD, $toD]);
+
+        $t = $inRange()->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as total')->first();
+        $rec = $inRange()->where('status', 'received')->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as total')->first();
+
+        $summary = [
+            'count' => (int) $t->count,
+            'total' => round((float) $t->total, 2),
+            'received_count' => (int) $rec->count,
+            'received_total' => round((float) $rec->total, 2),
+            'pending_count' => (int) $t->count - (int) $rec->count,
+            'pending_total' => round((float) $t->total - (float) $rec->total, 2),
+            'avg' => (int) $t->count > 0 ? round((float) $t->total / (int) $t->count, 2) : 0.0,
+        ];
+
+        $statusRows = $inRange()->selectRaw('status, COUNT(*) as n, COALESCE(SUM(total), 0) as total')
+            ->groupBy('status')->orderByDesc('n')->get();
+
+        $suppliers = $inRange()
+            ->leftJoin('suppliers', 'suppliers.id', '=', 'purchase_orders.supplier_id')
+            ->selectRaw("COALESCE(suppliers.name, 'No supplier') as label, COUNT(*) as n, COALESCE(SUM(purchase_orders.total), 0) as total")
+            ->groupBy('label')->orderByDesc('total')->get();
+
+        $warehouses = $inRange()
+            ->leftJoin('warehouses', 'warehouses.id', '=', 'purchase_orders.warehouse_id')
+            ->selectRaw("COALESCE(warehouses.name, 'Unassigned') as label, COUNT(*) as n, COALESCE(SUM(purchase_orders.total), 0) as total")
+            ->groupBy('label')->orderByDesc('total')->get();
+
+        $top = PurchaseOrderItem::query()
+            ->whereHas('purchaseOrder', fn ($q) => $q->whereBetween('order_date', [$fromD, $toD]))
+            ->join('products', 'products.id', '=', 'purchase_order_items.product_id')
+            ->selectRaw('purchase_order_items.product_id, products.name as name,
+                COALESCE(SUM(purchase_order_items.quantity), 0) as qty,
+                COALESCE(SUM(purchase_order_items.line_total), 0) as cost')
+            ->groupBy('purchase_order_items.product_id', 'products.name')
+            ->orderByDesc('cost')->limit(10)->get();
+
+        $daily = $inRange()->selectRaw('order_date as d, COUNT(*) as n, COALESCE(SUM(total), 0) as total')
+            ->groupBy('order_date')->orderBy('order_date')->get();
+
+        return compact('summary', 'statusRows', 'suppliers', 'warehouses', 'top', 'daily', 'from', 'to');
     }
 
     public function create()

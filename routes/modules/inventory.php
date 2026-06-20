@@ -70,6 +70,9 @@ Route::middleware(['web', 'auth'])->group(function () {
     // Purchase orders
     Route::middleware('permission:purchases.view')->group(function () {
         Route::get('purchases', [PurchaseOrderController::class, 'index'])->name('purchases.index');
+        // Literal segments — before purchases/{purchase} so they aren't treated as an id.
+        Route::get('purchases/report', [PurchaseOrderController::class, 'report'])->name('purchases.report');
+        Route::get('purchases/report/export', [PurchaseOrderController::class, 'reportExport'])->name('purchases.report.export');
         Route::get('purchases/{purchase}', [PurchaseOrderController::class, 'show'])->name('purchases.show');
     });
     Route::middleware('permission:purchases.manage')->group(function () {

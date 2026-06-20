@@ -32,6 +32,7 @@
                         ['route' => 'warehouses.index', 'label' => 'Warehouses', 'perm' => 'warehouses.manage'],
                         ['route' => 'stock.index', 'label' => 'Stock Levels', 'perm' => 'inventory.view'],
                         ['route' => 'purchases.index', 'label' => 'Purchase Orders', 'perm' => 'purchases.view'],
+                        ['route' => 'purchases.report', 'label' => 'Purchase Report', 'perm' => 'purchases.view'],
                     ]],
                     ['heading' => 'Point of Sale', 'links' => [
                         ['route' => 'pos.index', 'label' => 'Register', 'perm' => 'pos.use'],
