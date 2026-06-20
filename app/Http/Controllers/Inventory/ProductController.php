@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Inventory;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
+use App\Models\Inventory\ProductStock;
 use App\Models\Inventory\Warehouse;
 use App\Services\Inventory\StockService;
 use App\Support\Tenancy;
@@ -192,9 +193,10 @@ class ProductController extends Controller
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer'],
-            'action' => ['required', 'in:activate,deactivate,price,restock'],
+            'action' => ['required', 'in:activate,deactivate,price,restock,reorder'],
             'price' => ['required_if:action,price', 'nullable', 'numeric', 'min:0'],
             'quantity' => ['required_if:action,restock', 'nullable', 'numeric', 'not_in:0'],
+            'reorder' => ['required_if:action,reorder', 'nullable', 'numeric', 'min:0'],
         ]);
 
         // Tenant scope is applied by the global scope, so only this store's products match.
@@ -234,6 +236,21 @@ class ProductController extends Controller
                 }
                 $msg = 'Added '.rtrim(rtrim(number_format((float) $data['quantity'], 3), '0'), '.')." stock to {$n} product(s).";
                 break;
+
+            case 'reorder':
+                $warehouse = Warehouse::default();
+                if (! $warehouse) {
+                    return back()->with('error', 'No default warehouse to set a reorder level for.');
+                }
+                $level = (float) $data['reorder'];
+                foreach ($products as $product) {
+                    ProductStock::updateOrCreate(
+                        ['product_id' => $product->id, 'warehouse_id' => $warehouse->id],
+                        ['reorder_level' => $level],
+                    );
+                }
+                $msg = 'Set reorder level to '.rtrim(rtrim(number_format($level, 3), '0'), '.')." on {$n} product(s).";
+                break;
         }
 
         return back()->with('status', $msg);
@@ -251,9 +268,11 @@ class ProductController extends Controller
         $data = $this->validateData($request);
         $data['track_stock'] = $request->boolean('track_stock');
         $data['is_active'] = $request->boolean('is_active');
+        unset($data['reorder_level']);   // lives on product_stocks, not products
         $this->applyImage($request, $data);
 
-        Product::create($data);
+        $product = Product::create($data);
+        $this->applyReorderLevel($product, $request);
 
         return redirect()->route('products.index')->with('status', 'Product added.');
     }
@@ -262,8 +281,13 @@ class ProductController extends Controller
     {
         $this->authorizeTenant($product);
         $categories = Category::orderBy('name')->get();
+        // Reorder level for the default warehouse (shown/edited on the form).
+        $warehouse = Warehouse::default();
+        $reorderLevel = $warehouse
+            ? (float) ProductStock::where('product_id', $product->id)->where('warehouse_id', $warehouse->id)->value('reorder_level')
+            : 0.0;
 
-        return view('inventory.products.edit', compact('product', 'categories'));
+        return view('inventory.products.edit', compact('product', 'categories', 'reorderLevel'));
     }
 
     public function update(Request $request, Product $product)
@@ -272,11 +296,29 @@ class ProductController extends Controller
         $data = $this->validateData($request, $product);
         $data['track_stock'] = $request->boolean('track_stock');
         $data['is_active'] = $request->boolean('is_active');
+        unset($data['reorder_level']);
         $this->applyImage($request, $data, $product);
 
         $product->update($data);
+        $this->applyReorderLevel($product, $request);
 
         return redirect()->route('products.index')->with('status', 'Product updated.');
+    }
+
+    /** Upsert the default-warehouse reorder level for a product (no-op if left blank). */
+    protected function applyReorderLevel(Product $product, Request $request): void
+    {
+        if (! $request->filled('reorder_level')) {
+            return;
+        }
+        $warehouse = Warehouse::default();
+        if (! $warehouse) {
+            return;
+        }
+        ProductStock::updateOrCreate(
+            ['product_id' => $product->id, 'warehouse_id' => $warehouse->id],
+            ['reorder_level' => (float) $request->input('reorder_level')],
+        );
     }
 
     public function destroy(Product $product)
@@ -308,6 +350,7 @@ class ProductController extends Controller
             'cost_price' => ['required', 'numeric', 'min:0'],
             'sale_price' => ['required', 'numeric', 'min:0'],
             'tax_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'reorder_level' => ['nullable', 'numeric', 'min:0'],
             'track_stock' => ['boolean'],
             'is_active' => ['boolean'],
             'image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:8192'],

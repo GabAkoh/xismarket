@@ -32,6 +32,11 @@
         <label class="block text-sm font-medium text-slate-700">Tax rate (%)</label>
         <input name="tax_rate" type="number" step="0.0001" min="0" value="{{ old('tax_rate', $product->tax_rate ?? '0') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
     </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700">Reorder level</label>
+        <input name="reorder_level" type="number" step="0.001" min="0" value="{{ old('reorder_level', $reorderLevel ?? '') }}" placeholder="0" class="mt-1 w-full rounded-md border border-slate-300 p-2">
+        <p class="mt-1 text-xs text-slate-400">Flag for reorder when stock drops to this level. Leave blank for none.</p>
+    </div>
 </div>
 
 <div class="mt-4">

@@ -14,11 +14,12 @@
 <div x-data="{
         sel: [],
         pageIds: @js($products->pluck('id')->map(fn ($i) => (string) $i)->values()),
-        action: '', price: '', qty: '',
+        action: '', price: '', qty: '', reorder: '',
         toggleAll(e) { this.sel = e.target.checked ? [...this.pageIds] : []; },
         run(a) {
             if (a === 'price' && this.price === '') return;
             if (a === 'restock' && (this.qty === '' || Number(this.qty) === 0)) return;
+            if (a === 'reorder' && this.reorder === '') return;
             this.action = a;
             this.$nextTick(() => this.$refs.bulkForm.submit());
         },
@@ -66,6 +67,12 @@
                     <input type="number" name="quantity" x-model="qty" step="1" placeholder="qty"
                            class="w-20 rounded-md border border-slate-300 p-1.5 text-sm text-right">
                     <button type="button" @click="run('restock')" :disabled="qty==='' || Number(qty)===0" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Add stock</button>
+                </div>
+
+                <div class="flex items-center gap-1">
+                    <input type="number" name="reorder" x-model="reorder" min="0" step="1" placeholder="reorder"
+                           class="w-20 rounded-md border border-slate-300 p-1.5 text-sm text-right">
+                    <button type="button" @click="run('reorder')" :disabled="reorder===''" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Set reorder</button>
                 </div>
 
                 <button type="button" @click="sel = []" class="ml-auto text-sm text-slate-500 hover:underline">Clear</button>
