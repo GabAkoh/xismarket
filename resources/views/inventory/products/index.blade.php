@@ -14,12 +14,13 @@
 <div x-data="{
         sel: [],
         pageIds: @js($products->pluck('id')->map(fn ($i) => (string) $i)->values()),
-        action: '', price: '', qty: '', reorder: '',
+        action: '', price: '', qty: '', reorder: '', coverDays: '',
         toggleAll(e) { this.sel = e.target.checked ? [...this.pageIds] : []; },
         run(a) {
             if (a === 'price' && this.price === '') return;
             if (a === 'restock' && (this.qty === '' || Number(this.qty) === 0)) return;
             if (a === 'reorder' && this.reorder === '') return;
+            if (a === 'reorder_demand' && (this.coverDays === '' || Number(this.coverDays) < 1)) return;
             this.action = a;
             this.$nextTick(() => this.$refs.bulkForm.submit());
         },
@@ -73,6 +74,14 @@
                     <input type="number" name="reorder" x-model="reorder" min="0" step="1" placeholder="reorder"
                            class="w-20 rounded-md border border-slate-300 p-1.5 text-sm text-right">
                     <button type="button" @click="run('reorder')" :disabled="reorder===''" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Set reorder</button>
+                </div>
+
+                <div class="flex items-center gap-1">
+                    <input type="number" name="cover_days" x-model="coverDays" min="1" step="1" placeholder="days"
+                           class="w-16 rounded-md border border-slate-300 p-1.5 text-sm text-right">
+                    <button type="button" @click="run('reorder_demand')" :disabled="coverDays==='' || Number(coverDays) < 1"
+                            class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
+                            title="Set reorder level to this many days of average demand (last 90 days)">Reorder ≈ demand</button>
                 </div>
 
                 <button type="button" @click="sel = []" class="ml-auto text-sm text-slate-500 hover:underline">Clear</button>

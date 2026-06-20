@@ -187,16 +187,55 @@ class ProductController extends Controller
         ];
     }
 
+    /**
+     * Units sold (POS + online) per product over the last $lookback days.
+     *
+     * @param  \Illuminate\Support\Collection<int, int>  $ids
+     * @return array<int, float>  product_id => units sold
+     */
+    protected function unitsSoldByProduct($ids, int $lookback): array
+    {
+        $from = now()->subDays($lookback)->startOfDay();
+        $to = now()->endOfDay();
+
+        $pos = DB::table('sale_items')
+            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->whereIn('sale_items.product_id', $ids)
+            ->where('sales.status', '!=', 'void')->whereBetween('sales.completed_at', [$from, $to])
+            ->groupBy('sale_items.product_id')
+            ->selectRaw('sale_items.product_id as pid, SUM(sale_items.quantity) as qty')
+            ->pluck('qty', 'pid');
+
+        $online = DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->whereIn('order_items.product_id', $ids)
+            ->where('orders.status', '!=', 'cancelled')->whereBetween('orders.placed_at', [$from, $to])
+            ->groupBy('order_items.product_id')
+            ->selectRaw('order_items.product_id as pid, SUM(order_items.quantity) as qty')
+            ->pluck('qty', 'pid');
+
+        $units = [];
+        foreach ($pos as $pid => $q) {
+            $units[$pid] = (float) $q;
+        }
+        foreach ($online as $pid => $q) {
+            $units[$pid] = ($units[$pid] ?? 0) + (float) $q;
+        }
+
+        return $units;
+    }
+
     /** Apply an action to many products at once (from the Products list selection). */
     public function bulk(Request $request)
     {
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer'],
-            'action' => ['required', 'in:activate,deactivate,price,restock,reorder'],
+            'action' => ['required', 'in:activate,deactivate,price,restock,reorder,reorder_demand'],
             'price' => ['required_if:action,price', 'nullable', 'numeric', 'min:0'],
             'quantity' => ['required_if:action,restock', 'nullable', 'numeric', 'not_in:0'],
             'reorder' => ['required_if:action,reorder', 'nullable', 'numeric', 'min:0'],
+            'cover_days' => ['required_if:action,reorder_demand', 'nullable', 'integer', 'min:1', 'max:365'],
         ]);
 
         // Tenant scope is applied by the global scope, so only this store's products match.
@@ -250,6 +289,25 @@ class ProductController extends Controller
                     );
                 }
                 $msg = 'Set reorder level to '.rtrim(rtrim(number_format($level, 3), '0'), '.')." on {$n} product(s).";
+                break;
+
+            case 'reorder_demand':
+                $warehouse = Warehouse::default();
+                if (! $warehouse) {
+                    return back()->with('error', 'No default warehouse to set a reorder level for.');
+                }
+                $coverDays = (int) $data['cover_days'];
+                $lookback = 90;   // average demand is measured over the last 90 days
+                $units = $this->unitsSoldByProduct($ids, $lookback);
+                foreach ($products as $product) {
+                    $avgDaily = ($units[$product->id] ?? 0) / $lookback;
+                    $level = (float) ceil($avgDaily * $coverDays);
+                    ProductStock::updateOrCreate(
+                        ['product_id' => $product->id, 'warehouse_id' => $warehouse->id],
+                        ['reorder_level' => $level],
+                    );
+                }
+                $msg = "Set reorder to {$coverDays} day(s) of demand (90-day average) on {$n} product(s).";
                 break;
         }
 
