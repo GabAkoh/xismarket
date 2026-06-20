@@ -16,7 +16,9 @@ class CategoryController extends Controller
     public function index(Request $request)
     {
         $categories = $this->filtered($request)->paginate(20)->withQueryString();
-        $parents = Category::orderBy('name')->get(['id', 'name']);
+        // Only categories that actually have children are useful as filter options.
+        $parents = Category::whereIn('id', Category::whereNotNull('parent_id')->distinct()->pluck('parent_id'))
+            ->orderBy('name')->get(['id', 'name']);
 
         return view('inventory.categories.index', compact('categories', 'parents'));
     }
