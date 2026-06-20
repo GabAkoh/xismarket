@@ -9,7 +9,21 @@
     @endpermission
 </x-page-header>
 
+@php $filter = request('filter'); @endphp
 <x-card>
+    {{-- Filters --}}
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <a href="{{ route('products.index') }}"
+           class="rounded-full px-3 py-1 {{ $filter ? 'text-slate-500 hover:bg-slate-100' : 'bg-slate-800 text-white' }}">All</a>
+        <a href="{{ route('products.index', ['filter' => 'attention']) }}"
+           class="rounded-full px-3 py-1 {{ $filter === 'attention' ? 'bg-amber-500 text-white' : 'text-amber-600 hover:bg-amber-50' }}">
+            ⚠ Needs attention ({{ number_format($attentionCount) }})
+        </a>
+        @if ($filter === 'attention')
+            <span class="text-xs text-slate-400">No cost price and no stock — set a cost, restock, or deactivate.</span>
+        @endif
+    </div>
+
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Name</th><th>SKU</th><th>Category</th><th class="text-right">Sale price</th><th class="text-right">Stock</th><th>Status</th><th></th></tr>
@@ -25,6 +39,9 @@
                                 <span class="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-400">{{ strtoupper(substr($product->name, 0, 1)) }}</span>
                             @endif
                             <span>{{ $product->name }}</span>
+                            @if ((float) $product->cost_price == 0 && (float) ($product->total_stock ?? 0) <= 0)
+                                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 whitespace-nowrap" title="No cost price and no stock">⚠ No cost &amp; stock</span>
+                            @endif
                         </div>
                     </td>
                     <td class="text-slate-500">{{ $product->sku }}</td>

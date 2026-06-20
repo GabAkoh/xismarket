@@ -7,6 +7,7 @@ use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -14,14 +15,30 @@ class ProductController extends Controller
 {
     public function __construct(protected Tenancy $tenancy) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        $products = Product::with('category')
-            ->withSum('stocks as total_stock', 'quantity')
-            ->orderBy('name')
-            ->paginate(20);
+        // Total stock per product as a join so we can both show and filter on it.
+        $stockSub = DB::table('product_stocks')
+            ->select('product_id', DB::raw('SUM(quantity) as qty'))
+            ->groupBy('product_id');
 
-        return view('inventory.products.index', compact('products'));
+        $query = Product::query()->with('category')
+            ->leftJoinSub($stockSub, 'ps', 'ps.product_id', '=', 'products.id')
+            ->select('products.*', DB::raw('COALESCE(ps.qty, 0) as total_stock'));
+
+        // "Needs attention" = no cost price AND no stock (incomplete catalogue records).
+        $needsAttention = fn ($q) => $q->where('products.cost_price', 0)
+            ->where(DB::raw('COALESCE(ps.qty, 0)'), '<=', 0);
+
+        $attentionCount = $needsAttention(clone $query)->count();
+
+        if ($request->input('filter') === 'attention') {
+            $needsAttention($query);
+        }
+
+        $products = $query->orderBy('products.name')->paginate(20)->withQueryString();
+
+        return view('inventory.products.index', compact('products', 'attentionCount'));
     }
 
     public function create()
