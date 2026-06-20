@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Inventory;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
+use App\Models\Inventory\Warehouse;
+use App\Services\Inventory\StockService;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +15,7 @@ use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
-    public function __construct(protected Tenancy $tenancy) {}
+    public function __construct(protected Tenancy $tenancy, protected StockService $stock) {}
 
     public function index(Request $request)
     {
@@ -47,6 +49,59 @@ class ProductController extends Controller
         $products = $query->orderBy('products.name')->paginate(20)->withQueryString();
 
         return view('inventory.products.index', compact('products', 'attentionCount', 'sellableCount'));
+    }
+
+    /** Apply an action to many products at once (from the Products list selection). */
+    public function bulk(Request $request)
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+            'action' => ['required', 'in:activate,deactivate,price,restock'],
+            'price' => ['required_if:action,price', 'nullable', 'numeric', 'min:0'],
+            'quantity' => ['required_if:action,restock', 'nullable', 'numeric', 'not_in:0'],
+        ]);
+
+        // Tenant scope is applied by the global scope, so only this store's products match.
+        $products = Product::whereIn('id', $data['ids'])->get();
+        if ($products->isEmpty()) {
+            return back()->with('error', 'No matching products were selected.');
+        }
+        $ids = $products->pluck('id');
+        $n = $products->count();
+
+        switch ($data['action']) {
+            case 'activate':
+                Product::whereIn('id', $ids)->update(['is_active' => true]);
+                $msg = "Activated {$n} product(s).";
+                break;
+
+            case 'deactivate':
+                Product::whereIn('id', $ids)->update(['is_active' => false]);
+                $msg = "Deactivated {$n} product(s).";
+                break;
+
+            case 'price':
+                Product::whereIn('id', $ids)->update(['sale_price' => (float) $data['price']]);
+                $msg = 'Set sale price to '.number_format((float) $data['price'], 2)." on {$n} product(s).";
+                break;
+
+            case 'restock':
+                $warehouse = Warehouse::default();
+                if (! $warehouse) {
+                    return back()->with('error', 'No default warehouse to restock into.');
+                }
+                foreach ($products as $product) {
+                    $this->stock->recordMovement(
+                        $product, $warehouse, 'adjustment', (float) $data['quantity'],
+                        $product->cost_price ?: null, null, 'Bulk restock',
+                    );
+                }
+                $msg = 'Added '.rtrim(rtrim(number_format((float) $data['quantity'], 3), '0'), '.')." stock to {$n} product(s).";
+                break;
+        }
+
+        return back()->with('status', $msg);
     }
 
     public function create()

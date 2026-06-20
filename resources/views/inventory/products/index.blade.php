@@ -10,6 +10,19 @@
 </x-page-header>
 
 @php $filter = request('filter'); @endphp
+@php $canManage = auth()->user()?->hasPermission('products.manage'); @endphp
+<div x-data="{
+        sel: [],
+        pageIds: @js($products->pluck('id')->map(fn ($i) => (string) $i)->values()),
+        action: '', price: '', qty: '',
+        toggleAll(e) { this.sel = e.target.checked ? [...this.pageIds] : []; },
+        run(a) {
+            if (a === 'price' && this.price === '') return;
+            if (a === 'restock' && (this.qty === '' || Number(this.qty) === 0)) return;
+            this.action = a;
+            this.$nextTick(() => this.$refs.bulkForm.submit());
+        },
+     }">
 <x-card>
     {{-- Filters --}}
     <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
@@ -30,13 +43,47 @@
         @endif
     </div>
 
+    @if ($canManage)
+        {{-- Bulk action bar (appears once products are selected) --}}
+        <div x-show="sel.length" x-cloak class="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-indigo-200 bg-indigo-50 p-3">
+            <form method="POST" action="{{ route('products.bulk') }}" x-ref="bulkForm" class="contents">
+                @csrf
+                <template x-for="id in sel" :key="id"><input type="hidden" name="ids[]" :value="id"></template>
+                <input type="hidden" name="action" :value="action">
+
+                <span class="text-sm font-semibold text-indigo-700"><span x-text="sel.length"></span> selected</span>
+                <button type="button" @click="run('deactivate')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Deactivate</button>
+                <button type="button" @click="run('activate')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Activate</button>
+
+                <div class="flex items-center gap-1">
+                    <span class="text-xs text-slate-400">{{ $currentTenant->currencySymbol() }}</span>
+                    <input type="number" name="price" x-model="price" min="0" step="0.01" placeholder="price"
+                           class="w-24 rounded-md border border-slate-300 p-1.5 text-sm text-right">
+                    <button type="button" @click="run('price')" :disabled="price===''" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Set price</button>
+                </div>
+
+                <div class="flex items-center gap-1">
+                    <input type="number" name="quantity" x-model="qty" step="1" placeholder="qty"
+                           class="w-20 rounded-md border border-slate-300 p-1.5 text-sm text-right">
+                    <button type="button" @click="run('restock')" :disabled="qty==='' || Number(qty)===0" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Add stock</button>
+                </div>
+
+                <button type="button" @click="sel = []" class="ml-auto text-sm text-slate-500 hover:underline">Clear</button>
+            </form>
+        </div>
+    @endif
+
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
-            <tr><th class="py-2">Name</th><th>SKU</th><th>Category</th><th class="text-right">Sale price</th><th class="text-right">Stock</th><th>Status</th><th></th></tr>
+            <tr>
+                @if ($canManage)<th class="py-2 w-8"><input type="checkbox" @change="toggleAll($event)" :checked="sel.length && sel.length === pageIds.length" class="rounded border-slate-300"></th>@endif
+                <th class="py-2">Name</th><th>SKU</th><th>Category</th><th class="text-right">Sale price</th><th class="text-right">Stock</th><th>Status</th><th></th>
+            </tr>
         </thead>
         <tbody class="divide-y">
             @forelse ($products as $product)
                 <tr>
+                    @if ($canManage)<td class="align-top pt-4"><input type="checkbox" value="{{ $product->id }}" x-model="sel" class="rounded border-slate-300"></td>@endif
                     <td class="py-3 font-medium text-slate-700">
                         <div class="flex items-center gap-3">
                             @if ($product->image_path)
@@ -75,10 +122,11 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="py-6 text-center text-slate-400">No products yet.</td></tr>
+                <tr><td colspan="8" class="py-6 text-center text-slate-400">No products match this filter.</td></tr>
             @endforelse
         </tbody>
     </table>
     <div class="mt-4">{{ $products->links() }}</div>
 </x-card>
+</div>
 @endsection

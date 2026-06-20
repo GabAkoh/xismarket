@@ -19,6 +19,7 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('products/import', [ProductImportController::class, 'form'])->name('products.import');
         Route::post('products/import', [ProductImportController::class, 'import'])->name('products.import.store');
 
+        Route::post('products/bulk', [ProductController::class, 'bulk'])->name('products.bulk');
         Route::get('products/create', [ProductController::class, 'create'])->name('products.create');
         Route::post('products', [ProductController::class, 'store'])->name('products.store');
         Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
