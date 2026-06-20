@@ -15,6 +15,9 @@ Route::middleware(['web', 'auth'])->group(function () {
     // --- Order list + detail ---
     Route::middleware('permission:orders.view')->group(function () {
         Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+        // Literal segments — before orders/{order} so they aren't treated as an id.
+        Route::get('orders/report', [OrderController::class, 'report'])->name('orders.report');
+        Route::get('orders/report/export', [OrderController::class, 'reportExport'])->name('orders.report.export');
     });
 
     // --- Order builder (create before {order} so it isn't captured) ---

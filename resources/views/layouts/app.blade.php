@@ -46,6 +46,7 @@
                     ]],
                     ['heading' => 'Online Orders', 'links' => [
                         ['route' => 'orders.index', 'label' => 'Orders', 'perm' => 'orders.view'],
+                        ['route' => 'orders.report', 'label' => 'Orders Report', 'perm' => 'orders.view'],
                         ['route' => 'orders.create', 'label' => 'New Order', 'perm' => 'orders.manage'],
                         ['route' => 'storefront.settings', 'label' => 'Storefront', 'perm' => 'orders.manage'],
                     ]],
