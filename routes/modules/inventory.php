@@ -33,6 +33,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     // Categories
     Route::middleware('permission:inventory.view')->group(function () {
         Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::get('categories/export', [CategoryController::class, 'export'])->name('categories.export');
     });
     Route::middleware('permission:categories.manage')->group(function () {
         Route::get('categories/create', [CategoryController::class, 'create'])->name('categories.create');

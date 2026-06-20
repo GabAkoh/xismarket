@@ -13,14 +13,43 @@ class CategoryController extends Controller
 {
     public function __construct(protected Tenancy $tenancy) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        $categories = Category::with('parent')
-            ->withCount('products')
-            ->orderBy('name')
-            ->paginate(20);
+        $categories = $this->filtered($request)->paginate(20)->withQueryString();
+        $parents = Category::orderBy('name')->get(['id', 'name']);
 
-        return view('inventory.categories.index', compact('categories'));
+        return view('inventory.categories.index', compact('categories', 'parents'));
+    }
+
+    /** Download the categories list (current parent filter) as CSV. */
+    public function export(Request $request)
+    {
+        $categories = $this->filtered($request)->get();
+        $filename = 'categories-'.now()->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($categories) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Name', 'Parent', 'Products', 'Slug'], ',', '"', '');
+            foreach ($categories as $c) {
+                fputcsv($out, [$c->name, $c->parent?->name ?? '', $c->products_count, $c->slug], ',', '"', '');
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Category list query with the parent filter applied (shared by index + export). */
+    protected function filtered(Request $request)
+    {
+        $query = Category::with('parent')->withCount('products');
+
+        $parent = $request->input('parent');
+        if ($parent === 'none') {
+            $query->whereNull('parent_id');            // top-level only
+        } elseif (is_numeric($parent)) {
+            $query->where('parent_id', (int) $parent);  // children of a parent
+        }
+
+        return $query->orderBy('name');
     }
 
     public function create()

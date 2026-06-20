@@ -2,11 +2,32 @@
 @section('title', 'Categories')
 
 @section('content')
+@php $parent = request('parent'); @endphp
 <x-page-header title="Categories">
+    <a href="{{ route('categories.export', request()->only('parent')) }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Export CSV</a>
     @permission('categories.manage')
         <a href="{{ route('categories.create') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Add category</a>
     @endpermission
 </x-page-header>
+
+{{-- Parent filter --}}
+<x-card class="mb-4">
+    <form method="GET" action="{{ route('categories.index') }}" class="flex flex-wrap items-end gap-3">
+        <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Parent</label>
+            <select name="parent" onchange="this.form.submit()" class="rounded-md border border-slate-300 p-2 text-sm">
+                <option value="">All categories</option>
+                <option value="none" @selected($parent === 'none')>Top-level only</option>
+                <optgroup label="Children of…">
+                    @foreach ($parents as $p)
+                        <option value="{{ $p->id }}" @selected((string) $parent === (string) $p->id)>{{ $p->name }}</option>
+                    @endforeach
+                </optgroup>
+            </select>
+        </div>
+        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Apply</button>
+    </form>
+</x-card>
 
 <x-card>
     <table class="w-full text-sm">
