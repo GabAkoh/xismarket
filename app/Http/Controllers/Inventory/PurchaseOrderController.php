@@ -136,10 +136,22 @@ class PurchaseOrderController extends Controller
         $fromD = $from->toDateString();
         $toD = $to->toDateString();
 
-        $inRange = fn () => PurchaseOrder::query()->whereBetween('order_date', [$fromD, $toD]);
+        // Basis: 'order' buckets every PO by when it was ordered (committed spend);
+        // 'received' buckets only received POs by when they landed in stock.
+        $basis = $request->input('basis') === 'received' ? 'received' : 'order';
+        $dateCol = $basis === 'received' ? 'received_at' : 'order_date';
+
+        $scope = function ($q) use ($basis, $dateCol, $fromD, $toD) {
+            if ($basis === 'received') {
+                $q->where('purchase_orders.status', 'received')->whereNotNull('purchase_orders.received_at');
+            }
+
+            return $q->whereBetween('purchase_orders.'.$dateCol, [$fromD, $toD]);
+        };
+        $inRange = fn () => $scope(PurchaseOrder::query());
 
         $t = $inRange()->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as total')->first();
-        $rec = $inRange()->where('status', 'received')->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as total')->first();
+        $rec = $inRange()->where('purchase_orders.status', 'received')->selectRaw('COUNT(*) as count, COALESCE(SUM(total), 0) as total')->first();
 
         $summary = [
             'count' => (int) $t->count,
@@ -165,7 +177,7 @@ class PurchaseOrderController extends Controller
             ->groupBy('label')->orderByDesc('total')->get();
 
         $top = PurchaseOrderItem::query()
-            ->whereHas('purchaseOrder', fn ($q) => $q->whereBetween('order_date', [$fromD, $toD]))
+            ->whereHas('purchaseOrder', fn ($q) => $scope($q))
             ->join('products', 'products.id', '=', 'purchase_order_items.product_id')
             ->selectRaw('purchase_order_items.product_id, products.name as name,
                 COALESCE(SUM(purchase_order_items.quantity), 0) as qty,
@@ -173,10 +185,10 @@ class PurchaseOrderController extends Controller
             ->groupBy('purchase_order_items.product_id', 'products.name')
             ->orderByDesc('cost')->limit(10)->get();
 
-        $daily = $inRange()->selectRaw('order_date as d, COUNT(*) as n, COALESCE(SUM(total), 0) as total')
-            ->groupBy('order_date')->orderBy('order_date')->get();
+        $daily = $inRange()->selectRaw("purchase_orders.{$dateCol} as d, COUNT(*) as n, COALESCE(SUM(total), 0) as total")
+            ->groupBy("purchase_orders.{$dateCol}")->orderBy("purchase_orders.{$dateCol}")->get();
 
-        return compact('summary', 'statusRows', 'suppliers', 'warehouses', 'top', 'daily', 'from', 'to');
+        return compact('summary', 'statusRows', 'suppliers', 'warehouses', 'top', 'daily', 'from', 'to', 'basis');
     }
 
     public function create()

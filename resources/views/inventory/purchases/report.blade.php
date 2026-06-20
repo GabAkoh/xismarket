@@ -8,7 +8,10 @@
     $maxDay = $daily->max('total') ?: 1;
     $maxSupplier = $suppliers->max('total') ?: 1;
     $exportUrl = fn ($section) => route('purchases.report.export', [
-        'section' => $section, 'from' => $from->toDateString(), 'to' => $to->toDateString(),
+        'section' => $section, 'from' => $from->toDateString(), 'to' => $to->toDateString(), 'basis' => $basis,
+    ]);
+    $basisUrl = fn ($b) => route('purchases.report', [
+        'basis' => $b, 'from' => $from->toDateString(), 'to' => $to->toDateString(),
     ]);
 @endphp
 
@@ -17,9 +20,20 @@
     <a href="{{ route('purchases.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to purchases</a>
 </x-page-header>
 
-{{-- Date filter --}}
+{{-- Basis toggle + date filter --}}
 <x-card class="mb-4">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <span class="text-slate-400 mr-1">Basis:</span>
+        <a href="{{ $basisUrl('order') }}"
+           class="rounded-full px-3 py-1 {{ $basis === 'order' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100' }}">By order date</a>
+        <a href="{{ $basisUrl('received') }}"
+           class="rounded-full px-3 py-1 {{ $basis === 'received' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100' }}">By received date</a>
+        <span class="ml-1 text-xs text-slate-400">
+            {{ $basis === 'received' ? 'Received POs by when stock landed.' : 'All POs by when they were ordered.' }}
+        </span>
+    </div>
     <form method="GET" action="{{ route('purchases.report') }}" class="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="basis" value="{{ $basis }}">
         <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
             <input type="date" name="from" value="{{ $from->toDateString() }}" class="rounded-md border border-slate-300 p-2 text-sm">
