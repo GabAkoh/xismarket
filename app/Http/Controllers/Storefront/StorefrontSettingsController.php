@@ -38,6 +38,8 @@ class StorefrontSettingsController extends Controller
             'testimonials' => ['nullable', 'array', 'max:12'],
             'testimonials.*.name' => ['nullable', 'string', 'max:100'],
             'testimonials.*.text' => ['nullable', 'string', 'max:500'],
+            'social' => ['nullable', 'array'],
+            'social.*' => ['nullable', 'string', 'max:255'],
         ]);
 
         $store = $this->tenancy->current();
@@ -93,6 +95,15 @@ class StorefrontSettingsController extends Controller
             ->all();
         if (! empty($testimonials)) {
             $storefront['testimonials'] = $testimonials;
+        }
+
+        // Social handles — keep only the platforms that were filled in.
+        $social = collect($data['social'] ?? [])
+            ->map(fn ($v) => trim((string) $v))
+            ->filter()
+            ->all();
+        if (! empty($social)) {
+            $storefront['social'] = $social;
         }
 
         $settings = $store->settings ?? [];

@@ -118,6 +118,33 @@
         </div>
     </x-card>
 
+    {{-- Social media --}}
+    @php
+        $socialFields = [
+            'facebook' => ['Facebook', 'https://facebook.com/yourpage'],
+            'instagram' => ['Instagram', 'https://instagram.com/yourhandle'],
+            'x' => ['X (Twitter)', 'https://x.com/yourhandle'],
+            'tiktok' => ['TikTok', 'https://tiktok.com/@yourhandle'],
+            'youtube' => ['YouTube', 'https://youtube.com/@yourchannel'],
+            'whatsapp' => ['WhatsApp', 'https://wa.me/2348012345678'],
+        ];
+        $social = old('social', $store->setting('storefront.social', []));
+    @endphp
+    <x-card>
+        <h2 class="text-sm font-semibold text-slate-700 mb-1">Social media</h2>
+        <p class="text-xs text-slate-400 mb-3">Add full links to your profiles. Only the ones you fill in are shown in the shop footer.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            @foreach ($socialFields as $key => [$label, $placeholder])
+                <div>
+                    <label class="block text-sm font-medium text-slate-700">{{ $label }}</label>
+                    <input type="url" name="social[{{ $key }}]" maxlength="255"
+                           value="{{ $social[$key] ?? '' }}" placeholder="{{ $placeholder }}"
+                           class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm">
+                </div>
+            @endforeach
+        </div>
+    </x-card>
+
     {{-- Testimonials --}}
     @php
         $testimonialRows = array_values(old('testimonials', $store->setting('storefront.testimonials', [])) ?: []);

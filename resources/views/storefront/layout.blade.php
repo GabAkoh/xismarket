@@ -70,19 +70,53 @@
         @yield('content')
     </main>
 
+    @php
+        $socialPlatforms = [
+            'facebook' => ['Facebook', 'bg-blue-600 hover:bg-blue-700'],
+            'instagram' => ['Instagram', 'bg-pink-600 hover:bg-pink-700'],
+            'x' => ['X', 'bg-slate-900 hover:bg-black'],
+            'tiktok' => ['TikTok', 'bg-slate-900 hover:bg-black'],
+            'youtube' => ['YouTube', 'bg-red-600 hover:bg-red-700'],
+            'whatsapp' => ['WhatsApp', 'bg-green-600 hover:bg-green-700'],
+        ];
+        $social = array_filter($store->setting('storefront.social', []) ?: []);
+    @endphp
     <footer class="border-t border-slate-200 bg-white">
-        <div class="max-w-6xl mx-auto px-4 py-6 text-sm text-slate-400">
-            <div class="flex flex-wrap justify-between gap-2">
-                <span>© {{ $store->name }}</span>
+        <div class="max-w-6xl mx-auto px-4 py-8">
+            <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+                {{-- Store identity + contact (darker, larger for visibility) --}}
+                <div>
+                    <div class="text-lg font-bold text-slate-900">{{ $store->name }}</div>
+                    <div class="mt-2 space-y-1 text-sm text-slate-600">
+                        @if ($store->address)
+                            <div>📍 {{ $store->address }}</div>
+                        @endif
+                        @if ($store->phone)
+                            <div>📞 <a href="tel:{{ preg_replace('/[^0-9+]/', '', $store->phone) }}" class="font-medium text-slate-700 hover:text-indigo-600">{{ $store->phone }}</a></div>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Social handles --}}
+                @if (! empty($social))
+                    <div>
+                        <div class="text-sm font-semibold text-slate-900 mb-2">Follow us</div>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach ($socialPlatforms as $key => [$label, $color])
+                                @if (! empty($social[$key]))
+                                    <a href="{{ $social[$key] }}" target="_blank" rel="noopener"
+                                       class="inline-flex items-center rounded-full px-3.5 py-1.5 text-xs font-semibold text-white transition {{ $color }}">{{ $label }}</a>
+                                @endif
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-100 flex flex-wrap justify-between gap-2 text-sm text-slate-500">
+                <span>© {{ date('Y') }} {{ $store->name }}. All rights reserved.</span>
                 <span>Powered by xismarket</span>
             </div>
-            @if ($store->address || $store->phone)
-                <div class="mt-2 text-xs text-slate-400">
-                    @if ($store->address)📍 {{ $store->address }}@endif
-                    @if ($store->address && $store->phone) · @endif
-                    @if ($store->phone)📞 {{ $store->phone }}@endif
-                </div>
-            @endif
         </div>
     </footer>
 </body>
