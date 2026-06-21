@@ -11,7 +11,16 @@
 </head>
 @php
     $cartCount = app(\App\Services\Storefront\CartService::class)->count();
-    $navCategories = \App\Models\Inventory\Category::orderBy('name')->take(6)->get(['id', 'name']);
+    // Top-level categories that actually have products, most-stocked first — so the
+    // nav shows browsable sections rather than empty taxonomy scaffolding.
+    $navCategories = \App\Models\Inventory\Category::query()
+        ->whereNull('parent_id')
+        ->withCount(['products as nav_count' => fn ($q) => $q->where('is_active', true)])
+        ->having('nav_count', '>', 0)
+        ->orderByDesc('nav_count')
+        ->orderBy('name')
+        ->take(6)
+        ->get();
     $promo = (bool) $store->setting('storefront.promo_enabled', true)
         ? $store->setting('storefront.promo', 'Free delivery on orders over '.$store->currencySymbol().' 150 · Shop the latest arrivals today')
         : null;

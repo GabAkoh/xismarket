@@ -25,7 +25,11 @@ class StorefrontController extends Controller
 
         $products = Product::query()
             ->where('is_active', true)
-            ->when($request->filled('category'), fn ($q) => $q->where('category_id', $request->integer('category')))
+            // Filtering by a category includes everything in its sub-tree, so a
+            // top-level category shows all products in its descendant categories.
+            ->when($request->filled('category'), fn ($q) => $q->whereIn(
+                'category_id', $this->categoryWithDescendants($request->integer('category'))
+            ))
             ->when($request->filled('q'), function ($q) use ($request) {
                 $term = '%'.$request->string('q').'%';
                 $q->where(fn ($w) => $w->where('name', 'like', $term)->orWhere('description', 'like', $term));
@@ -42,6 +46,39 @@ class StorefrontController extends Controller
         return view('storefront.index', compact(
             'products', 'categories', 'featured', 'categoryTiles', 'filtering'
         ));
+    }
+
+    /**
+     * A category id plus every descendant category id (the whole sub-tree), so
+     * selecting a parent category surfaces all products filed under its children.
+     *
+     * @return array<int, int>
+     */
+    protected function categoryWithDescendants(int $id): array
+    {
+        // id => parent_id for the whole (tenant-scoped) category set.
+        $parents = Category::pluck('parent_id', 'id');
+        $childrenOf = [];
+        foreach ($parents as $cid => $pid) {
+            if ($pid !== null) {
+                $childrenOf[$pid][] = $cid;
+            }
+        }
+
+        $ids = [];
+        $stack = [$id];
+        while ($stack) {
+            $cur = array_pop($stack);
+            if (isset($ids[$cur])) {
+                continue;
+            }
+            $ids[$cur] = true;
+            foreach ($childrenOf[$cur] ?? [] as $child) {
+                $stack[] = $child;
+            }
+        }
+
+        return array_keys($ids);
     }
 
     /**
