@@ -34,6 +34,7 @@ class StorefrontSettingsController extends Controller
             'story_title' => ['nullable', 'string', 'max:150'],
             'story_body' => ['nullable', 'string', 'max:2000'],
             'hero_image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:4096'],
+            'story_image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:4096'],
             'logo' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:2048'],
             'testimonials' => ['nullable', 'array', 'max:12'],
             'testimonials.*.name' => ['nullable', 'string', 'max:100'],
@@ -70,6 +71,21 @@ class StorefrontSettingsController extends Controller
         }
         if ($heroImage) {
             $storefront['hero_image'] = $heroImage;
+        }
+
+        // Brand-story image — same replace/remove handling as the hero image.
+        $storyImage = $existing['story_image'] ?? null;
+        if ($request->hasFile('story_image')) {
+            $storyImage = $request->file('story_image')->store('storefront', 'public');
+            if (! empty($existing['story_image'])) {
+                Storage::disk('public')->delete($existing['story_image']);
+            }
+        } elseif ($request->boolean('remove_story_image') && ! empty($existing['story_image'])) {
+            Storage::disk('public')->delete($existing['story_image']);
+            $storyImage = null;
+        }
+        if ($storyImage) {
+            $storefront['story_image'] = $storyImage;
         }
 
         // Logo — same replace/remove handling as the hero image.

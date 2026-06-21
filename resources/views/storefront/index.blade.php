@@ -127,7 +127,14 @@
     {{-- Brand story --}}
     <section id="story" class="grid grid-cols-1 md:grid-cols-3 gap-8 items-center bg-white rounded-2xl border border-slate-200 p-6 sm:p-10 mb-12">
         <div class="md:col-span-1">
-            <div class="aspect-square rounded-2xl bg-gradient-to-br from-amber-100 to-indigo-100 flex items-center justify-center text-6xl">🛍️</div>
+            @php $storyImage = $store->setting('storefront.story_image'); @endphp
+            <div class="aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-amber-100 to-indigo-100 flex items-center justify-center text-6xl">
+                @if ($storyImage)
+                    <img src="{{ asset('storage/'.$storyImage) }}" alt="{{ $store->setting('storefront.story_title', 'Our Story') }}" class="h-full w-full object-cover">
+                @else
+                    🛍️
+                @endif
+            </div>
         </div>
         <div class="md:col-span-2">
             <h2 class="text-2xl font-bold text-slate-800">{{ $store->setting('storefront.story_title', 'Our Story') }}</h2>

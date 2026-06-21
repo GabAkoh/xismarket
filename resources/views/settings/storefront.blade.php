@@ -115,6 +115,23 @@
                           placeholder="{{ $store->name }} was built on a simple idea: bring you dependable quality at a fair price…"
                           class="mt-1 w-full rounded-md border border-slate-300 p-2">{{ old('story_body', $store->setting('storefront.story_body')) }}</textarea>
             </div>
+            @php $storyImage = $store->setting('storefront.story_image'); @endphp
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Story image</label>
+                @if ($storyImage)
+                    <div class="mt-2 flex items-center gap-3">
+                        <img src="{{ asset('storage/'.$storyImage) }}" alt="Story image" class="h-20 w-20 rounded-md border border-slate-200 object-cover">
+                        <label class="flex items-center gap-2 text-sm text-slate-600">
+                            <input type="checkbox" name="remove_story_image" value="1">
+                            Remove image
+                        </label>
+                    </div>
+                @endif
+                <input type="file" name="story_image" accept="image/*"
+                       class="mt-2 w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+                <p class="mt-1 text-xs text-slate-400">Shown beside your story on the storefront. JPG, PNG, WEBP or GIF up to 4&nbsp;MB. Square works best.</p>
+                @error('story_image')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
         </div>
     </x-card>
 
