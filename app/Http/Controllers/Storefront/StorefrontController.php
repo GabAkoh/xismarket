@@ -6,18 +6,22 @@ use App\Http\Controllers\Controller;
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
 use App\Services\Storefront\BestsellerService;
+use App\Services\Storefront\CategoryNavService;
 use Illuminate\Http\Request;
 
 class StorefrontController extends Controller
 {
-    public function __construct(protected BestsellerService $bestsellers) {}
+    public function __construct(
+        protected BestsellerService $bestsellers,
+        protected CategoryNavService $nav,
+    ) {}
 
     /** Storefront landing page: marketing sections + searchable product catalogue. */
     public function index(Request $request)
     {
         $hasCats = class_exists(Category::class);
         // The category tree + how many active products sit in each sub-tree.
-        [$byId, $childrenOf, $subtree] = $hasCats ? $this->categoryTree() : [collect(), [], []];
+        [$byId, $childrenOf, $subtree] = $hasCats ? $this->nav->tree() : [collect(), [], []];
 
         $selectedCategory = ($hasCats && $request->filled('category'))
             ? ($byId[$request->integer('category')] ?? null)
@@ -28,7 +32,7 @@ class StorefrontController extends Controller
         $filtering = $request->filled('q') || $request->filled('category');
 
         // Filtering by a category includes everything in its sub-tree.
-        $descendantIds = $selectedCategory ? $this->descendantIds($selectedCategory->id, $childrenOf) : [];
+        $descendantIds = $selectedCategory ? $this->nav->descendants($selectedCategory->id, $childrenOf) : [];
 
         $products = Product::query()
             ->where('is_active', true)
@@ -79,67 +83,6 @@ class StorefrontController extends Controller
         return view('storefront.index', compact(
             'products', 'chipCategories', 'selectedCategory', 'breadcrumb', 'featured', 'categoryTiles', 'filtering'
         ));
-    }
-
-    /**
-     * Build the category tree once: the id=>Category map, a parent=>[child ids]
-     * map, and a id=>(active products in the whole sub-tree) count map.
-     *
-     * @return array{0: \Illuminate\Support\Collection, 1: array, 2: array}
-     */
-    protected function categoryTree(): array
-    {
-        $cats = Category::get(['id', 'name', 'parent_id']);
-        $byId = $cats->keyBy('id');
-
-        $childrenOf = [];
-        foreach ($cats as $c) {
-            if ($c->parent_id) {
-                $childrenOf[$c->parent_id][] = $c->id;
-            }
-        }
-
-        $direct = Product::where('is_active', true)->whereNotNull('category_id')
-            ->groupBy('category_id')->selectRaw('category_id, COUNT(*) as c')
-            ->pluck('c', 'category_id');
-
-        $subtree = [];
-        $calc = function ($id) use (&$calc, &$subtree, $childrenOf, $direct) {
-            if (array_key_exists($id, $subtree)) {
-                return $subtree[$id];
-            }
-            $subtree[$id] = 0;   // guards against accidental cycles
-            $sum = (int) ($direct[$id] ?? 0);
-            foreach ($childrenOf[$id] ?? [] as $child) {
-                $sum += $calc($child);
-            }
-
-            return $subtree[$id] = $sum;
-        };
-        foreach ($cats as $c) {
-            $calc($c->id);
-        }
-
-        return [$byId, $childrenOf, $subtree];
-    }
-
-    /** A category id plus every descendant id, from a prebuilt parent=>children map. */
-    protected function descendantIds(int $id, array $childrenOf): array
-    {
-        $ids = [];
-        $stack = [$id];
-        while ($stack) {
-            $cur = array_pop($stack);
-            if (isset($ids[$cur])) {
-                continue;
-            }
-            $ids[$cur] = true;
-            foreach ($childrenOf[$cur] ?? [] as $child) {
-                $stack[] = $child;
-            }
-        }
-
-        return array_keys($ids);
     }
 
     /**
