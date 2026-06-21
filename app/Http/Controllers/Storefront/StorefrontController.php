@@ -15,9 +15,20 @@ class StorefrontController extends Controller
     /** Storefront landing page: marketing sections + searchable product catalogue. */
     public function index(Request $request)
     {
-        $categories = class_exists(Category::class)
-            ? Category::orderBy('name')->get()
+        // Category filter chips: top-level categories that have products (most
+        // stocked first) — not the full taxonomy. The selected category is kept
+        // separately so the page title/highlight works even for a sub-category.
+        $chipCategories = class_exists(Category::class)
+            ? Category::query()->whereNull('parent_id')
+                ->withCount(['products as nav_count' => fn ($q) => $q->where('is_active', true)])
+                ->having('nav_count', '>', 0)
+                ->orderByDesc('nav_count')->orderBy('name')
+                ->take(15)->get()   // the most-stocked sections; the rest are reachable via search/tiles
             : collect();
+
+        $selectedCategory = $request->filled('category') && class_exists(Category::class)
+            ? Category::find($request->integer('category'))
+            : null;
 
         // When the visitor is searching or filtering we drop the marketing
         // sections and show a focused results grid instead.
@@ -44,7 +55,7 @@ class StorefrontController extends Controller
         $categoryTiles = $filtering ? collect() : $this->categoryTiles();
 
         return view('storefront.index', compact(
-            'products', 'categories', 'featured', 'categoryTiles', 'filtering'
+            'products', 'chipCategories', 'selectedCategory', 'featured', 'categoryTiles', 'filtering'
         ));
     }
 

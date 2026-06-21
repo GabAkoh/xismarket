@@ -11,20 +11,24 @@
             @if (request('q'))
                 Results for “{{ request('q') }}”
             @else
-                {{ optional($categories->firstWhere('id', (int) request('category')))->name ?? 'Products' }}
+                {{ $selectedCategory?->name ?? 'Products' }}
             @endif
         </h1>
         <a href="{{ route('shop.home') }}" class="text-sm text-indigo-600 hover:underline">← Back to home</a>
     </div>
 
-    @if ($categories->isNotEmpty())
+    @if ($chipCategories->isNotEmpty())
         <div class="flex flex-wrap gap-2 mb-6">
             <a href="{{ route('shop.home', ['q' => request('q')]) }}"
                class="px-3 py-1.5 rounded-full text-sm {{ ! request('category') ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100' }}">All</a>
-            @foreach ($categories as $cat)
+            @foreach ($chipCategories as $cat)
                 <a href="{{ route('shop.home', ['category' => $cat->id, 'q' => request('q')]) }}"
                    class="px-3 py-1.5 rounded-full text-sm {{ request('category') == $cat->id ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100' }}">{{ $cat->name }}</a>
             @endforeach
+            {{-- When a sub-category (e.g. from a tile) is selected, show it too so it's reflected. --}}
+            @if ($selectedCategory && ! $chipCategories->contains('id', $selectedCategory->id))
+                <span class="px-3 py-1.5 rounded-full text-sm bg-indigo-600 text-white">{{ $selectedCategory->name }}</span>
+            @endif
         </div>
     @endif
 
@@ -153,11 +157,11 @@
             <h2 class="text-2xl font-bold text-slate-800">All products</h2>
         </div>
 
-        @if ($categories->isNotEmpty())
+        @if ($chipCategories->isNotEmpty())
             <div class="flex flex-wrap gap-2 mb-6">
                 <a href="{{ route('shop.home') }}#shop"
                    class="px-3 py-1.5 rounded-full text-sm bg-indigo-600 text-white">All</a>
-                @foreach ($categories as $cat)
+                @foreach ($chipCategories as $cat)
                     <a href="{{ route('shop.home', ['category' => $cat->id]) }}"
                        class="px-3 py-1.5 rounded-full text-sm bg-white border border-slate-200 text-slate-600 hover:bg-slate-100">{{ $cat->name }}</a>
                 @endforeach
