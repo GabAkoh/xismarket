@@ -15,32 +15,24 @@ class StorefrontController extends Controller
     /** Storefront landing page: marketing sections + searchable product catalogue. */
     public function index(Request $request)
     {
-        // Category filter chips: top-level categories that have products (most
-        // stocked first) — not the full taxonomy. The selected category is kept
-        // separately so the page title/highlight works even for a sub-category.
-        $chipCategories = class_exists(Category::class)
-            ? Category::query()->whereNull('parent_id')
-                ->withCount(['products as nav_count' => fn ($q) => $q->where('is_active', true)])
-                ->having('nav_count', '>', 0)
-                ->orderByDesc('nav_count')->orderBy('name')
-                ->take(15)->get()   // the most-stocked sections; the rest are reachable via search/tiles
-            : collect();
+        $hasCats = class_exists(Category::class);
+        // The category tree + how many active products sit in each sub-tree.
+        [$byId, $childrenOf, $subtree] = $hasCats ? $this->categoryTree() : [collect(), [], []];
 
-        $selectedCategory = $request->filled('category') && class_exists(Category::class)
-            ? Category::find($request->integer('category'))
+        $selectedCategory = ($hasCats && $request->filled('category'))
+            ? ($byId[$request->integer('category')] ?? null)
             : null;
 
         // When the visitor is searching or filtering we drop the marketing
         // sections and show a focused results grid instead.
         $filtering = $request->filled('q') || $request->filled('category');
 
+        // Filtering by a category includes everything in its sub-tree.
+        $descendantIds = $selectedCategory ? $this->descendantIds($selectedCategory->id, $childrenOf) : [];
+
         $products = Product::query()
             ->where('is_active', true)
-            // Filtering by a category includes everything in its sub-tree, so a
-            // top-level category shows all products in its descendant categories.
-            ->when($request->filled('category'), fn ($q) => $q->whereIn(
-                'category_id', $this->categoryWithDescendants($request->integer('category'))
-            ))
+            ->when($selectedCategory, fn ($q) => $q->whereIn('category_id', $descendantIds))
             ->when($request->filled('q'), function ($q) use ($request) {
                 $term = '%'.$request->string('q').'%';
                 $q->where(fn ($w) => $w->where('name', 'like', $term)->orWhere('description', 'like', $term));
@@ -49,33 +41,91 @@ class StorefrontController extends Controller
             ->paginate(12)
             ->withQueryString();
 
+        // Drill-down chips: the children of the current browse level (the selected
+        // category if it has stocked sub-categories, else its parent's level, else
+        // the top level), keeping only branches that actually have products.
+        $browseParentId = null;
+        if ($selectedCategory) {
+            $stockedKids = collect($childrenOf[$selectedCategory->id] ?? [])
+                ->contains(fn ($id) => ($subtree[$id] ?? 0) > 0);
+            $browseParentId = $stockedKids ? $selectedCategory->id : $selectedCategory->parent_id;
+        }
+        $candidateIds = $browseParentId
+            ? ($childrenOf[$browseParentId] ?? [])
+            : ($hasCats ? $byId->whereNull('parent_id')->pluck('id')->all() : []);
+        $chipCategories = collect($candidateIds)
+            ->map(fn ($id) => $byId[$id] ?? null)->filter()
+            ->filter(fn ($c) => ($subtree[$c->id] ?? 0) > 0)
+            ->sortByDesc(fn ($c) => $subtree[$c->id])
+            ->take(20)
+            ->values();
+
+        // Breadcrumb trail from the root down to the selected category.
+        $breadcrumb = collect();
+        if ($selectedCategory) {
+            $cur = $selectedCategory;
+            $guard = 0;
+            while ($cur && $guard++ < 20) {
+                $breadcrumb->prepend($cur);
+                $cur = $cur->parent_id ? ($byId[$cur->parent_id] ?? null) : null;
+            }
+        }
+
         // Landing-page extras (skipped while filtering to keep the page light).
         $featured = $filtering ? collect() : $this->bestsellerProducts(8);
 
         $categoryTiles = $filtering ? collect() : $this->categoryTiles();
 
         return view('storefront.index', compact(
-            'products', 'chipCategories', 'selectedCategory', 'featured', 'categoryTiles', 'filtering'
+            'products', 'chipCategories', 'selectedCategory', 'breadcrumb', 'featured', 'categoryTiles', 'filtering'
         ));
     }
 
     /**
-     * A category id plus every descendant category id (the whole sub-tree), so
-     * selecting a parent category surfaces all products filed under its children.
+     * Build the category tree once: the id=>Category map, a parent=>[child ids]
+     * map, and a id=>(active products in the whole sub-tree) count map.
      *
-     * @return array<int, int>
+     * @return array{0: \Illuminate\Support\Collection, 1: array, 2: array}
      */
-    protected function categoryWithDescendants(int $id): array
+    protected function categoryTree(): array
     {
-        // id => parent_id for the whole (tenant-scoped) category set.
-        $parents = Category::pluck('parent_id', 'id');
+        $cats = Category::get(['id', 'name', 'parent_id']);
+        $byId = $cats->keyBy('id');
+
         $childrenOf = [];
-        foreach ($parents as $cid => $pid) {
-            if ($pid !== null) {
-                $childrenOf[$pid][] = $cid;
+        foreach ($cats as $c) {
+            if ($c->parent_id) {
+                $childrenOf[$c->parent_id][] = $c->id;
             }
         }
 
+        $direct = Product::where('is_active', true)->whereNotNull('category_id')
+            ->groupBy('category_id')->selectRaw('category_id, COUNT(*) as c')
+            ->pluck('c', 'category_id');
+
+        $subtree = [];
+        $calc = function ($id) use (&$calc, &$subtree, $childrenOf, $direct) {
+            if (array_key_exists($id, $subtree)) {
+                return $subtree[$id];
+            }
+            $subtree[$id] = 0;   // guards against accidental cycles
+            $sum = (int) ($direct[$id] ?? 0);
+            foreach ($childrenOf[$id] ?? [] as $child) {
+                $sum += $calc($child);
+            }
+
+            return $subtree[$id] = $sum;
+        };
+        foreach ($cats as $c) {
+            $calc($c->id);
+        }
+
+        return [$byId, $childrenOf, $subtree];
+    }
+
+    /** A category id plus every descendant id, from a prebuilt parent=>children map. */
+    protected function descendantIds(int $id, array $childrenOf): array
+    {
         $ids = [];
         $stack = [$id];
         while ($stack) {
