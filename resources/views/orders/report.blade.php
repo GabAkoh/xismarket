@@ -121,6 +121,26 @@
     </x-card>
 </div>
 
+{{-- Shipping methods --}}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <x-card title="Shipping methods">
+        <x-slot:actions><a href="{{ $exportUrl('shipping') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <table class="w-full text-sm">
+            <tbody class="divide-y">
+                @forelse ($shipping as $s)
+                    <tr>
+                        <td class="py-2 text-slate-700">{{ $s->label }}</td>
+                        <td class="py-2 text-right text-slate-400 text-xs">{{ number_format($s->n) }} orders</td>
+                        <td class="py-2 text-right font-semibold text-slate-700">{{ $money($s->total) }}</td>
+                    </tr>
+                @empty
+                    <tr><td class="py-4 text-center text-slate-400">No shipping methods recorded in this period.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </x-card>
+</div>
+
 {{-- Payment methods + top products --}}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="Payment methods">

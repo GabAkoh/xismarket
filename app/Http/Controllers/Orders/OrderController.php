@@ -61,6 +61,8 @@ class OrderController extends Controller
                 $data['statusRows']->map(fn ($s) => [$s->status, $s->n, $num($s->total)])],
             'fulfilment' => ['fulfilment', ['Fulfilment', 'Orders', 'Value'],
                 $data['fulfilment']->map(fn ($f) => [$f->label, $f->n, $num($f->total)])],
+            'shipping' => ['shipping-methods', ['Shipping method', 'Orders', 'Value'],
+                $data['shipping']->map(fn ($s) => [$s->label, $s->n, $num($s->total)])],
             'methods' => ['payment-methods', ['Method', 'Orders', 'Amount'],
                 $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)])],
             'products' => ['top-products', ['Product', 'Qty', 'Revenue'],
@@ -132,6 +134,8 @@ class OrderController extends Controller
                 $data['statusRows']->map(fn ($x) => [$x->status, $x->n, $num($x->total)]));
             $section('Fulfilment', ['Fulfilment', 'Orders', 'Value'],
                 $data['fulfilment']->map(fn ($x) => [$x->label, $x->n, $num($x->total)]));
+            $section('Shipping methods', ['Shipping method', 'Orders', 'Value'],
+                $data['shipping']->map(fn ($x) => [$x->label, $x->n, $num($x->total)]));
             $section('Payment methods', ['Method', 'Orders', 'Amount'],
                 $data['methods']->map(fn ($x) => [$x->label, $x->n, $num($x->amount)]));
             $section('Top products', ['Product', 'Qty', 'Revenue'],
@@ -229,6 +233,15 @@ class OrderController extends Controller
                 'n' => (int) $f->n, 'total' => round((float) $f->total, 2),
             ]);
 
+        // Shipping methods (valid orders that carry a stored method label).
+        $shipping = $valid()->whereNotNull('shipping_method')->where('shipping_method', '!=', '')
+            ->selectRaw('shipping_method, COUNT(*) as n, COALESCE(SUM(total), 0) as total')
+            ->groupBy('shipping_method')->orderByDesc('n')->get()
+            ->map(fn ($s) => (object) [
+                'label' => $s->shipping_method,
+                'n' => (int) $s->n, 'total' => round((float) $s->total, 2),
+            ]);
+
         // Payment methods (orders with money collected).
         $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
         $methods = $valid()->where('paid_total', '>', 0)->whereNotNull('payment_method')
@@ -250,7 +263,7 @@ class OrderController extends Controller
             COALESCE(SUM(total), 0) as total')
             ->groupBy('d')->orderBy('d')->get();
 
-        return compact('summary', 'statusRows', 'fulfilment', 'methods', 'top', 'daily', 'from', 'to');
+        return compact('summary', 'statusRows', 'fulfilment', 'shipping', 'methods', 'top', 'daily', 'from', 'to');
     }
 
     public function create()
