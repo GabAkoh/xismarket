@@ -144,8 +144,13 @@
 </div>
 
 {{-- ===== Gallery: additional images (cascading angles / variants / lifestyle) ===== --}}
+@php
+    $aiUrl = isset($product) && $product->exists ? route('products.ai-image', $product) : null;
+    $aiConfigured = app(\App\Services\Images\ImageGenerator::class)->configured();
+@endphp
 <div class="mt-5" x-data="productGallery({
         existing: @js(isset($product) ? $product->images->map(fn ($i) => ['id' => $i->id, 'url' => $i->url()])->values() : []),
+        aiUrl: @js($aiUrl), aiConfigured: @js($aiConfigured),
      })">
     <label class="block text-sm font-medium text-slate-700">More images (gallery)</label>
     <p class="text-xs text-slate-400 mb-2">Extra angles, side/back views, colour variants and lifestyle shots — shown on the storefront product page. Drag to reorder.</p>
@@ -180,6 +185,49 @@
         <input type="file" name="gallery[]" accept="image/*" multiple x-ref="gallery" @change="onAdd()" class="hidden">
     </div>
 
+    {{-- ===== AI image tools (edit mode only) ===== --}}
+    @if ($aiUrl)
+        <div class="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-indigo-700">✨ AI image tools</span>
+                <span x-show="aiBusy" x-cloak class="text-xs text-slate-500" x-text="'Generating ' + aiBusy + '…'"></span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">Runs on the cover image (or first gallery image) and adds the result here.</p>
+
+            @unless ($aiConfigured)
+                <p class="mt-2 text-xs text-amber-700 bg-amber-100 rounded px-2 py-1">
+                    Not configured yet — set <code>IMAGE_AI_KEY</code> (and optionally <code>IMAGE_AI_PROVIDER</code>) in your environment to enable generation.
+                </p>
+            @endunless
+
+            <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3" :class="aiConfigured ? '' : 'opacity-60 pointer-events-none'">
+                {{-- Background --}}
+                <div class="flex items-center gap-2">
+                    <input x-model="ai.background" placeholder="white" class="w-24 rounded-md border border-slate-300 p-1.5 text-sm">
+                    <button type="button" @click="runAi('background', ai.background)" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Plain background</button>
+                </div>
+                {{-- Colour variant --}}
+                <div class="flex items-center gap-2">
+                    <input x-model="ai.color" placeholder="navy blue" class="w-28 rounded-md border border-slate-300 p-1.5 text-sm">
+                    <button type="button" @click="runAi('color', ai.color)" :disabled="aiBusy || !ai.color" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Recolour</button>
+                </div>
+                {{-- Side / angle --}}
+                <div class="flex items-center gap-2">
+                    <select x-model="ai.angle" class="rounded-md border border-slate-300 p-1.5 text-sm">
+                        <option value="side">Side</option><option value="back">Back</option>
+                        <option value="three-quarter">3/4</option><option value="top-down">Top-down</option>
+                    </select>
+                    <button type="button" @click="runAi('angle', ai.angle)" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Add angle view</button>
+                </div>
+                {{-- Model shot --}}
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="runAi('model', '')" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Lifestyle / model shot</button>
+                </div>
+            </div>
+            <p x-show="aiError" x-cloak class="mt-2 text-xs text-red-600" x-text="aiError"></p>
+        </div>
+    @endif
+
     {{-- Hidden state submitted with the form --}}
     <template x-for="it in items.filter(x => x.remove)" :key="'r'+it.id"><input type="hidden" name="remove_gallery[]" :value="it.id"></template>
     <input type="hidden" name="gallery_order" :value="items.filter(x => !x.remove).map(x => x.id).join(',')">
@@ -195,9 +243,33 @@ function productGallery(cfg) {
         newPreviews: [],
         drag: null,
         cover: '',
+        aiUrl: cfg.aiUrl || null,
+        aiConfigured: !!cfg.aiConfigured,
+        aiBusy: '', aiError: '',
+        ai: { background: 'white', color: '', angle: 'side' },
         init() {
             // The image editor can push an edited image straight into the gallery.
             window.addEventListener('gallery-add-file', (e) => this.addFile(e.detail));
+        },
+        async runAi(operation, detail) {
+            if (this.aiBusy || !this.aiUrl) return;
+            this.aiBusy = operation; this.aiError = '';
+            try {
+                const token = document.querySelector('input[name=_token]')?.value;
+                const res = await fetch(this.aiUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': token, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ operation, detail: detail || '' }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) { this.aiError = json.message || ('Generation failed (' + res.status + ').'); return; }
+                // The image is already saved to the gallery; show it here.
+                this.items.push({ id: json.image.id, url: json.image.url, remove: false });
+            } catch (e) {
+                this.aiError = 'Generation failed: ' + (e && e.message ? e.message : e);
+            } finally {
+                this.aiBusy = '';
+            }
         },
         addFile(file) {
             const input = this.$refs.gallery, dt = new DataTransfer();

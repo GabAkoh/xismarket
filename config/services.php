@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    // AI product-image generation (background removal, recolor, side views,
+    // model shots). Set IMAGE_AI_KEY to enable; the 'stub' provider echoes the
+    // source image for local testing without an external call.
+    'image_ai' => [
+        'provider' => env('IMAGE_AI_PROVIDER', 'gemini'),
+        'key' => env('IMAGE_AI_KEY'),
+        'model' => env('IMAGE_AI_MODEL', 'gemini-2.5-flash-image'),
+        'endpoint' => env('IMAGE_AI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
+    ],
+
 ];
