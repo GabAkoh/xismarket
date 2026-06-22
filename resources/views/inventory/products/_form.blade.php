@@ -143,6 +143,10 @@
         <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $product->is_active ?? true))>
         Active
     </label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">
+        <input type="checkbox" name="is_featured" value="1" @checked(old('is_featured', $product->is_featured ?? false))>
+        Featured (pin to storefront bestsellers)
+    </label>
 </div>
 
 @push('scripts')

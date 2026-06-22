@@ -114,36 +114,37 @@ class StorefrontController extends Controller
     }
 
     /**
-     * Bestselling active products, ranked by real units sold. Falls back to the
-     * newest products for a store with no sales yet, and tops the row up with
-     * newest products when fewer than $limit bestsellers are available.
+     * Products for the storefront "Bestsellers" row. Manually featured products
+     * are pinned to the front, then real top-sellers (by units sold) fill the
+     * remaining slots, then the newest products top it up if still short.
      */
     protected function bestsellerProducts(int $limit = 8)
     {
-        $ids = $this->bestsellers->topProductIds($limit);
+        // 1. Pinned: products marked "featured".
+        $products = Product::where('is_active', true)->where('is_featured', true)
+            ->with('category')->latest()->take($limit)->get();
 
-        if (empty($ids)) {
-            return Product::where('is_active', true)->with('category')->latest()->take($limit)->get();
+        // 2. Top-sellers by units sold (excluding any already pinned).
+        if ($products->count() < $limit) {
+            $ids = $this->bestsellers->topProductIds($limit + $products->count());
+            $ids = array_values(array_diff($ids, $products->pluck('id')->all()));
+            if (! empty($ids)) {
+                $sellers = Product::where('is_active', true)->with('category')
+                    ->whereIn('id', $ids)->get()
+                    ->sortBy(fn ($p) => array_search($p->id, $ids))->values();
+                $products = $products->concat($sellers)->take($limit);
+            }
         }
 
-        $products = Product::where('is_active', true)
-            ->with('category')
-            ->whereIn('id', $ids)
-            ->get()
-            ->sortBy(fn ($p) => array_search($p->id, $ids))
-            ->values();
-
+        // 3. Newest products to fill any remaining slots.
         if ($products->count() < $limit) {
-            $fill = Product::where('is_active', true)
-                ->with('category')
-                ->whereNotIn('id', $products->pluck('id'))
-                ->latest()
-                ->take($limit - $products->count())
-                ->get();
+            $fill = Product::where('is_active', true)->with('category')
+                ->whereNotIn('id', $products->pluck('id')->all() ?: [0])
+                ->latest()->take($limit - $products->count())->get();
             $products = $products->concat($fill);
         }
 
-        return $products;
+        return $products->values();
     }
 
     /**

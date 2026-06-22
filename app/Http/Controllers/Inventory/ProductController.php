@@ -231,7 +231,7 @@ class ProductController extends Controller
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer'],
-            'action' => ['required', 'in:activate,deactivate,price,restock,reorder,reorder_demand'],
+            'action' => ['required', 'in:activate,deactivate,feature,unfeature,price,restock,reorder,reorder_demand'],
             'price' => ['required_if:action,price', 'nullable', 'numeric', 'min:0'],
             'quantity' => ['required_if:action,restock', 'nullable', 'numeric', 'not_in:0'],
             'reorder' => ['required_if:action,reorder', 'nullable', 'numeric', 'min:0'],
@@ -255,6 +255,16 @@ class ProductController extends Controller
             case 'deactivate':
                 Product::whereIn('id', $ids)->update(['is_active' => false]);
                 $msg = "Deactivated {$n} product(s).";
+                break;
+
+            case 'feature':
+                Product::whereIn('id', $ids)->update(['is_featured' => true]);
+                $msg = "Featured {$n} product(s) on the storefront.";
+                break;
+
+            case 'unfeature':
+                Product::whereIn('id', $ids)->update(['is_featured' => false]);
+                $msg = "Un-featured {$n} product(s).";
                 break;
 
             case 'price':
@@ -326,6 +336,7 @@ class ProductController extends Controller
         $data = $this->validateData($request);
         $data['track_stock'] = $request->boolean('track_stock');
         $data['is_active'] = $request->boolean('is_active');
+        $data['is_featured'] = $request->boolean('is_featured');
         unset($data['reorder_level']);   // lives on product_stocks, not products
         $this->applyImage($request, $data);
 
@@ -354,6 +365,7 @@ class ProductController extends Controller
         $data = $this->validateData($request, $product);
         $data['track_stock'] = $request->boolean('track_stock');
         $data['is_active'] = $request->boolean('is_active');
+        $data['is_featured'] = $request->boolean('is_featured');
         unset($data['reorder_level']);
         $this->applyImage($request, $data, $product);
 

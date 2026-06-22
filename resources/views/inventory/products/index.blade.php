@@ -56,6 +56,8 @@
                 <span class="text-sm font-semibold text-indigo-700"><span x-text="sel.length"></span> selected</span>
                 <button type="button" @click="run('deactivate')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Deactivate</button>
                 <button type="button" @click="run('activate')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Activate</button>
+                <button type="button" @click="run('feature')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">★ Feature</button>
+                <button type="button" @click="run('unfeature')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Un-feature</button>
 
                 <div class="flex items-center gap-1">
                     <span class="text-xs text-slate-400">{{ $currentTenant->currencySymbol() }}</span>
