@@ -5,6 +5,7 @@ use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\ProductImportController;
 use App\Http\Controllers\Inventory\PurchaseOrderController;
 use App\Http\Controllers\Inventory\StockController;
+use App\Http\Controllers\Inventory\StockMovementController;
 use App\Http\Controllers\Inventory\SupplierController;
 use App\Http\Controllers\Inventory\WarehouseController;
 use Illuminate\Support\Facades\Route;
@@ -16,6 +17,8 @@ Route::middleware(['web', 'auth'])->group(function () {
         // Literal segments — before any products/{product} route.
         Route::get('products/report', [ProductController::class, 'report'])->name('products.report');
         Route::get('products/report/export', [ProductController::class, 'reportExport'])->name('products.report.export');
+        Route::get('products/movements', [StockMovementController::class, 'report'])->name('products.movements');
+        Route::get('products/movements/export', [StockMovementController::class, 'reportExport'])->name('products.movements.export');
     });
     Route::middleware('permission:products.manage')->group(function () {
         // Import (literal segments — before products/{product} routes).
