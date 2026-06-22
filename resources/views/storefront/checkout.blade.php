@@ -39,19 +39,12 @@
         <div class="bg-white rounded-lg border border-slate-200 p-5">
             <h2 class="font-semibold text-slate-800 mb-4">Shipping method</h2>
             <input type="hidden" name="shipping_method" :value="m">
-            <div class="space-y-2 mb-4">
+            <select x-model.number="m" class="w-full rounded-md border border-slate-300 p-2.5 text-sm mb-4">
                 <template x-for="(method, i) in methods" :key="i">
-                    <label class="flex items-center justify-between gap-2 rounded-md border p-3 cursor-pointer"
-                           :class="m===i ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-slate-300'">
-                        <span class="flex items-center gap-2 text-sm">
-                            <input type="radio" :checked="m===i" @change="m=i" class="text-indigo-600">
-                            <span x-text="(method.pickup ? '🏬 ' : '🚚 ') + method.label"></span>
-                        </span>
-                        <span class="text-sm font-medium text-slate-600"
-                              x-text="Number(method.fee) > 0 ? '+{{ $symbol }} ' + Number(method.fee).toFixed(2) : 'Free'"></span>
-                    </label>
+                    <option :value="i"
+                            x-text="(method.pickup ? '🏬 ' : '🚚 ') + method.label + ' — ' + (Number(method.fee) > 0 ? '+{{ $symbol }} ' + Number(method.fee).toFixed(2) : 'Free')"></option>
                 </template>
-            </div>
+            </select>
 
             <div x-show="!pickup" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div class="sm:col-span-2">
