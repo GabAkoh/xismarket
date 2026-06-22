@@ -29,6 +29,19 @@ class ProductController extends Controller
             ->leftJoinSub($stockSub, 'ps', 'ps.product_id', '=', 'products.id')
             ->select('products.*', DB::raw('COALESCE(ps.qty, 0) as total_stock'));
 
+        // Text + category filters — applied before the chip counts so those
+        // counts reflect the current search/category scope.
+        $search = trim((string) $request->input('q'));
+        if ($search !== '') {
+            $term = '%'.$search.'%';
+            $query->where(fn ($w) => $w->where('products.name', 'like', $term)
+                ->orWhere('products.sku', 'like', $term)
+                ->orWhere('products.barcode', 'like', $term));
+        }
+        if ($request->filled('category')) {
+            $query->where('products.category_id', $request->integer('category'));
+        }
+
         // "Needs attention" = no cost price AND no stock (incomplete catalogue records).
         $needsAttention = fn ($q) => $q->where('products.cost_price', 0)
             ->where(DB::raw('COALESCE(ps.qty, 0)'), '<=', 0);
@@ -48,8 +61,9 @@ class ProductController extends Controller
         };
 
         $products = $query->orderBy('products.name')->paginate(20)->withQueryString();
+        $categories = Category::orderBy('name')->get(['id', 'name']);
 
-        return view('inventory.products.index', compact('products', 'attentionCount', 'sellableCount'));
+        return view('inventory.products.index', compact('products', 'attentionCount', 'sellableCount', 'categories'));
     }
 
     /** Inventory/products report: stock state and sales activity, filterable. */

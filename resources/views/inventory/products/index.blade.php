@@ -10,6 +10,8 @@
 </x-page-header>
 
 @php $filter = request('filter'); @endphp
+@php $q = request('q'); $category = request('category'); @endphp
+@php $scope = array_filter(['q' => $q, 'category' => $category], fn ($v) => $v !== null && $v !== ''); @endphp
 @php $canManage = auth()->user()?->hasPermission('products.manage'); @endphp
 <div x-data="{
         sel: [],
@@ -26,15 +28,37 @@
         },
      }">
 <x-card>
-    {{-- Filters --}}
+    {{-- Search + category filter --}}
+    <form method="GET" action="{{ route('products.index') }}" class="mb-3 flex flex-wrap items-end gap-3">
+        @if ($filter)<input type="hidden" name="filter" value="{{ $filter }}">@endif
+        <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+            <input name="q" value="{{ $q }}" placeholder="Name, SKU or barcode" class="w-56 rounded-md border border-slate-300 p-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Category</label>
+            <select name="category" class="rounded-md border border-slate-300 p-2 text-sm">
+                <option value="">All categories</option>
+                @foreach ($categories as $c)
+                    <option value="{{ $c->id }}" @selected((string) $category === (string) $c->id)>{{ $c->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Apply</button>
+        @if ($scope)
+            <a href="{{ route('products.index', $filter ? ['filter' => $filter] : []) }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Clear filters</a>
+        @endif
+    </form>
+
+    {{-- Quick filters --}}
     <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
-        <a href="{{ route('products.index') }}"
+        <a href="{{ route('products.index', $scope) }}"
            class="rounded-full px-3 py-1 {{ $filter ? 'text-slate-500 hover:bg-slate-100' : 'bg-slate-800 text-white' }}">All</a>
-        <a href="{{ route('products.index', ['filter' => 'attention']) }}"
+        <a href="{{ route('products.index', ['filter' => 'attention'] + $scope) }}"
            class="rounded-full px-3 py-1 {{ $filter === 'attention' ? 'bg-amber-500 text-white' : 'text-amber-600 hover:bg-amber-50' }}">
             ⚠ Needs attention ({{ number_format($attentionCount) }})
         </a>
-        <a href="{{ route('products.index', ['filter' => 'unsellable']) }}"
+        <a href="{{ route('products.index', ['filter' => 'unsellable'] + $scope) }}"
            class="rounded-full px-3 py-1 {{ $filter === 'unsellable' ? 'bg-red-500 text-white' : 'text-red-600 hover:bg-red-50' }}">
             No price / out of stock ({{ number_format($sellableCount) }})
         </a>
