@@ -108,15 +108,24 @@
                 <label class="flex items-center gap-2"><span class="w-20 text-slate-600">Brightness</span><input type="range" min="0" max="200" x-model.number="adj.brightness" @input="render()" class="flex-1"></label>
                 <label class="flex items-center gap-2"><span class="w-20 text-slate-600">Contrast</span><input type="range" min="0" max="200" x-model.number="adj.contrast" @input="render()" class="flex-1"></label>
                 <label class="flex items-center gap-2"><span class="w-20 text-slate-600">Saturation</span><input type="range" min="0" max="200" x-model.number="adj.saturate" @input="render()" class="flex-1"></label>
-                <label class="flex items-center gap-2"><input type="checkbox" x-model="bg.on" @change="render()"><span class="text-slate-600">Remove background</span></label>
+                <label class="flex items-center gap-2"><input type="checkbox" x-model="bg.on" @change="render()"><span class="text-slate-600">Remove / replace background</span></label>
                 <label class="flex items-center gap-2" x-show="bg.on"><span class="w-20 text-slate-600">Tolerance</span><input type="range" min="0" max="180" x-model.number="bg.tol" @input="render()" class="flex-1"></label>
+                <div x-show="bg.on" class="flex items-center gap-2 flex-wrap">
+                    <span class="w-20 text-slate-600">Backdrop</span>
+                    <button type="button" @click="backdrop='transparent'; render()" class="rounded border px-2 py-0.5 text-xs" :class="backdrop==='transparent' ? 'ring-2 ring-indigo-400' : 'border-slate-300'">None</button>
+                    <button type="button" @click="backdrop='white'; render()" class="rounded border px-2 py-0.5 text-xs" :class="backdrop==='white' ? 'ring-2 ring-indigo-400' : 'border-slate-300'">White</button>
+                    <button type="button" @click="backdrop='studio'; render()" class="rounded border px-2 py-0.5 text-xs" :class="backdrop==='studio' ? 'ring-2 ring-indigo-400' : 'border-slate-300'">Studio</button>
+                    <button type="button" @click="backdrop='color'; render()" class="rounded border px-2 py-0.5 text-xs" :class="backdrop==='color' ? 'ring-2 ring-indigo-400' : 'border-slate-300'">Colour</button>
+                    <input type="color" x-show="backdrop==='color'" x-model="bgColor" @input="render()" class="h-6 w-8 rounded border border-slate-300 p-0">
+                </div>
                 <label class="flex items-center gap-2"><input type="checkbox" x-model="wm.on" @change="render()"><span class="text-slate-600">Watermark</span></label>
                 <input type="text" x-show="wm.on" x-model="wm.text" @input="render()" placeholder="Watermark text" class="w-full rounded-md border border-slate-300 p-1.5 text-sm">
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
                 <button type="button" @click="resetAdjust()" class="rounded-md border border-slate-300 px-2.5 py-1 text-sm hover:bg-white">Reset</button>
                 <button type="button" @click="backToCrop()" class="rounded-md border border-slate-300 px-2.5 py-1 text-sm hover:bg-white">← Crop</button>
-                <button type="button" @click="save()" class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700">Save image</button>
+                <button type="button" @click="save('cover')" class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700">Save as cover</button>
+                <button type="button" @click="save('gallery')" class="rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">+ Add to gallery</button>
                 <button type="button" @click="cancelEdit()" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm">Cancel</button>
             </div>
         </div>
@@ -186,6 +195,17 @@ function productGallery(cfg) {
         newPreviews: [],
         drag: null,
         cover: '',
+        init() {
+            // The image editor can push an edited image straight into the gallery.
+            window.addEventListener('gallery-add-file', (e) => this.addFile(e.detail));
+        },
+        addFile(file) {
+            const input = this.$refs.gallery, dt = new DataTransfer();
+            for (const f of input.files) dt.items.add(f);
+            dt.items.add(file);
+            input.files = dt.files;
+            this.onAdd();
+        },
         onAdd() {
             this.newPreviews = Array.from(this.$refs.gallery.files).map(f => URL.createObjectURL(f));
         },
@@ -228,6 +248,7 @@ function productImageEditor() {
         editing: false, stage: 'crop', cropper: null, aspect: null, _src: null, baseCanvas: null,
         adj: { brightness: 100, contrast: 100, saturate: 100 },
         bg: { on: false, tol: 60 },
+        backdrop: 'transparent', bgColor: '#ffffff',
         wm: { on: false, text: '' },
         preview: null, error: '',
 
@@ -320,13 +341,36 @@ function productImageEditor() {
             const base = this.baseCanvas, out = this.$refs.out;
             if (!base || !out) return;
             out.width = base.width; out.height = base.height;
+            const w = out.width, h = out.height;
+
+            // 1. Adjusted product onto a temp canvas, keyed transparent if removing bg.
+            const tmp = document.createElement('canvas');
+            tmp.width = w; tmp.height = h;
+            const tctx = tmp.getContext('2d');
+            tctx.filter = `brightness(${this.adj.brightness}%) contrast(${this.adj.contrast}%) saturate(${this.adj.saturate}%)`;
+            tctx.drawImage(base, 0, 0);
+            tctx.filter = 'none';
+            if (this.bg.on) this.removeBackground(tctx, w, h);
+
+            // 2. Paint the chosen backdrop (when replacing), then 3. the product over it.
             const ctx = out.getContext('2d');
-            ctx.clearRect(0, 0, out.width, out.height);
-            ctx.filter = `brightness(${this.adj.brightness}%) contrast(${this.adj.contrast}%) saturate(${this.adj.saturate}%)`;
-            ctx.drawImage(base, 0, 0);
-            ctx.filter = 'none';
-            if (this.bg.on) this.removeBackground(ctx, out.width, out.height);
-            if (this.wm.on && this.wm.text) this.drawWatermark(ctx, out.width, out.height);
+            ctx.clearRect(0, 0, w, h);
+            if (this.bg.on && this.backdrop !== 'transparent') this.paintBackdrop(ctx, w, h);
+            ctx.drawImage(tmp, 0, 0);
+
+            if (this.wm.on && this.wm.text) this.drawWatermark(ctx, w, h);
+        },
+        paintBackdrop(ctx, w, h) {
+            if (this.backdrop === 'studio') {
+                const g = ctx.createLinearGradient(0, 0, 0, h);
+                g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#dbe2ea');
+                ctx.fillStyle = g;
+            } else if (this.backdrop === 'white') {
+                ctx.fillStyle = '#ffffff';
+            } else {
+                ctx.fillStyle = this.bgColor;
+            }
+            ctx.fillRect(0, 0, w, h);
         },
         removeBackground(ctx, w, h) {
             // Estimate the background from the border pixels, then key out pixels
@@ -358,18 +402,26 @@ function productImageEditor() {
         resetAdjust() {
             this.adj = { brightness: 100, contrast: 100, saturate: 100 };
             this.bg = { on: false, tol: 60 };
+            this.backdrop = 'transparent'; this.bgColor = '#ffffff';
             this.wm = { on: false, text: this.$el.dataset.store || '' };
             this.render();
         },
 
         // --- Save / clear ---
-        save() {
+        // target: 'cover' replaces the primary image; 'gallery' adds it as an extra image.
+        save(target) {
             const out = this.$refs.out;
-            const png = this.bg.on;                 // keep transparency only when removing bg
+            // Keep transparency only when removing the background with no replacement backdrop.
+            const png = this.bg.on && this.backdrop === 'transparent';
             const type = png ? 'image/png' : 'image/jpeg';
             out.toBlob((blob) => {
                 if (!blob) { this.error = 'Could not export the image.'; return; }
                 const file = new File([blob], 'product-image.' + (png ? 'png' : 'jpg'), { type });
+                if (target === 'gallery') {
+                    window.dispatchEvent(new CustomEvent('gallery-add-file', { detail: file }));
+                    this.editing = false; this.stage = 'crop';
+                    return;
+                }
                 const dt = new DataTransfer();
                 dt.items.add(file);
                 this.$refs.file.files = dt.files;   // submits with the form
