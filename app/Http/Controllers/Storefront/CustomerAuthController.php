@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Pos\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 
 /**
@@ -93,6 +94,53 @@ class CustomerAuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('shop.home', ['store' => $store]);
+    }
+
+    public function showForgot($store)
+    {
+        return view('storefront.auth.forgot');
+    }
+
+    public function sendResetLink(Request $request, $store)
+    {
+        $request->validate(['email' => ['required', 'email']]);
+
+        // Always report success — never reveal whether an email is registered.
+        Password::broker('customers')->sendResetLink(['email' => strtolower($request->input('email'))]);
+
+        return back()->with('status', 'If that email has an account, we have sent a password reset link.');
+    }
+
+    public function showReset($store, $token)
+    {
+        return view('storefront.auth.reset', ['token' => $token, 'email' => request('email')]);
+    }
+
+    public function resetPassword(Request $request, $store)
+    {
+        $data = $request->validate([
+            'token' => ['required'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $status = Password::broker('customers')->reset(
+            [
+                'email' => strtolower($data['email']),
+                'password' => $data['password'],
+                'password_confirmation' => $request->input('password_confirmation'),
+                'token' => $data['token'],
+            ],
+            // The model's 'hashed' cast hashes the plain password on save.
+            fn (Customer $customer, string $password) => $customer->forceFill(['password' => $password])->save(),
+        );
+
+        if ($status === Password::PASSWORD_RESET) {
+            return redirect()->route('shop.login', ['store' => $store])
+                ->with('status', 'Your password has been reset — please sign in.');
+        }
+
+        return back()->withInput($request->only('email'))->with('error', __($status));
     }
 
     public function account($store)

@@ -19,7 +19,10 @@
             @error('email')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
         </div>
         <div>
-            <label class="block text-sm font-medium text-slate-700">Password</label>
+            <div class="flex items-center justify-between">
+                <label class="block text-sm font-medium text-slate-700">Password</label>
+                <a href="{{ route('shop.password.request') }}" class="text-xs text-indigo-600 hover:underline">Forgot password?</a>
+            </div>
             <input type="password" name="password" required
                    class="mt-1 w-full rounded-md border border-slate-300 p-2.5">
         </div>

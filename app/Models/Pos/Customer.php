@@ -4,14 +4,24 @@ namespace App\Models\Pos;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Orders\Order;
+use App\Notifications\CustomerResetPasswordNotification;
 use Illuminate\Auth\Authenticatable as AuthenticatableTrait;
+use Illuminate\Auth\Passwords\CanResetPassword as CanResetPasswordTrait;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\CanResetPassword;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Notifications\Notifiable;
 
-class Customer extends Model implements Authenticatable
+class Customer extends Model implements Authenticatable, CanResetPassword
 {
-    use AuthenticatableTrait, BelongsToTenant;
+    use AuthenticatableTrait, BelongsToTenant, CanResetPasswordTrait, Notifiable;
+
+    /** Send the storefront (store-scoped) password reset link. */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new CustomerResetPasswordNotification($token));
+    }
 
     protected $fillable = [
         'tenant_id', 'name', 'email', 'identity_number', 'phone', 'address', 'notes',
