@@ -29,4 +29,35 @@ class Category extends Model
     {
         return $this->hasMany(Product::class);
     }
+
+    /**
+     * This category id plus every descendant id (the whole subtree).
+     * One query loads the id/parent map; the tree is then walked in memory.
+     *
+     * @return array<int, int>
+     */
+    public static function subtreeIds(int $id): array
+    {
+        $childrenOf = [];
+        foreach (static::query()->get(['id', 'parent_id']) as $c) {
+            if ($c->parent_id) {
+                $childrenOf[$c->parent_id][] = $c->id;
+            }
+        }
+
+        $ids = [];
+        $stack = [$id];
+        while ($stack) {
+            $cur = array_pop($stack);
+            if (isset($ids[$cur])) {
+                continue;
+            }
+            $ids[$cur] = true;
+            foreach ($childrenOf[$cur] ?? [] as $child) {
+                $stack[] = $child;
+            }
+        }
+
+        return array_map('intval', array_keys($ids));
+    }
 }

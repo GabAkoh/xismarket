@@ -39,7 +39,8 @@ class ProductController extends Controller
                 ->orWhere('products.barcode', 'like', $term));
         }
         if ($request->filled('category')) {
-            $query->where('products.category_id', $request->integer('category'));
+            // Include the chosen category and all of its descendants.
+            $query->whereIn('products.category_id', Category::subtreeIds($request->integer('category')));
         }
 
         // "Needs attention" = no cost price AND no stock (incomplete catalogue records).
