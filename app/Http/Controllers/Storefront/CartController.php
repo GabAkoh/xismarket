@@ -14,7 +14,7 @@ class CartController extends Controller
     {
         return view('storefront.cart', [
             'lines' => $this->cart->lines(),
-            'totals' => $this->cart->totals('pickup'),
+            'totals' => $this->cart->totals(0),
         ]);
     }
 

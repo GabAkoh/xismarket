@@ -22,10 +22,13 @@ class CheckoutController extends Controller
             return redirect()->route('shop.home')->with('status', 'Your cart is empty.');
         }
 
+        $shipping = app(\App\Support\Tenancy::class)->current()->shippingMethods();
+        $firstFee = (float) ($shipping[0]['fee'] ?? 0);
+
         return view('storefront.checkout', [
             'lines' => $this->cart->lines(),
-            'totals' => $this->cart->totals('delivery'),
-            'deliveryFee' => CartService::DELIVERY_FEE,
+            'totals' => $this->cart->totals($firstFee),
+            'shippingMethods' => $shipping,
         ]);
     }
 
@@ -35,12 +38,14 @@ class CheckoutController extends Controller
             return redirect()->route('shop.home')->with('status', 'Your cart is empty.');
         }
 
+        $shipping = app(\App\Support\Tenancy::class)->current()->shippingMethods();
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
-            'fulfillment_type' => ['required', 'in:delivery,pickup'],
-            'address' => ['required_if:fulfillment_type,delivery', 'nullable', 'string', 'max:255'],
+            'shipping_method' => ['required', 'integer', 'min:0', 'max:'.max(0, count($shipping) - 1)],
+            'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'payment_method' => ['nullable', 'in:card'],   // card is the only online option
@@ -51,12 +56,19 @@ class CheckoutController extends Controller
             'card_cvc' => ['required', 'string', 'max:4'],
         ]);
 
+        $method = $shipping[$data['shipping_method']];
+        // A delivery method needs an address.
+        if (! $method['pickup'] && blank($data['address'] ?? null)) {
+            return back()->withInput()->withErrors(['address' => 'A delivery address is required for '.$method['label'].'.']);
+        }
+        $fee = (float) $method['fee'];
+
         $payByCard = true;
 
         // --- Authorise the card BEFORE creating the order (decline = no order). ---
         $charge = null;
         if ($payByCard) {
-            $total = $this->cart->totals($data['fulfillment_type'])['total'];
+            $total = $this->cart->totals($fee)['total'];
             $charge = $gateway->charge([
                 'number' => $request->input('card_number'),
                 'name' => $request->input('card_name'),
@@ -95,8 +107,9 @@ class CheckoutController extends Controller
         $order = $orders->create([
             'customer_id' => $customer->id,
             'channel' => 'online',
-            'fulfillment_type' => $data['fulfillment_type'],
-            'delivery_fee' => $data['fulfillment_type'] === 'delivery' ? CartService::DELIVERY_FEE : 0,
+            'fulfillment_type' => $method['pickup'] ? 'pickup' : 'delivery',
+            'shipping_method' => $method['label'],
+            'delivery_fee' => $method['pickup'] ? 0 : $fee,
             'contact_name' => $data['name'],
             'contact_phone' => $data['phone'],
             'address' => $data['address'] ?? null,

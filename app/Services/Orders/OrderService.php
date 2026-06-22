@@ -134,6 +134,7 @@ class OrderService
                 'customer_id' => $data['customer_id'] ?? null,
                 'channel' => $data['channel'] ?? 'online',
                 'fulfillment_type' => $fulfillmentType,
+                'shipping_method' => $data['shipping_method'] ?? null,
                 'status' => 'pending',
                 'payment_status' => 'unpaid',
                 'subtotal' => $subtotal,

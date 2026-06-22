@@ -88,6 +88,38 @@ class Tenant extends Model
         ));
     }
 
+    /** Built-in shipping methods used when a tenant hasn't configured its own. */
+    public const DEFAULT_SHIPPING_METHODS = [
+        ['label' => 'Standard Delivery', 'fee' => 5.00, 'pickup' => false],
+        ['label' => 'Store Pickup', 'fee' => 0.00, 'pickup' => true],
+    ];
+
+    /**
+     * Configured online shipping methods as
+     * [['label' => ..., 'fee' => float, 'pickup' => bool], ...].
+     * A 'pickup' method needs no delivery address.
+     *
+     * @return array<int, array{label:string, fee:float, pickup:bool}>
+     */
+    public function shippingMethods(): array
+    {
+        $methods = $this->setting('storefront.shipping_methods');
+
+        if (! is_array($methods) || $methods === []) {
+            return self::DEFAULT_SHIPPING_METHODS;
+        }
+
+        return array_values(array_filter(array_map(function ($m) {
+            $label = trim((string) ($m['label'] ?? ''));
+
+            return $label === '' ? null : [
+                'label' => $label,
+                'fee' => round((float) ($m['fee'] ?? 0), 2),
+                'pickup' => ! empty($m['pickup']),
+            ];
+        }, $methods)));
+    }
+
     /** Display symbol for the tenant's currency, falling back to the ISO code. */
     public function currencySymbol(): string
     {

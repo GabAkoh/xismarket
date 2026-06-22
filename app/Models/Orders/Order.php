@@ -18,7 +18,7 @@ class Order extends Model
     use BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id', 'number', 'customer_id', 'channel', 'fulfillment_type',
+        'tenant_id', 'number', 'customer_id', 'channel', 'fulfillment_type', 'shipping_method',
         'status', 'payment_status', 'payment_method', 'payment_reference', 'paid_at',
         'subtotal', 'discount_total', 'tax_total',
         'delivery_fee', 'total', 'paid_total', 'contact_name', 'contact_phone',

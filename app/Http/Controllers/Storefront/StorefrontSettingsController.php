@@ -41,6 +41,10 @@ class StorefrontSettingsController extends Controller
             'testimonials.*.text' => ['nullable', 'string', 'max:500'],
             'social' => ['nullable', 'array'],
             'social.*' => ['nullable', 'string', 'max:255'],
+            'shipping_methods' => ['nullable', 'array'],
+            'shipping_methods.*.label' => ['nullable', 'string', 'max:100'],
+            'shipping_methods.*.fee' => ['nullable', 'numeric', 'min:0'],
+            'shipping_methods.*.pickup' => ['nullable'],
         ]);
 
         $store = $this->tenancy->current();
@@ -120,6 +124,19 @@ class StorefrontSettingsController extends Controller
             ->all();
         if (! empty($social)) {
             $storefront['social'] = $social;
+        }
+
+        // Shipping methods — keep rows that have a label.
+        $shipping = collect($data['shipping_methods'] ?? [])
+            ->map(fn ($m) => [
+                'label' => trim((string) ($m['label'] ?? '')),
+                'fee' => round((float) ($m['fee'] ?? 0), 2),
+                'pickup' => filter_var($m['pickup'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ])
+            ->filter(fn ($m) => $m['label'] !== '')
+            ->values()->all();
+        if (! empty($shipping)) {
+            $storefront['shipping_methods'] = $shipping;
         }
 
         $settings = $store->settings ?? [];

@@ -116,19 +116,19 @@ class CartService
         return $lines;
     }
 
-    /** Cart totals for a given fulfilment type. */
-    public function totals(string $fulfillment = 'pickup'): array
+    /** Cart totals with a given shipping fee added. */
+    public function totals(float $shippingFee = 0.0): array
     {
         $lines = $this->lines();
         $subtotal = round(array_sum(array_column($lines, 'line_net')), 2);
         $tax = round(array_sum(array_map(fn ($l) => round($l['line_net'] * $l['tax_rate'], 2), $lines)), 2);
-        $deliveryFee = $fulfillment === 'delivery' ? self::DELIVERY_FEE : 0.0;
+        $shippingFee = round(max(0, $shippingFee), 2);
 
         return [
             'subtotal' => $subtotal,
             'tax' => $tax,
-            'delivery_fee' => $deliveryFee,
-            'total' => round($subtotal + $tax + $deliveryFee, 2),
+            'delivery_fee' => $shippingFee,
+            'total' => round($subtotal + $tax + $shippingFee, 2),
         ];
     }
 }
