@@ -79,7 +79,12 @@
                     <td class="py-3 font-medium text-slate-700">{{ $order->number }}</td>
                     <td class="text-slate-500">{{ optional($order->placed_at)->format('d M Y H:i') }}</td>
                     <td class="text-slate-500">{{ $order->customer?->name ?? $order->contact_name ?? '—' }}</td>
-                    <td class="text-slate-500 capitalize">{{ $order->fulfillment_type }}</td>
+                    <td class="text-slate-500">
+                        <span class="capitalize">{{ $order->fulfillment_type }}</span>
+                        @if ($order->shipping_method)
+                            <span class="block text-xs text-slate-400">{{ $order->shipping_method }}</span>
+                        @endif
+                    </td>
                     <td>
                         <span class="text-xs px-2 py-0.5 rounded-full capitalize {{ $statusBadge($order->status) }}">{{ str_replace('_', ' ', $order->status) }}</span>
                     </td>
