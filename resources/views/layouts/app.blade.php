@@ -29,6 +29,7 @@
                         ['route' => 'products.index', 'label' => 'Products', 'perm' => 'inventory.view'],
                         ['route' => 'products.report', 'label' => 'Product Report', 'perm' => 'inventory.view'],
                         ['route' => 'products.movements', 'label' => 'Product Movements', 'perm' => 'inventory.view'],
+                        ['route' => 'products.valuation', 'label' => 'Stock Valuation', 'perm' => 'inventory.view'],
                         ['route' => 'categories.index', 'label' => 'Categories', 'perm' => 'inventory.view'],
                         ['route' => 'suppliers.index', 'label' => 'Suppliers', 'perm' => 'suppliers.manage'],
                         ['route' => 'warehouses.index', 'label' => 'Warehouses', 'perm' => 'warehouses.manage'],
