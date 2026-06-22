@@ -46,7 +46,7 @@
                     <tr><td colspan="4" class="text-right text-slate-500">Discount</td><td class="text-right">−{{ $symbol }}{{ number_format($order->discount_total, 2) }}</td></tr>
                     <tr><td colspan="4" class="text-right text-slate-500">Tax</td><td class="text-right">{{ $symbol }}{{ number_format($order->tax_total, 2) }}</td></tr>
                     @if ($order->fulfillment_type === 'delivery')
-                        <tr><td colspan="4" class="text-right text-slate-500">Delivery fee</td><td class="text-right">{{ $symbol }}{{ number_format($order->delivery_fee, 2) }}</td></tr>
+                        <tr><td colspan="4" class="text-right text-slate-500">{{ $order->shipping_method ?: 'Delivery fee' }}</td><td class="text-right">{{ $symbol }}{{ number_format($order->delivery_fee, 2) }}</td></tr>
                     @endif
                     <tr class="font-bold text-slate-800"><td colspan="4" class="text-right">Total</td><td class="text-right">{{ $symbol }}{{ number_format($order->total, 2) }}</td></tr>
                 </tfoot>
@@ -145,6 +145,9 @@
             <dl class="text-sm space-y-1.5">
                 <div class="flex justify-between"><dt class="text-slate-500">Channel</dt><dd class="capitalize">{{ $order->channel }}</dd></div>
                 <div class="flex justify-between"><dt class="text-slate-500">Fulfilment</dt><dd class="capitalize">{{ $order->fulfillment_type }}</dd></div>
+                @if ($order->shipping_method)
+                    <div class="flex justify-between"><dt class="text-slate-500">Shipping method</dt><dd>{{ $order->shipping_method }}</dd></div>
+                @endif
                 <div class="flex justify-between"><dt class="text-slate-500">Placed</dt><dd>{{ optional($order->placed_at)->format('d M Y H:i') }}</dd></div>
                 <div class="flex justify-between"><dt class="text-slate-500">Customer</dt><dd>{{ $order->customer?->name ?? 'Guest' }}</dd></div>
             </dl>

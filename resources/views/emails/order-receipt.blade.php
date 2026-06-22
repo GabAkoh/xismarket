@@ -25,11 +25,18 @@ Payment will be collected on **{{ $order->fulfillment_type === 'delivery' ? 'del
 - Subtotal: {{ $symbol }} {{ number_format($order->subtotal - $order->discount_total, 2) }}
 - Tax: {{ $symbol }} {{ number_format($order->tax_total, 2) }}
 @if ($order->fulfillment_type === 'delivery')
-- Delivery: {{ $symbol }} {{ number_format($order->delivery_fee, 2) }}
+- {{ $order->shipping_method ?: 'Delivery' }}: {{ $symbol }} {{ number_format($order->delivery_fee, 2) }}
 @endif
 - **Total: {{ $symbol }} {{ number_format($order->total, 2) }}**
 
-**Fulfilment:** {{ ucfirst($order->fulfillment_type) }}@if($order->fulfillment_type === 'delivery' && $order->address) — {{ $order->address }}@if($order->city), {{ $order->city }}@endif @endif
+@php
+    $fulfilment = ucfirst($order->fulfillment_type);
+    if ($order->shipping_method) { $fulfilment .= ' · '.$order->shipping_method; }
+    if ($order->fulfillment_type === 'delivery' && $order->address) {
+        $fulfilment .= ' — '.$order->address.($order->city ? ', '.$order->city : '');
+    }
+@endphp
+**Fulfilment:** {{ $fulfilment }}
 
 @if ($store)
 <x-mail::button :url="route('shop.home', ['store' => $store->slug])">

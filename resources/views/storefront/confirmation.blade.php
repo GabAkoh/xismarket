@@ -31,12 +31,12 @@
             <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd>{{ $symbol }} {{ number_format($order->subtotal - $order->discount_total, 2) }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Tax</dt><dd>{{ $symbol }} {{ number_format($order->tax_total, 2) }}</dd></div>
             @if ($order->fulfillment_type === 'delivery')
-                <div class="flex justify-between"><dt class="text-slate-500">Delivery</dt><dd>{{ $symbol }} {{ number_format($order->delivery_fee, 2) }}</dd></div>
+                <div class="flex justify-between"><dt class="text-slate-500">{{ $order->shipping_method ?: 'Delivery' }}</dt><dd>{{ $symbol }} {{ number_format($order->delivery_fee, 2) }}</dd></div>
             @endif
             <div class="flex justify-between font-bold text-slate-800 pt-2 border-t"><dt>Total</dt><dd>{{ $symbol }} {{ number_format($order->total, 2) }}</dd></div>
         </dl>
         <div class="mt-3 text-sm text-slate-500">
-            <span class="capitalize">{{ $order->fulfillment_type }}</span>
+            <span class="capitalize">{{ $order->fulfillment_type }}</span>@if ($order->shipping_method) · {{ $order->shipping_method }}@endif
             @if ($order->fulfillment_type === 'delivery' && $order->address) · {{ $order->address }}@if($order->city), {{ $order->city }}@endif @endif
         </div>
     </div>
