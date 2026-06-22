@@ -72,10 +72,10 @@ class CheckoutController extends Controller
             }
         }
 
-        // Match an existing customer by email, otherwise create one from the
-        // checkout details so the order shows up in the customer's history.
-        $customer = null;
-        if (! empty($data['email'])) {
+        // A signed-in shopper's orders attach to their account; otherwise match an
+        // existing customer by email, or create one from the checkout details.
+        $customer = auth('customer')->user();
+        if (! $customer && ! empty($data['email'])) {
             $customer = Customer::where('email', $data['email'])->first();
         }
         if (! $customer) {

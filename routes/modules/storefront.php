@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CheckoutController;
+use App\Http\Controllers\Storefront\CustomerAuthController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use App\Http\Middleware\ResolveStoreTenant;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +25,14 @@ Route::middleware(['web', ResolveStoreTenant::class])
         Route::post('cart/remove', [CartController::class, 'remove'])->name('cart.remove');
 
         Route::post('subscribe', [StorefrontController::class, 'subscribe'])->name('subscribe');
+
+        // Customer accounts (Sign in / Sign up).
+        Route::get('register', [CustomerAuthController::class, 'showRegister'])->name('register');
+        Route::post('register', [CustomerAuthController::class, 'register'])->name('register.store');
+        Route::get('login', [CustomerAuthController::class, 'showLogin'])->name('login');
+        Route::post('login', [CustomerAuthController::class, 'login'])->name('login.store');
+        Route::post('logout', [CustomerAuthController::class, 'logout'])->name('logout');
+        Route::get('account', [CustomerAuthController::class, 'account'])->name('account');
 
         Route::get('checkout', [CheckoutController::class, 'show'])->name('checkout');
         Route::post('checkout', [CheckoutController::class, 'place'])->name('checkout.place');

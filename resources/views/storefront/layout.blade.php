@@ -38,12 +38,23 @@
                 <input name="q" value="{{ request('q') }}" placeholder="Search products…"
                        class="w-full rounded-full border border-slate-300 px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
             </form>
-            <a href="{{ route('shop.cart') }}" class="relative ml-auto inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium hover:bg-slate-200">
-                🛒 <span class="hidden sm:inline">Cart</span>
-                @if ($cartCount > 0)
-                    <span class="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center">{{ $cartCount }}</span>
+            @php $shopper = auth('customer')->user(); @endphp
+            <div class="ml-auto flex items-center gap-2">
+                @if ($shopper)
+                    <a href="{{ route('shop.account') }}" class="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium hover:bg-slate-200">
+                        👤 {{ \Illuminate\Support\Str::of($shopper->name)->explode(' ')->first() }}
+                    </a>
+                @else
+                    <a href="{{ route('shop.login') }}" class="hidden sm:inline-flex items-center rounded-full px-3 py-2 text-sm font-medium text-slate-600 hover:text-indigo-600">Sign in</a>
+                    <a href="{{ route('shop.register') }}" class="hidden sm:inline-flex items-center rounded-full bg-slate-100 px-4 py-2 text-sm font-medium hover:bg-slate-200">Sign up</a>
                 @endif
-            </a>
+                <a href="{{ route('shop.cart') }}" class="relative inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium hover:bg-slate-200">
+                    🛒 <span class="hidden sm:inline">Cart</span>
+                    @if ($cartCount > 0)
+                        <span class="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center">{{ $cartCount }}</span>
+                    @endif
+                </a>
+            </div>
         </div>
 
         {{-- Category navigation --}}
