@@ -66,9 +66,14 @@ class BestsellerService
             }
         };
 
-        // Completed POS sales (exclude voided / refunded).
+        // Completed POS sales (exclude voided / refunded). The inner join to
+        // products — restricted to active rows — drops any product that has
+        // since been deleted or deactivated, so the ranking only ever contains
+        // products still in the live catalogue.
         $accumulate(SaleItem::query()
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->join('products', 'products.id', '=', 'sale_items.product_id')
+            ->where('products.is_active', true)
             ->whereNotIn('sales.status', ['void', 'refunded'])
             ->whereNotNull('sale_items.product_id')
             ->groupBy('sale_items.product_id')
@@ -78,6 +83,8 @@ class BestsellerService
         // Fulfilled online orders (revenue is recognised at fulfilment == completed).
         $accumulate(OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->join('products', 'products.id', '=', 'order_items.product_id')
+            ->where('products.is_active', true)
             ->where('orders.status', 'completed')
             ->where('orders.payment_status', '!=', 'refunded')
             ->whereNotNull('order_items.product_id')
