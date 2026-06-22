@@ -23,6 +23,8 @@ Route::middleware(['web', ResolveStoreTenant::class])
         Route::post('cart/update', [CartController::class, 'update'])->name('cart.update');
         Route::post('cart/remove', [CartController::class, 'remove'])->name('cart.remove');
 
+        Route::post('subscribe', [StorefrontController::class, 'subscribe'])->name('subscribe');
+
         Route::get('checkout', [CheckoutController::class, 'show'])->name('checkout');
         Route::post('checkout', [CheckoutController::class, 'place'])->name('checkout.place');
         Route::get('order/confirmed', [CheckoutController::class, 'confirmation'])->name('confirmation');

@@ -84,6 +84,29 @@
         </div>
     </section>
 
+    {{-- What makes us special --}}
+    @php
+        $specials = [
+            ['icon' => '🧸', 'title' => 'Premium Quality', 'text' => "Every item is carefully selected — baby and children's essentials you can trust."],
+            ['icon' => '💛', 'title' => 'Fair Prices', 'text' => 'Premium quality without the premium markup, so every family can afford the best.'],
+            ['icon' => '🚚', 'title' => 'Fast Delivery', 'text' => 'Quick, reliable delivery right to your door — order today, relax tomorrow.'],
+            ['icon' => '👪', 'title' => 'Trusted by Parents', 'text' => 'Loved by families who come back again and again for products that deliver.'],
+        ];
+    @endphp
+    <section class="mb-12">
+        <h2 class="text-2xl font-bold text-slate-800 mb-1 text-center">What Makes {{ $store->name }} Special</h2>
+        <p class="text-center text-slate-500 mb-6">A little of what you can count on, every time you shop.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            @foreach ($specials as $s)
+                <div class="bg-white rounded-xl border border-slate-200 p-5 text-center">
+                    <div class="text-4xl">{{ $s['icon'] }}</div>
+                    <h3 class="mt-3 font-semibold text-slate-800">{{ $s['title'] }}</h3>
+                    <p class="mt-1 text-sm text-slate-500 leading-relaxed">{{ $s['text'] }}</p>
+                </div>
+            @endforeach
+        </div>
+    </section>
+
     {{-- Shop by category --}}
     @if ($categoryTiles->isNotEmpty())
         <section class="mb-12">
@@ -166,6 +189,22 @@
                     <figcaption class="mt-3 text-sm font-semibold text-slate-700">{{ $t['name'] }}</figcaption>
                 </figure>
             @endforeach
+        </div>
+    </section>
+
+    {{-- Join our community --}}
+    <section class="mb-12">
+        <div class="rounded-2xl bg-gradient-to-br from-indigo-600 to-indigo-500 px-6 py-10 sm:px-12 text-center text-white">
+            <h2 class="text-2xl sm:text-3xl font-bold">Join Our Community</h2>
+            <p class="mt-2 text-indigo-100 max-w-xl mx-auto">Be first to hear about new arrivals, exclusive offers and parenting tips from {{ $store->name }}.</p>
+            <form method="POST" action="{{ route('shop.subscribe', ['store' => $store->slug]) }}"
+                  class="mt-6 flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+                @csrf
+                <input type="email" name="email" required placeholder="Your email address"
+                       class="flex-1 rounded-full px-5 py-3 text-sm text-slate-800 focus:ring-2 focus:ring-white">
+                <button class="rounded-full bg-white px-6 py-3 text-sm font-semibold text-indigo-600 hover:bg-indigo-50">Subscribe</button>
+            </form>
+            @error('email')<p class="mt-2 text-sm text-indigo-100">{{ $message }}</p>@enderror
         </div>
     </section>
 

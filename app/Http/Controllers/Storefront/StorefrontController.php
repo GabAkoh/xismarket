@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Storefront;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
+use App\Models\Storefront\Subscriber;
 use App\Services\Storefront\BestsellerService;
 use App\Services\Storefront\CategoryNavService;
 use Illuminate\Http\Request;
@@ -145,6 +146,29 @@ class StorefrontController extends Controller
         }
 
         return $products->values();
+    }
+
+    /** "Join our community" newsletter signup. */
+    public function subscribe(Request $request, $store)
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        // Idempotent — re-subscribing with the same email is a no-op success.
+        Subscriber::firstOrCreate(
+            ['email' => strtolower($data['email'])],
+            ['name' => $data['name'] ?? null],
+        );
+
+        return back()->with('status', "Thanks for joining the {$this->storeName()} community! We'll be in touch.");
+    }
+
+    /** Current store name (tenancy is resolved by the storefront middleware). */
+    protected function storeName(): string
+    {
+        return optional(app(\App\Support\Tenancy::class)->current())->name ?? 'our';
     }
 
     /**
