@@ -134,6 +134,73 @@
     @error('image')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
 </div>
 
+{{-- ===== Gallery: additional images (cascading angles / variants / lifestyle) ===== --}}
+<div class="mt-5" x-data="productGallery({
+        existing: @js(isset($product) ? $product->images->map(fn ($i) => ['id' => $i->id, 'url' => $i->url()])->values() : []),
+     })">
+    <label class="block text-sm font-medium text-slate-700">More images (gallery)</label>
+    <p class="text-xs text-slate-400 mb-2">Extra angles, side/back views, colour variants and lifestyle shots — shown on the storefront product page. Drag to reorder.</p>
+
+    {{-- Existing gallery images (edit mode) --}}
+    <div class="flex flex-wrap gap-3" x-show="items.length">
+        <template x-for="(it, i) in items" :key="it.id">
+            <div class="relative" draggable="true"
+                 @dragstart="drag = i" @dragover.prevent @drop="drop(i)"
+                 :class="it.remove ? 'opacity-40' : ''">
+                <img :src="it.url" class="h-20 w-20 rounded-md border border-slate-200 object-cover cursor-move">
+                <button type="button" @click="it.remove = !it.remove"
+                        class="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border border-slate-300 text-xs leading-none shadow"
+                        :title="it.remove ? 'Keep' : 'Remove'" x-text="it.remove ? '↩' : '✕'"></button>
+                <button type="button" @click="makeCover(it.id)"
+                        class="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[10px] py-0.5 rounded-b-md hover:bg-indigo-600"
+                        :class="cover === it.id ? 'bg-indigo-600' : ''"
+                        title="Use as the main cover image" x-text="cover === it.id ? '✓ Cover' : 'Make cover'"></button>
+            </div>
+        </template>
+    </div>
+
+    {{-- New uploads preview --}}
+    <div class="flex flex-wrap gap-3 mt-3" x-show="newPreviews.length">
+        <template x-for="(src, i) in newPreviews" :key="'n'+i">
+            <img :src="src" class="h-20 w-20 rounded-md border border-dashed border-indigo-300 object-cover">
+        </template>
+    </div>
+
+    <div class="mt-3">
+        <button type="button" @click="$refs.gallery.click()" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">+ Add images</button>
+        <input type="file" name="gallery[]" accept="image/*" multiple x-ref="gallery" @change="onAdd()" class="hidden">
+    </div>
+
+    {{-- Hidden state submitted with the form --}}
+    <template x-for="it in items.filter(x => x.remove)" :key="'r'+it.id"><input type="hidden" name="remove_gallery[]" :value="it.id"></template>
+    <input type="hidden" name="gallery_order" :value="items.filter(x => !x.remove).map(x => x.id).join(',')">
+    <input type="hidden" name="make_cover" :value="cover || ''">
+    @error('gallery.*')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+</div>
+
+@push('scripts')
+<script>
+function productGallery(cfg) {
+    return {
+        items: (cfg.existing || []).map(x => ({ ...x, remove: false })),
+        newPreviews: [],
+        drag: null,
+        cover: '',
+        onAdd() {
+            this.newPreviews = Array.from(this.$refs.gallery.files).map(f => URL.createObjectURL(f));
+        },
+        drop(i) {
+            if (this.drag === null || this.drag === i) return;
+            const moved = this.items.splice(this.drag, 1)[0];
+            this.items.splice(i, 0, moved);
+            this.drag = null;
+        },
+        makeCover(id) { this.cover = (this.cover === id ? '' : id); },
+    };
+}
+</script>
+@endpush
+
 <div class="mt-4 flex flex-wrap gap-6">
     <label class="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" name="track_stock" value="1" @checked(old('track_stock', $product->track_stock ?? true))>

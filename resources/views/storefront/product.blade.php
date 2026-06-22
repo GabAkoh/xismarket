@@ -6,14 +6,30 @@
 
 <a href="{{ route('shop.home') }}" class="text-sm text-indigo-600 hover:underline">← Back to shop</a>
 
+@php $gallery = $product->galleryUrls(); @endphp
 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-lg border border-slate-200 p-6">
-    <div class="aspect-square bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg flex items-center justify-center text-7xl text-slate-300">
-        @if ($product->image_path)
-            <img src="{{ asset('storage/'.$product->image_path) }}" alt="{{ $product->name }}" class="w-full h-full object-cover rounded-lg">
-        @else
+    @if (count($gallery))
+        <div x-data="{ active: @js($gallery[0]) }">
+            <div class="aspect-square bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg overflow-hidden">
+                <img :src="active" alt="{{ $product->name }}" class="w-full h-full object-cover">
+            </div>
+            @if (count($gallery) > 1)
+                <div class="mt-3 flex flex-wrap gap-2">
+                    @foreach ($gallery as $url)
+                        <button type="button" @click="active = @js($url)"
+                                class="h-16 w-16 rounded-md overflow-hidden border-2"
+                                :class="active === @js($url) ? 'border-indigo-500' : 'border-slate-200'">
+                            <img src="{{ $url }}" alt="" class="h-full w-full object-cover">
+                        </button>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+    @else
+        <div class="aspect-square bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg flex items-center justify-center text-7xl text-slate-300">
             {{ strtoupper(substr($product->name, 0, 1)) }}
-        @endif
-    </div>
+        </div>
+    @endif
 
     <div class="flex flex-col">
         <h1 class="text-2xl font-bold text-slate-800">{{ $product->name }}</h1>

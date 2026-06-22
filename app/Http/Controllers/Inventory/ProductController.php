@@ -354,9 +354,11 @@ class ProductController extends Controller
         $data['is_featured'] = $request->boolean('is_featured');
         unset($data['reorder_level']);   // lives on product_stocks, not products
         $this->applyImage($request, $data);
+        $this->stripGalleryKeys($data);
 
         $product = Product::create($data);
         $this->applyReorderLevel($product, $request);
+        $this->applyGallery($request, $product);
 
         return redirect()->route('products.index')->with('status', 'Product added.');
     }
@@ -383,9 +385,11 @@ class ProductController extends Controller
         $data['is_featured'] = $request->boolean('is_featured');
         unset($data['reorder_level']);
         $this->applyImage($request, $data, $product);
+        $this->stripGalleryKeys($data);
 
         $product->update($data);
         $this->applyReorderLevel($product, $request);
+        $this->applyGallery($request, $product);
 
         return redirect()->route('products.index')->with('status', 'Product updated.');
     }
@@ -413,6 +417,9 @@ class ProductController extends Controller
         if ($product->image_path) {
             Storage::disk('public')->delete($product->image_path);
         }
+        foreach ($product->images as $img) {
+            Storage::disk('public')->delete($img->path);
+        }
 
         $product->delete();
 
@@ -439,7 +446,72 @@ class ProductController extends Controller
             'track_stock' => ['boolean'],
             'is_active' => ['boolean'],
             'image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:8192'],
+            // Gallery (additional images) — handled by applyGallery(), not mass-assigned.
+            'gallery' => ['nullable', 'array', 'max:12'],
+            'gallery.*' => ['image', 'mimes:jpeg,jpg,png,webp,gif', 'max:8192'],
+            'remove_gallery' => ['nullable', 'array'],
+            'remove_gallery.*' => ['integer'],
+            'make_cover' => ['nullable', 'integer'],
+            'gallery_order' => ['nullable', 'string', 'max:4000'],
         ]);
+    }
+
+    /** Keys that belong to the gallery, not the products table. */
+    protected function stripGalleryKeys(array &$data): void
+    {
+        unset($data['gallery'], $data['remove_gallery'], $data['make_cover'], $data['gallery_order']);
+    }
+
+    /**
+     * Apply gallery changes for a product: promote a chosen image to cover,
+     * delete removed images, append new uploads, then re-order. Cover image
+     * stays on products.image_path; these rows are the additional images.
+     */
+    protected function applyGallery(Request $request, Product $product): void
+    {
+        // Promote a gallery image to the primary cover (swap with current cover).
+        if ($request->filled('make_cover') && ! $request->hasFile('image')) {
+            $img = $product->images()->whereKey($request->integer('make_cover'))->first();
+            if ($img) {
+                $oldCover = $product->image_path;
+                $product->update(['image_path' => $img->path]);
+                if ($oldCover) {
+                    $img->update(['path' => $oldCover, 'source' => 'cover-swap', 'position' => 0]);
+                } else {
+                    $img->delete();
+                }
+            }
+        }
+
+        // Delete selected gallery images (and their files).
+        foreach ((array) $request->input('remove_gallery', []) as $id) {
+            $img = $product->images()->whereKey((int) $id)->first();
+            if ($img) {
+                Storage::disk('public')->delete($img->path);
+                $img->delete();
+            }
+        }
+
+        // Append newly uploaded gallery images.
+        $maxPos = (int) $product->images()->max('position');
+        foreach ((array) $request->file('gallery', []) as $file) {
+            if (! $file) {
+                continue;
+            }
+            $product->images()->create([
+                'path' => $file->store('products', 'public'),
+                'position' => ++$maxPos,
+                'source' => 'upload',
+            ]);
+        }
+
+        // Re-order from an explicit ordered id list (drag-and-drop result).
+        if ($request->filled('gallery_order')) {
+            $pos = 0;
+            foreach (array_filter(array_map('intval', explode(',', $request->input('gallery_order')))) as $id) {
+                $product->images()->whereKey($id)->update(['position' => $pos++]);
+            }
+        }
     }
 
     /**

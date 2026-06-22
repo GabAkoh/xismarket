@@ -43,6 +43,31 @@ class Product extends Model
         return $this->hasMany(StockMovement::class);
     }
 
+    /** Additional gallery images (excludes the primary cover on image_path). */
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * Every image URL for the storefront gallery: the cover first (if any),
+     * then the additional gallery images in order.
+     *
+     * @return array<int, string>
+     */
+    public function galleryUrls(): array
+    {
+        $urls = [];
+        if ($this->image_path) {
+            $urls[] = asset('storage/'.$this->image_path);
+        }
+        foreach ($this->images as $img) {
+            $urls[] = $img->url();
+        }
+
+        return $urls;
+    }
+
     /** Quantity on hand for this product in the given warehouse. */
     public function stockIn(Warehouse $w): float
     {
