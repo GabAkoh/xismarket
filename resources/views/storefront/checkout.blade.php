@@ -7,7 +7,7 @@
 <h1 class="text-2xl font-bold text-slate-800 mb-5">Checkout</h1>
 
 <form method="POST" action="{{ route('shop.checkout.place') }}"
-      x-data="{ fulfillment: '{{ old('fulfillment_type', 'delivery') }}', payment: '{{ old('payment_method', 'card') }}', subtotal: {{ $totals['subtotal'] }}, tax: {{ $totals['tax'] }}, fee: {{ $deliveryFee }} }"
+      x-data="{ fulfillment: '{{ old('fulfillment_type', 'delivery') }}', subtotal: {{ $totals['subtotal'] }}, tax: {{ $totals['tax'] }}, fee: {{ $deliveryFee }} }"
       class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     @csrf
 
@@ -63,18 +63,10 @@
         {{-- Payment --}}
         <div class="bg-white rounded-lg border border-slate-200 p-5">
             <h2 class="font-semibold text-slate-800 mb-4">Payment</h2>
-            <div class="grid grid-cols-2 gap-3 mb-4">
-                <label class="flex items-center gap-2 rounded-md border p-3 cursor-pointer" :class="payment==='card' ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-slate-300'">
-                    <input type="radio" name="payment_method" value="card" x-model="payment" class="text-indigo-600">
-                    <span class="text-sm">💳 Pay now by card</span>
-                </label>
-                <label class="flex items-center gap-2 rounded-md border p-3 cursor-pointer" :class="payment==='on_delivery' ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-slate-300'">
-                    <input type="radio" name="payment_method" value="on_delivery" x-model="payment" class="text-indigo-600">
-                    <span class="text-sm" x-text="fulfillment==='pickup' ? '🏬 Pay at pickup' : '💵 Pay on delivery'"></span>
-                </label>
-            </div>
+            <input type="hidden" name="payment_method" value="card">
+            <p class="text-sm text-slate-600 mb-4">💳 Pay securely by card.</p>
 
-            <div x-show="payment==='card'" x-cloak class="space-y-3">
+            <div class="space-y-3">
                 <div>
                     <label class="block text-sm font-medium text-slate-700">Card number</label>
                     <input name="card_number" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242"
@@ -117,10 +109,9 @@
                 <dd x-text="'{{ $symbol }} ' + (subtotal + tax + (fulfillment==='delivery' ? fee : 0)).toFixed(2)"></dd></div>
         </dl>
         <button class="mt-4 w-full rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
-            <span x-show="payment==='card'">Pay <span x-text="'{{ $symbol }} ' + (subtotal + tax + (fulfillment==='delivery' ? fee : 0)).toFixed(2)"></span></span>
-            <span x-show="payment!=='card'">Place order</span>
+            Pay <span x-text="'{{ $symbol }} ' + (subtotal + tax + (fulfillment==='delivery' ? fee : 0)).toFixed(2)"></span>
         </button>
-        <p class="text-xs text-slate-400 mt-2 text-center" x-text="payment==='card' ? 'Your card will be charged now.' : 'Pay on delivery or at pickup — staff will confirm your order.'"></p>
+        <p class="text-xs text-slate-400 mt-2 text-center">Your card will be charged now.</p>
     </div>
 </form>
 @endsection

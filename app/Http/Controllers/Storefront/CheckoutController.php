@@ -43,15 +43,15 @@ class CheckoutController extends Controller
             'address' => ['required_if:fulfillment_type,delivery', 'nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:1000'],
-            'payment_method' => ['required', 'in:card,on_delivery'],
-            // Card fields are required only when paying by card. Never stored.
-            'card_number' => ['required_if:payment_method,card', 'nullable', 'string', 'max:30'],
-            'card_name' => ['required_if:payment_method,card', 'nullable', 'string', 'max:255'],
-            'card_expiry' => ['required_if:payment_method,card', 'nullable', 'string', 'max:10'],
-            'card_cvc' => ['required_if:payment_method,card', 'nullable', 'string', 'max:4'],
+            'payment_method' => ['nullable', 'in:card'],   // card is the only online option
+            // Card details are required (and never stored).
+            'card_number' => ['required', 'string', 'max:30'],
+            'card_name' => ['required', 'string', 'max:255'],
+            'card_expiry' => ['required', 'string', 'max:10'],
+            'card_cvc' => ['required', 'string', 'max:4'],
         ]);
 
-        $payByCard = $data['payment_method'] === 'card';
+        $payByCard = true;
 
         // --- Authorise the card BEFORE creating the order (decline = no order). ---
         $charge = null;
