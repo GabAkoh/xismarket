@@ -77,9 +77,16 @@
                     </select>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
-                    <button type="button" @click="fulfillment='delivery'" :class="fulfillment==='delivery' ? 'bg-indigo-600 text-white' : 'border border-slate-300 text-slate-600'" class="rounded-md px-3 py-2 text-sm font-medium">🚚 Delivery</button>
-                    <button type="button" @click="fulfillment='pickup'" :class="fulfillment==='pickup' ? 'bg-indigo-600 text-white' : 'border border-slate-300 text-slate-600'" class="rounded-md px-3 py-2 text-sm font-medium">🏬 Pickup</button>
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-medium text-slate-500">Shipping method</label>
+                        <a href="{{ route('storefront.settings') }}#shipping-methods" class="text-xs text-indigo-600 hover:underline">Manage</a>
+                    </div>
+                    <select x-model.number="methodIndex" @change="applyMethod()" class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                        <template x-for="(m, i) in shippingMethods" :key="i">
+                            <option :value="i" x-text="m.label + ' · ' + (Number(m.fee) > 0 ? money(m.fee) : (m.pickup ? 'Pickup' : 'Free'))"></option>
+                        </template>
+                    </select>
                 </div>
 
                 <div class="space-y-2" x-show="fulfillment==='delivery'" x-cloak>
@@ -119,6 +126,7 @@
         <input type="hidden" name="customer_id" :value="customerId">
         <input type="hidden" name="channel" value="online">
         <input type="hidden" name="fulfillment_type" :value="fulfillment">
+        <input type="hidden" name="shipping_method" :value="shippingMethod">
         <input type="hidden" name="delivery_fee" :value="fulfillment==='delivery' ? (deliveryFee||0) : 0">
         <input type="hidden" name="contact_name" :value="contactName">
         <input type="hidden" name="contact_phone" :value="contactPhone">
@@ -142,10 +150,20 @@ function orderBuilder() {
     return {
         products: @json($products),
         customers: @json($customers),
+        shippingMethods: @json($shippingMethods),
         cart: [], search: '', customerId: '',
-        fulfillment: 'delivery', deliveryFee: 0,
+        methodIndex: 0, fulfillment: 'delivery', deliveryFee: 0, shippingMethod: '',
         contactName: '', contactPhone: '', address: '', city: '', notes: '',
         submitting: false,
+
+        init() { this.applyMethod(); },
+        applyMethod() {
+            const m = this.shippingMethods[this.methodIndex];
+            if (!m) return;
+            this.fulfillment = m.pickup ? 'pickup' : 'delivery';
+            this.deliveryFee = Number(m.fee) || 0;
+            this.shippingMethod = m.label;
+        },
 
         get filteredProducts() {
             const t = this.search.trim().toLowerCase();

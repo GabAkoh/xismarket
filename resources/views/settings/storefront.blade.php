@@ -137,12 +137,12 @@
 
     {{-- Shipping methods --}}
     @php $shippingRows = old('shipping_methods', $store->shippingMethods()); @endphp
-    <div class="bg-white rounded-lg shadow-sm p-5" x-data="{ rows: @js(array_values($shippingRows)) }">
+    <div id="shipping-methods" class="bg-white rounded-lg shadow-sm p-5 scroll-mt-24" x-data="{ rows: @js(array_values($shippingRows)) }">
         <div class="flex items-center justify-between mb-1">
             <h2 class="text-sm font-semibold text-slate-700">Shipping methods</h2>
             <button type="button" @click="rows.push({ label: '', fee: '0', pickup: false })" class="text-sm font-medium text-indigo-600 hover:underline">+ Add method</button>
         </div>
-        <p class="text-xs text-slate-400 mb-3">The options shoppers choose at online checkout. Mark a method as “Pickup” if it needs no delivery address.</p>
+        <p class="text-xs text-slate-400 mb-3">The options shoppers choose at online checkout — and that staff pick when creating an online order. Mark a method as “Pickup” if it needs no delivery address.</p>
 
         <div class="flex items-center gap-2 px-1 pb-1 text-xs font-medium uppercase tracking-wider text-slate-400">
             <span class="flex-1">Method name</span>

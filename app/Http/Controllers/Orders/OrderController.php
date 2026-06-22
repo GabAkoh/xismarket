@@ -280,7 +280,9 @@ class OrderController extends Controller
             ])
             ->values();
 
-        return view('orders.create', compact('products', 'customers'));
+        $shippingMethods = $this->tenancy->current()->shippingMethods();
+
+        return view('orders.create', compact('products', 'customers', 'shippingMethods'));
     }
 
     public function store(Request $request, OrderService $orders)
@@ -289,6 +291,7 @@ class OrderController extends Controller
             'customer_id' => ['nullable', 'integer'],
             'channel' => ['nullable', 'string', 'max:50'],
             'fulfillment_type' => ['required', 'string', 'in:delivery,pickup'],
+            'shipping_method' => ['nullable', 'string', 'max:255'],
             'delivery_fee' => ['nullable', 'numeric', 'min:0'],
             'contact_name' => ['nullable', 'string', 'max:255'],
             'contact_phone' => ['nullable', 'string', 'max:50'],
