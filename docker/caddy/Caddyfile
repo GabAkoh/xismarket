@@ -1,0 +1,17 @@
+# xismarket production reverse proxy with automatic HTTPS.
+# APP_DOMAIN and ACME_EMAIL come from the environment (set in .env).
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# Forward everything to the internal nginx container (php-fpm behind it).
+	reverse_proxy nginx:80
+
+	# Reasonable upload ceiling for product images (nginx also caps at 64M).
+	request_body {
+		max_size 64MB
+	}
+}

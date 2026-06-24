@@ -19,6 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Behind the production TLS terminator (Caddy → nginx), trust the proxy
+        // so Laravel honours X-Forwarded-Proto/For and builds https:// URLs.
+        // Only Caddy can reach nginx on the internal network, so trusting all
+        // forwarders is safe here.
+        $middleware->trustProxies(at: '*');
+
         // Resolve the active tenant on every web request (after auth).
         $middleware->web(append: [
             IdentifyTenant::class,

@@ -1,0 +1,47 @@
+# Production overlay for xismarket.
+#
+#   cp .env.production .env      # then fill in real values
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Caddy terminates TLS on 80/443 (automatic Let's Encrypt certificates) and
+# reverse-proxies to the internal nginx container. nginx, MySQL and Redis are
+# no longer published to the host — only 80/443 are public.
+#
+# Requires Docker Compose v2.24+ for the `!reset` tag.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: xismarket-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - nginx
+    networks:
+      - xismarket
+
+  # Internal only now — Caddy fronts it; stop publishing 8080 to the host.
+  nginx:
+    ports: !reset []
+
+  # Keep the datastore and cache off the public internet.
+  mysql:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+volumes:
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local
