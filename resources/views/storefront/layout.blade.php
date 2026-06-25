@@ -126,7 +126,9 @@
                 @endif
             </div>
 
-            <div class="mt-6 pt-4 border-t border-slate-100 flex flex-wrap justify-between gap-2 text-sm text-slate-500">
+            <p class="mt-6 text-center text-sm text-slate-400">Lovingly curated baby &amp; kids essentials — shopped easy, delivered fast. 💛</p>
+
+            <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap justify-between gap-2 text-sm text-slate-500">
                 <span>© {{ date('Y') }} {{ $store->name }}. All rights reserved.</span>
                 <span>Powered by xismarket</span>
             </div>
