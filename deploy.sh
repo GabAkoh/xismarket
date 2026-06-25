@@ -43,8 +43,11 @@ $COMPOSE exec -T app php artisan storage:link 2>/dev/null || true
 echo "==> Caching config, routes and views"
 $COMPOSE exec -T app php artisan optimize
 
-echo "==> Restarting queue worker to pick up new code"
-$COMPOSE restart worker
+# Restart nginx so it re-resolves the (possibly recreated) app container —
+# otherwise it can keep pointing at the old one and return 502. Worker restarts
+# to pick up the new code.
+echo "==> Restarting nginx + queue worker"
+$COMPOSE restart nginx worker
 
 echo ""
 echo "Deploy complete. Tail logs with:  $COMPOSE logs -f app caddy worker"
