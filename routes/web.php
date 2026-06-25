@@ -5,7 +5,19 @@ use App\Http\Controllers\Auth\RegisteredTenantController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'));
+Route::get('/', function () {
+    // Logged-in staff go to the admin dashboard. Everyone else lands on the
+    // configured store's storefront (if set), otherwise the login page.
+    if (auth()->check()) {
+        return redirect()->route('dashboard');
+    }
+
+    $store = config('storefront.default_store');
+
+    return $store
+        ? redirect()->route('shop.home', ['store' => $store])
+        : redirect()->route('login');
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredTenantController::class, 'create'])->name('register');
