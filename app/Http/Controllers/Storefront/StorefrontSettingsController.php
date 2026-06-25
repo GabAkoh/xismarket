@@ -49,6 +49,9 @@ class StorefrontSettingsController extends Controller
             'featured_collections' => ['nullable', 'array', 'max:6'],
             'featured_collections.*.category_id' => ['nullable', 'integer'],
             'featured_collections.*.subtitle' => ['nullable', 'string', 'max:120'],
+            'featured_collections.*.image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:4096'],
+            'featured_collections.*.existing_image' => ['nullable', 'string', 'max:255'],
+            'featured_collections.*.remove_image' => ['nullable'],
         ]);
 
         $store = $this->tenancy->current();
@@ -143,16 +146,38 @@ class StorefrontSettingsController extends Controller
             $storefront['shipping_methods'] = $shipping;
         }
 
-        // Featured collections — keep rows that point at a category.
-        $collections = collect($data['featured_collections'] ?? [])
-            ->map(fn ($c) => [
-                'category_id' => (int) ($c['category_id'] ?? 0),
+        // Featured collections — keep rows that point at a category, with a
+        // per-row image (new upload replaces, checkbox removes, else kept).
+        $collections = [];
+        foreach (($data['featured_collections'] ?? []) as $i => $c) {
+            $catId = (int) ($c['category_id'] ?? 0);
+            if ($catId <= 0) {
+                continue;
+            }
+
+            $image = $c['existing_image'] ?? null;
+            if ($file = $request->file("featured_collections.$i.image")) {
+                $image = $file->store('storefront', 'public');
+            } elseif (! empty($c['remove_image'])) {
+                $image = null;
+            }
+
+            $collections[] = [
+                'category_id' => $catId,
                 'subtitle' => trim((string) ($c['subtitle'] ?? '')),
-            ])
-            ->filter(fn ($c) => $c['category_id'] > 0)
-            ->values()->all();
+                'image' => $image,
+            ];
+        }
         if (! empty($collections)) {
             $storefront['featured_collections'] = $collections;
+        }
+
+        // Delete any collection images that are no longer referenced.
+        $keptImages = collect($collections)->pluck('image')->filter()->all();
+        foreach (($existing['featured_collections'] ?? []) as $old) {
+            if (! empty($old['image']) && ! in_array($old['image'], $keptImages, true)) {
+                Storage::disk('public')->delete($old['image']);
+            }
         }
 
         $settings = $store->settings ?? [];

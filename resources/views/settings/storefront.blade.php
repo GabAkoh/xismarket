@@ -173,19 +173,35 @@
             <h2 class="text-sm font-semibold text-slate-700">Featured collections</h2>
             <button type="button" @click="rows.push({ category_id: '', subtitle: '' })" class="text-sm font-medium text-indigo-600 hover:underline">+ Add collection</button>
         </div>
-        <p class="text-xs text-slate-400 mb-3">Curated category cards on the storefront home (e.g. “Baby Clothes — soft &amp; comfortable wear”). Each links to that category; its image is taken from a product in it.</p>
+        <p class="text-xs text-slate-400 mb-3">Curated category cards on the storefront home (e.g. “Baby Clothes — soft &amp; comfortable wear”). Each links to that category. Upload an image, or leave it blank to use a product photo from the category.</p>
 
         <template x-for="(row, i) in rows" :key="i">
-            <div class="mb-2 flex flex-wrap items-center gap-2">
-                <select :name="`featured_collections[${i}][category_id]`" x-model="row.category_id" class="w-56 rounded-md border border-slate-300 p-2 text-sm">
-                    <option value="">— Select category —</option>
-                    @foreach ($categories as $c)
-                        <option value="{{ $c->id }}">{{ $c->name }}</option>
-                    @endforeach
-                </select>
-                <input type="text" :name="`featured_collections[${i}][subtitle]`" x-model="row.subtitle" maxlength="120"
-                       placeholder="Subtitle, e.g. Soft &amp; comfortable wear" class="flex-1 min-w-[14rem] rounded-md border border-slate-300 p-2 text-sm">
-                <button type="button" @click="rows.splice(i, 1)" class="w-5 text-slate-300 hover:text-red-500 text-sm" title="Remove">✕</button>
+            <div class="mb-3 flex flex-wrap items-start gap-2 border-b border-slate-100 pb-3">
+                <div class="flex-1 min-w-[14rem] space-y-2">
+                    <select :name="`featured_collections[${i}][category_id]`" x-model="row.category_id" class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                        <option value="">— Select category —</option>
+                        @foreach ($categories as $c)
+                            <option value="{{ $c->id }}">{{ $c->name }}</option>
+                        @endforeach
+                    </select>
+                    <input type="text" :name="`featured_collections[${i}][subtitle]`" x-model="row.subtitle" maxlength="120"
+                           placeholder="Subtitle, e.g. Soft &amp; comfortable wear" class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                </div>
+                {{-- Per-collection image --}}
+                <div class="flex items-start gap-2">
+                    <template x-if="row.image && !row.remove_image">
+                        <img :src="`{{ asset('storage') }}/${row.image}`" class="h-14 w-14 rounded-md object-cover border border-slate-200" alt="">
+                    </template>
+                    <div class="space-y-1">
+                        <input type="file" :name="`featured_collections[${i}][image]`" accept="image/*" class="block w-44 text-xs text-slate-500 file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs">
+                        <input type="hidden" :name="`featured_collections[${i}][existing_image]`" :value="row.image || ''">
+                        <label class="flex items-center gap-1 text-xs text-slate-500" x-show="row.image">
+                            <input type="checkbox" :name="`featured_collections[${i}][remove_image]`" value="1" x-model="row.remove_image" class="rounded border-slate-300">
+                            Remove image
+                        </label>
+                    </div>
+                </div>
+                <button type="button" @click="rows.splice(i, 1)" class="w-5 text-slate-300 hover:text-red-500 text-sm" title="Remove collection">✕</button>
             </div>
         </template>
         <p x-show="rows.length === 0" class="mt-1 text-xs text-slate-400">No featured collections yet — add a few to show a curated grid on your storefront home.</p>
