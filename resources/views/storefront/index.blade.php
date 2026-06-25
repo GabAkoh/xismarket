@@ -107,6 +107,33 @@
         </div>
     </section>
 
+    {{-- Featured Collections (curated) --}}
+    @if ($featuredCollections->isNotEmpty())
+        <section class="mb-12">
+            <div class="flex items-end justify-between mb-5">
+                <h2 class="text-2xl font-bold text-slate-800">Featured Collections</h2>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                @foreach ($featuredCollections as $col)
+                    <a href="{{ route('shop.home', ['category' => $col->id]) }}"
+                       class="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-100 to-slate-200 border border-slate-200 shadow-sm hover:shadow-md transition">
+                        @if ($col->image)
+                            <img src="{{ asset('storage/'.$col->image) }}" alt="{{ $col->name }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                        @endif
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent"></div>
+                        <div class="absolute bottom-0 left-0 p-5 text-white">
+                            <div class="text-xl font-bold leading-tight">{{ $col->name }}</div>
+                            @if ($col->subtitle)
+                                <div class="mt-0.5 text-sm text-white/85">{{ $col->subtitle }}</div>
+                            @endif
+                            <span class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-white/90 group-hover:gap-2 transition-all">Shop now →</span>
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     {{-- Shop by category --}}
     @if ($categoryTiles->isNotEmpty())
         <section class="mb-12">

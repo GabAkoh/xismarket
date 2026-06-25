@@ -19,8 +19,9 @@ class StorefrontSettingsController extends Controller
     public function edit()
     {
         $store = $this->tenancy->current();
+        $categories = \App\Models\Inventory\Category::orderBy('name')->get(['id', 'name']);
 
-        return view('settings.storefront', compact('store'));
+        return view('settings.storefront', compact('store', 'categories'));
     }
 
     public function update(Request $request)
@@ -45,6 +46,9 @@ class StorefrontSettingsController extends Controller
             'shipping_methods.*.label' => ['nullable', 'string', 'max:100'],
             'shipping_methods.*.fee' => ['nullable', 'numeric', 'min:0'],
             'shipping_methods.*.pickup' => ['nullable'],
+            'featured_collections' => ['nullable', 'array', 'max:6'],
+            'featured_collections.*.category_id' => ['nullable', 'integer'],
+            'featured_collections.*.subtitle' => ['nullable', 'string', 'max:120'],
         ]);
 
         $store = $this->tenancy->current();
@@ -137,6 +141,18 @@ class StorefrontSettingsController extends Controller
             ->values()->all();
         if (! empty($shipping)) {
             $storefront['shipping_methods'] = $shipping;
+        }
+
+        // Featured collections — keep rows that point at a category.
+        $collections = collect($data['featured_collections'] ?? [])
+            ->map(fn ($c) => [
+                'category_id' => (int) ($c['category_id'] ?? 0),
+                'subtitle' => trim((string) ($c['subtitle'] ?? '')),
+            ])
+            ->filter(fn ($c) => $c['category_id'] > 0)
+            ->values()->all();
+        if (! empty($collections)) {
+            $storefront['featured_collections'] = $collections;
         }
 
         $settings = $store->settings ?? [];

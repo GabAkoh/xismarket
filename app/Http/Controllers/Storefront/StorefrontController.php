@@ -81,9 +81,51 @@ class StorefrontController extends Controller
 
         $categoryTiles = $filtering ? collect() : $this->categoryTiles();
 
+        $featuredCollections = $filtering ? collect() : $this->featuredCollections();
+
         return view('storefront.index', compact(
-            'products', 'chipCategories', 'selectedCategory', 'breadcrumb', 'featured', 'categoryTiles', 'filtering'
+            'products', 'chipCategories', 'selectedCategory', 'breadcrumb', 'featured', 'categoryTiles', 'featuredCollections', 'filtering'
         ));
+    }
+
+    /**
+     * Curated "Featured Collections" — admin-chosen categories, each with a
+     * subtitle and image (a custom upload, or a representative product image
+     * from the category's subtree). Configured under storefront settings.
+     */
+    protected function featuredCollections()
+    {
+        if (! class_exists(Category::class)) {
+            return collect();
+        }
+
+        $store = app(\App\Support\Tenancy::class)->current();
+        $rows = $store?->setting('storefront.featured_collections', []);
+        if (! is_array($rows) || $rows === []) {
+            return collect();
+        }
+
+        $cats = Category::whereIn('id', collect($rows)->pluck('category_id')->filter())->get()->keyBy('id');
+
+        return collect($rows)->map(function ($r) use ($cats) {
+            $cat = $cats->get($r['category_id'] ?? null);
+            if (! $cat) {
+                return null;
+            }
+
+            $image = $r['image'] ?? null;
+            if (! $image) {
+                $image = Product::whereIn('category_id', Category::subtreeIds($cat->id))
+                    ->where('is_active', true)->whereNotNull('image_path')->value('image_path');
+            }
+
+            return (object) [
+                'id' => $cat->id,
+                'name' => $cat->name,
+                'subtitle' => trim((string) ($r['subtitle'] ?? '')),
+                'image' => $image,
+            ];
+        })->filter()->values();
     }
 
     /**
