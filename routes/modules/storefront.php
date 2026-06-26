@@ -39,6 +39,7 @@ Route::middleware(['web', ResolveStoreTenant::class])
         Route::get('reset-password/{token}', [CustomerAuthController::class, 'showReset'])->name('password.reset');
         Route::post('reset-password', [CustomerAuthController::class, 'resetPassword'])->name('password.update');
         Route::get('account', [CustomerAuthController::class, 'account'])->name('account');
+        Route::post('account/orders/{order}/cancel', [CustomerAuthController::class, 'cancelOrder'])->name('account.orders.cancel');
 
         Route::get('checkout', [CheckoutController::class, 'show'])->name('checkout');
         Route::post('checkout', [CheckoutController::class, 'place'])->name('checkout.place');

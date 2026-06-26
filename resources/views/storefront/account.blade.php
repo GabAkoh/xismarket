@@ -28,11 +28,18 @@
     </div>
 @endif
 
+@if (session('status'))
+    <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700">{{ session('status') }}</div>
+@endif
+@if (session('error'))
+    <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{{ session('error') }}</div>
+@endif
+
 <h2 class="text-lg font-semibold text-slate-800 mb-3">Your orders</h2>
 <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
-            <tr><th class="py-2 px-4">Order</th><th>Date</th><th>Status</th><th class="text-right px-4">Total</th></tr>
+            <tr><th class="py-2 px-4">Order</th><th>Date</th><th>Status</th><th class="text-right px-4">Total</th><th></th></tr>
         </thead>
         <tbody class="divide-y">
             @forelse ($orders as $order)
@@ -41,11 +48,21 @@
                     <td class="text-slate-500">{{ optional($order->placed_at)->format('d M Y') }}</td>
                     <td><span class="text-xs rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 capitalize">{{ str_replace('_', ' ', $order->status) }}</span></td>
                     <td class="text-right px-4 text-slate-700">{{ $symbol }} {{ number_format((float) $order->total, 2) }}</td>
+                    <td class="text-right px-4">
+                        @if ($order->status === 'pending')
+                            <form method="POST" action="{{ route('shop.account.orders.cancel', $order->id) }}"
+                                  onsubmit="return confirm('Cancel order {{ $order->number }}? This cannot be undone.')">
+                                @csrf
+                                <button class="text-xs font-medium text-red-600 hover:underline">Cancel</button>
+                            </form>
+                        @endif
+                    </td>
                 </tr>
             @empty
-                <tr><td colspan="4" class="py-8 text-center text-slate-400">No orders yet — <a href="{{ route('shop.home') }}" class="text-indigo-600 hover:underline">start shopping</a>.</td></tr>
+                <tr><td colspan="5" class="py-8 text-center text-slate-400">No orders yet — <a href="{{ route('shop.home') }}" class="text-indigo-600 hover:underline">start shopping</a>.</td></tr>
             @endforelse
         </tbody>
     </table>
 </div>
+<p class="mt-2 text-xs text-slate-400">You can cancel an order while it's still <strong>pending</strong>. Once we start processing it, please contact us to make changes.</p>
 @endsection

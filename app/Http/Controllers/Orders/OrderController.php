@@ -392,18 +392,25 @@ class OrderController extends Controller
             ->with('status', 'Order '.$order->number.' fulfilled.');
     }
 
-    public function cancel(Order $order, OrderService $orders)
+    public function cancel(Request $request, Order $order, OrderService $orders)
     {
         $this->authorizeTenant($order);
 
+        // Feature B: optionally refund the payment in the same step (only meaningful
+        // for a paid order; the form offers this as a checked-by-default checkbox).
+        $alsoRefund = $request->boolean('refund') && $order->isPaid();
+
         try {
             $orders->cancel($order);
+            if ($alsoRefund) {
+                $orders->refund($order);
+            }
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
         return redirect()->route('orders.show', $order)
-            ->with('status', 'Order '.$order->number.' cancelled.');
+            ->with('status', 'Order '.$order->number.' cancelled.'.($alsoRefund ? ' Payment refunded.' : ''));
     }
 
     public function refund(Order $order, OrderService $orders)

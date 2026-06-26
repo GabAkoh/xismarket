@@ -118,8 +118,14 @@
                     @unless ($order->isPaid())<p class="text-xs text-amber-600 mb-2">Mark the order paid before fulfilling.</p>@endunless
 
                     <form method="POST" action="{{ route('orders.cancel', $order) }}"
-                          onsubmit="return confirm('Cancel this order?')">
+                          onsubmit="return confirm('{{ $order->isPaid() ? 'This order is PAID — cancelling alone does not return the money. Continue? (Leave the refund box ticked to refund the customer now.)' : 'Cancel this order?' }}')">
                         @csrf
+                        @if ($order->isPaid())
+                            <label class="flex items-center gap-2 text-xs text-slate-600 mb-2 rounded-md bg-amber-50 border border-amber-200 px-2 py-1.5">
+                                <input type="checkbox" name="refund" value="1" checked class="rounded border-slate-300 text-red-600">
+                                Also refund the customer's payment{{ $order->isCompleted() ? ' (restores stock + reverses the books)' : '' }}
+                            </label>
+                        @endif
                         <button class="w-full rounded-md border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">Cancel order</button>
                     </form>
                 @endpermission

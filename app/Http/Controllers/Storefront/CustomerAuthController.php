@@ -154,4 +154,36 @@ class CustomerAuthController extends Controller
 
         return view('storefront.account', compact('customer', 'orders'));
     }
+
+    /**
+     * Let a signed-in customer cancel their own order while it's still pending
+     * (before staff have started processing it). Paid orders are left for staff
+     * to refund; the customer just gets the automatic cancellation email.
+     */
+    public function cancelOrder($store, $order, \App\Services\Orders\OrderService $orders)
+    {
+        $customer = Auth::guard('customer')->user();
+        if (! $customer) {
+            return redirect()->route('shop.login', ['store' => $store]);
+        }
+
+        // Manual lookup, scoped to this customer, so one shopper can't touch another's order.
+        $model = $customer->orders()->whereKey($order)->first();
+        if (! $model) {
+            return back()->with('error', 'Order not found.');
+        }
+
+        if ($model->status !== 'pending') {
+            return back()->with('error', 'This order can no longer be cancelled online — please contact us for help.');
+        }
+
+        try {
+            $orders->cancel($model);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('status', 'Order '.$model->number.' has been cancelled.'
+            .($model->payment_status === 'paid' ? ' Any payment will be refunded by our team.' : ''));
+    }
 }
