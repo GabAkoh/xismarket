@@ -32,10 +32,10 @@
         @endif
     </div>
 
-    <div class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-0">
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
 
         {{-- LEFT: product search + grid --}}
-        <div class="lg:col-span-2 bg-white rounded-lg shadow-sm flex flex-col min-h-0">
+        <div class="lg:col-span-3 bg-white rounded-lg shadow-sm flex flex-col min-h-0">
             <div class="p-4 border-b border-slate-100">
                 <div class="relative">
                     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔎</span>
@@ -83,7 +83,7 @@
         </div>
 
         {{-- RIGHT: cart + checkout --}}
-        <div class="bg-white rounded-lg shadow-sm flex flex-col min-h-0">
+        <div class="lg:col-span-2 bg-white rounded-lg shadow-sm flex flex-col min-h-0">
             <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <h2 class="font-semibold text-slate-800">Cart</h2>
                 <button type="button" @click="clearCart()" x-show="cart.length" class="text-xs text-red-500 hover:underline">Clear</button>
