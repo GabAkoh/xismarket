@@ -122,6 +122,33 @@ class PosController extends Controller
         return view('pos.receipt', compact('sale'));
     }
 
+    /** Optionally email a sale receipt to the customer (or a typed address). */
+    public function emailReceipt(Request $request, Sale $sale)
+    {
+        $this->authorizeTenant($sale);
+
+        $data = $request->validate([
+            'email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $email = $data['email'] ?? $sale->customer?->email;
+        if (! $email) {
+            return back()->with('error', 'No email address for this sale — enter one to send the receipt.');
+        }
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($email)->send(
+                new \App\Mail\SaleReceiptMail($sale->load('items', 'customer'))
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Could not send the receipt. '.$e->getMessage());
+        }
+
+        return back()->with('status', 'Receipt emailed to '.$email.'.');
+    }
+
     /** Valid payment method keys for checkout: the configured tenders plus wallet. */
     protected function allowedPaymentMethods(): array
     {

@@ -5,9 +5,22 @@
 @php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header title="Receipt {{ $sale->number }}">
+    <form method="POST" action="{{ route('pos.receipt.email', $sale) }}" class="flex items-center gap-1 print:hidden">
+        @csrf
+        <input type="email" name="email" value="{{ $sale->customer?->email }}" placeholder="customer@email.com"
+               class="rounded-md border border-slate-300 px-2 py-2 text-sm w-44">
+        <button class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50" title="Email this receipt (optional)">✉ Email</button>
+    </form>
     <button onclick="window.print()" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Print</button>
     <a href="{{ route('pos.index') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">New sale</a>
 </x-page-header>
+
+@if (session('status'))
+    <div class="max-w-md mx-auto mb-3 rounded-md bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700 print:hidden">{{ session('status') }}</div>
+@endif
+@if (session('error'))
+    <div class="max-w-md mx-auto mb-3 rounded-md bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700 print:hidden">{{ session('error') }}</div>
+@endif
 
 <div class="max-w-md mx-auto bg-white rounded-lg shadow-sm p-6 print:shadow-none" id="receipt">
     <div class="text-center border-b border-dashed border-slate-200 pb-4 mb-4">
