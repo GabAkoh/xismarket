@@ -34,6 +34,9 @@
                             <span class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Shift open</span>
                             <p class="text-xs text-slate-400 mt-1">Opened {{ optional($shift->opened_at)->format('d M H:i') }} by {{ $shift->user?->name }}</p>
                             <p class="text-xs text-slate-400">Float: {{ $symbol }}{{ number_format($shift->opening_float, 2) }}</p>
+                            @if ($shift->cashMovements()->exists())
+                                <p class="text-xs text-slate-400">Cash in: {{ $symbol }}{{ number_format($shift->cashIn(), 2) }} · Cash out: {{ $symbol }}{{ number_format($shift->cashOut(), 2) }}</p>
+                            @endif
                         </div>
                         <button @click="open = !open" class="text-sm text-red-600 hover:underline">Close shift</button>
                     </div>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Pos\CashDrawerController;
 use App\Http\Controllers\Pos\CustomerController;
 use App\Http\Controllers\Pos\LoyaltyController;
 use App\Http\Controllers\Pos\PaymentMethodController;
@@ -18,6 +19,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
         Route::get('pos/receipt/{sale}', [PosController::class, 'receipt'])->name('pos.receipt');
         Route::post('pos/receipt/{sale}/email', [PosController::class, 'emailReceipt'])->name('pos.receipt.email');
+
+        // Cash-drawer adjustments (Shopify-style cash in / cash out) on the open shift.
+        Route::post('pos/cash', [CashDrawerController::class, 'store'])->name('pos.cash');
     });
 
     // --- Sales history ---

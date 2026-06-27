@@ -108,14 +108,14 @@ class RegisterController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Expected = opening float + cash payments taken during the shift.
+        // Expected = opening float + cash sales + manual cash in − manual cash out.
         $cashTaken = (float) $shift->sales()
             ->where('status', '!=', 'void')
             ->join('payments', 'payments.sale_id', '=', 'sales.id')
             ->where('payments.method', 'cash')
             ->sum('payments.amount');
 
-        $expected = round((float) $shift->opening_float + $cashTaken, 2);
+        $expected = round((float) $shift->opening_float + $cashTaken + $shift->netCashMovements(), 2);
 
         $shift->update([
             'closed_at' => now(),

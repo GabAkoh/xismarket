@@ -21,15 +21,61 @@
                 <span class="text-sm text-amber-600">No active register — create one under Registers & Shifts.</span>
             @endif
         </div>
-        @if ($registers->count() > 1)
-            <form method="GET" action="{{ route('pos.index') }}">
-                <select name="register" onchange="this.form.submit()" class="rounded-md border border-slate-300 p-2 text-sm">
-                    @foreach ($registers as $r)
-                        <option value="{{ $r->id }}" @selected($register && $r->id === $register->id)>{{ $r->name }}</option>
-                    @endforeach
-                </select>
-            </form>
-        @endif
+        <div class="flex items-center gap-2">
+            {{-- Cash in / Cash out — drawer adjustments on the open shift (Shopify-style) --}}
+            @if ($register && $openShift)
+                <div x-data="{ show: false, type: 'in', reasons: { in: @js(\App\Models\Pos\CashMovement::IN_REASONS), out: @js(\App\Models\Pos\CashMovement::OUT_REASONS) } }" class="flex items-center gap-2">
+                    <button type="button" @click="type = 'in'; show = true"
+                            class="rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100">Cash in</button>
+                    <button type="button" @click="type = 'out'; show = true"
+                            class="rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100">Cash out</button>
+
+                    <div x-show="show" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="show = false" @keydown.escape.window="show = false">
+                        <form method="POST" action="{{ route('pos.cash') }}" class="w-full max-w-sm space-y-3 rounded-lg bg-white p-5 shadow-xl">
+                            @csrf
+                            <input type="hidden" name="register_id" value="{{ $register->id }}">
+                            <input type="hidden" name="type" :value="type">
+                            <h3 class="text-sm font-semibold text-slate-800"
+                                x-text="type === 'in' ? 'Cash in — add to drawer' : 'Cash out — remove from drawer'"></h3>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Amount ({{ $symbol }})</label>
+                                <input type="number" step="0.01" min="0.01" name="amount" required
+                                       class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Reason</label>
+                                <select name="reason" class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                                    <template x-for="(label, key) in reasons[type]" :key="key">
+                                        <option :value="key" x-text="label"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Note (optional)</label>
+                                <input type="text" name="note" maxlength="255"
+                                       class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                            </div>
+                            <div class="flex justify-end gap-2 pt-1">
+                                <button type="button" @click="show = false" class="rounded-md px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100">Cancel</button>
+                                <button type="submit" class="rounded-md px-3 py-1.5 text-sm font-semibold text-white"
+                                        :class="type === 'in' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'"
+                                        x-text="type === 'in' ? 'Record cash in' : 'Record cash out'"></button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endif
+
+            @if ($registers->count() > 1)
+                <form method="GET" action="{{ route('pos.index') }}">
+                    <select name="register" onchange="this.form.submit()" class="rounded-md border border-slate-300 p-2 text-sm">
+                        @foreach ($registers as $r)
+                            <option value="{{ $r->id }}" @selected($register && $r->id === $register->id)>{{ $r->name }}</option>
+                        @endforeach
+                    </select>
+                </form>
+            @endif
+        </div>
     </div>
 
     <div class="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">

@@ -43,6 +43,29 @@ class Shift extends Model
         return $this->hasMany(Sale::class);
     }
 
+    public function cashMovements(): HasMany
+    {
+        return $this->hasMany(CashMovement::class);
+    }
+
+    /** Total manual cash added to the drawer this shift. */
+    public function cashIn(): float
+    {
+        return round((float) $this->cashMovements()->where('type', 'in')->sum('amount'), 2);
+    }
+
+    /** Total manual cash removed from the drawer this shift. */
+    public function cashOut(): float
+    {
+        return round((float) $this->cashMovements()->where('type', 'out')->sum('amount'), 2);
+    }
+
+    /** Net drawer effect of manual movements (cash in − cash out). */
+    public function netCashMovements(): float
+    {
+        return round($this->cashIn() - $this->cashOut(), 2);
+    }
+
     public function isOpen(): bool
     {
         return $this->status === 'open';
