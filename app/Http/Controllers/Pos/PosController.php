@@ -111,7 +111,8 @@ class PosController extends Controller
 
         return redirect()
             ->route('pos.receipt', $sale)
-            ->with('status', 'Sale '.$sale->number.' completed.');
+            ->with('status', 'Sale '.$sale->number.' completed.')
+            ->with('autoprint', true);
     }
 
     /** Printable receipt for a sale. */

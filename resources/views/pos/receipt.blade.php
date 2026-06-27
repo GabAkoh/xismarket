@@ -107,7 +107,37 @@
     <p class="text-center text-xs text-slate-400 mt-6">Thank you for your purchase!</p>
 </div>
 
+@php
+    $receiptWidth = in_array((int) $currentTenant->setting('pos.receipt_width', 80), [58, 80], true)
+        ? (int) $currentTenant->setting('pos.receipt_width', 80) : 80;
+    $autoPrint = (bool) $currentTenant->setting('pos.receipt_auto_print', false) && session('autoprint');
+@endphp
+
 @push('head')
-<style>@media print { aside, header, .print\:hidden { display:none !important; } main { padding:0 !important; } }</style>
+<style>
+@media print {
+    @page { size: {{ $receiptWidth }}mm auto; margin: 0; }
+    html, body { background: #fff !important; }
+    aside, header, .print\:hidden { display: none !important; }
+    main { padding: 0 !important; margin: 0 !important; }
+    #receipt {
+        width: {{ $receiptWidth }}mm !important;
+        max-width: {{ $receiptWidth }}mm !important;
+        margin: 0 !important;
+        padding: 2mm 3mm !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        font-size: {{ $receiptWidth === 58 ? '10' : '11' }}px;
+        line-height: 1.3;
+    }
+    #receipt * { color: #000 !important; }
+}
+</style>
 @endpush
+
+@if ($autoPrint)
+    @push('scripts')
+    <script>window.addEventListener('load', () => setTimeout(() => window.print(), 250));</script>
+    @endpush
+@endif
 @endsection

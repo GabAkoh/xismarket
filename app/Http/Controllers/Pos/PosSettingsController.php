@@ -25,12 +25,16 @@ class PosSettingsController extends Controller
     {
         $data = $request->validate([
             'grid_columns' => ['required', 'integer', 'min:2', 'max:8'],
+            'receipt_width' => ['required', 'integer', 'in:58,80'],
+            'receipt_auto_print' => ['nullable'],
         ]);
 
         $store = $this->tenancy->current();
         $settings = $store->settings ?? [];
         $settings['pos'] = array_merge($settings['pos'] ?? [], [
             'grid_columns' => (int) $data['grid_columns'],
+            'receipt_width' => (int) $data['receipt_width'],
+            'receipt_auto_print' => $request->boolean('receipt_auto_print'),
         ]);
         $store->update(['settings' => $settings]);
 

@@ -2,9 +2,13 @@
 @section('title', 'Register display')
 
 @section('content')
-@php $current = max(2, min(8, (int) $store->setting('pos.grid_columns', 4))); @endphp
+@php
+    $current = max(2, min(8, (int) $store->setting('pos.grid_columns', 4)));
+    $receiptWidth = in_array((int) $store->setting('pos.receipt_width', 80), [58, 80], true) ? (int) $store->setting('pos.receipt_width', 80) : 80;
+    $autoPrint = (bool) $store->setting('pos.receipt_auto_print', false);
+@endphp
 
-<x-page-header title="Register display" subtitle="Control how the POS register shows products." />
+<x-page-header title="Register display" subtitle="Control how the POS register shows products and prints receipts." />
 
 <form method="POST" action="{{ route('pos.settings.update') }}" class="max-w-2xl" x-data="{ cols: {{ $current }} }">
     @csrf @method('PUT')
@@ -31,6 +35,30 @@
                     </template>
                 </div>
             </div>
+        </div>
+    </x-card>
+
+    <x-card class="mt-4">
+        <h2 class="text-sm font-semibold text-slate-700 mb-3">Receipt printing</h2>
+
+        <div class="flex items-end gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-600 mb-1">Paper width</label>
+                <select name="receipt_width" class="rounded-md border border-slate-300 p-2 text-sm">
+                    <option value="80" @selected($receiptWidth === 80)>80 mm (standard)</option>
+                    <option value="58" @selected($receiptWidth === 58)>58 mm (mini)</option>
+                </select>
+            </div>
+        </div>
+
+        <label class="mt-4 flex items-start gap-2 text-sm text-slate-700">
+            <input type="checkbox" name="receipt_auto_print" value="1" @checked($autoPrint) class="mt-0.5 rounded border-slate-300 text-indigo-600">
+            <span>Automatically print the receipt after each completed sale.</span>
+        </label>
+
+        <div class="mt-4 rounded-md bg-slate-50 border border-slate-100 p-3 text-xs text-slate-500 space-y-1">
+            <p>The receipt is formatted to the chosen roll width. With auto-print on, the browser's print dialog opens as soon as the receipt loads.</p>
+            <p><span class="font-medium text-slate-600">For silent, no-dialog printing:</span> run the till's browser in kiosk-printing mode and set the thermal printer as the system default — e.g. launch Chrome/Edge with <code class="rounded bg-slate-100 px-1">--kiosk-printing</code>. Receipts then print straight to the printer with no prompt.</p>
         </div>
     </x-card>
 
