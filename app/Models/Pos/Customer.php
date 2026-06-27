@@ -24,7 +24,7 @@ class Customer extends Model implements Authenticatable, CanResetPassword
     }
 
     protected $fillable = [
-        'tenant_id', 'name', 'email', 'identity_number', 'phone', 'address', 'notes',
+        'tenant_id', 'name', 'email', 'identity_number', 'loyalty_no', 'phone', 'address', 'notes',
         'balance', 'loyalty_points', 'password',
     ];
 

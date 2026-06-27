@@ -177,7 +177,7 @@
                     <select x-model.number="customerId" @change="onCustomerChange()" class="w-full rounded-md border border-slate-300 p-2 text-sm">
                         <option value="">Walk-in customer</option>
                         @foreach ($customers as $c)
-                            <option value="{{ $c['id'] }}">{{ $c['name'] }}</option>
+                            <option value="{{ $c['id'] }}">{{ $c['name'] }}@if (! empty($c['loyalty_no'])) · {{ $c['loyalty_no'] }}@endif</option>
                         @endforeach
                     </select>
                     <template x-if="customer">

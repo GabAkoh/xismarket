@@ -24,6 +24,7 @@ class CustomerController extends Controller
                 $q->where(fn ($w) => $w->where('name', 'like', $term)
                     ->orWhere('email', 'like', $term)
                     ->orWhere('phone', 'like', $term)
+                    ->orWhere('loyalty_no', 'like', $term)
                     ->orWhere('identity_number', 'like', $term));
             })
             ->orderBy('name')
@@ -323,11 +324,18 @@ class CustomerController extends Controller
                     ->where(fn ($q) => $q->where('tenant_id', $tenantId))
                     ->ignore($customer?->id),
             ],
+            'loyalty_no' => [
+                'nullable', 'string', 'max:50',
+                Rule::unique('customers', 'loyalty_no')
+                    ->where(fn ($q) => $q->where('tenant_id', $tenantId))
+                    ->ignore($customer?->id),
+            ],
             'phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ], [
             'identity_number.unique' => 'Another customer already has this ID number.',
+            'loyalty_no.unique' => 'Another customer already has this loyalty number.',
         ]);
     }
 

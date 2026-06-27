@@ -29,6 +29,9 @@
                 <tr>
                     <td class="py-3 font-medium text-slate-700">
                         <a href="{{ route('customers.show', $customer) }}" class="text-indigo-600 hover:underline">{{ $customer->name }}</a>
+                        @if ($customer->loyalty_no)
+                            <div class="text-xs font-normal text-slate-500">Loyalty: {{ $customer->loyalty_no }}</div>
+                        @endif
                         @if ($customer->identity_number)
                             <div class="text-xs font-normal text-slate-400">ID: {{ $customer->identity_number }}</div>
                         @endif

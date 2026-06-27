@@ -55,11 +55,12 @@ class PosController extends Controller
             ->values();
 
         $customers = Customer::orderBy('name')
-            ->get(['id', 'name', 'phone', 'balance', 'loyalty_points'])
+            ->get(['id', 'name', 'phone', 'loyalty_no', 'balance', 'loyalty_points'])
             ->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
                 'phone' => $c->phone,
+                'loyalty_no' => $c->loyalty_no,
                 'balance' => (float) $c->balance,
                 'points' => (int) $c->loyalty_points,
             ])

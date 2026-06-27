@@ -23,6 +23,7 @@
     <div class="space-y-6">
         <x-card title="Details">
             <dl class="text-sm space-y-2">
+                <div class="flex justify-between"><dt class="text-slate-400">Loyalty no.</dt><dd class="text-slate-700 font-medium">{{ $customer->loyalty_no ?: '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-slate-400">ID / Tax no.</dt><dd class="text-slate-700">{{ $customer->identity_number ?: '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-slate-400">Email</dt><dd class="text-slate-700">{{ $customer->email ?: '—' }}</dd></div>
                 <div class="flex justify-between"><dt class="text-slate-400">Phone</dt><dd class="text-slate-700">{{ $customer->phone ?: '—' }}</dd></div>

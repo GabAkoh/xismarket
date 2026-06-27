@@ -34,6 +34,7 @@
         </div>
         <div class="text-sm text-right">
             <p class="font-semibold text-slate-700">{{ $customer->name }}</p>
+            @if ($customer->loyalty_no)<p class="text-slate-500">Loyalty: {{ $customer->loyalty_no }}</p>@endif
             @if ($customer->identity_number)<p class="text-slate-500">ID: {{ $customer->identity_number }}</p>@endif
             @if ($customer->email)<p class="text-slate-500">{{ $customer->email }}</p>@endif
             @if ($customer->phone)<p class="text-slate-500">{{ $customer->phone }}</p>@endif

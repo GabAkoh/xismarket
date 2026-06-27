@@ -10,8 +10,14 @@
             <input name="email" type="email" value="{{ old('email', $customer->email ?? '') }}" class="mt-1 w-full rounded-md border border-slate-300 p-2">
         </div>
         <div>
+            <label class="block text-sm font-medium text-slate-700">Loyalty no.</label>
+            <input name="loyalty_no" value="{{ old('loyalty_no', $customer->loyalty_no ?? '') }}" placeholder="Membership / loyalty card number" class="mt-1 w-full rounded-md border border-slate-300 p-2">
+            @error('loyalty_no')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+        <div>
             <label class="block text-sm font-medium text-slate-700">ID / Tax number</label>
             <input name="identity_number" value="{{ old('identity_number', $customer->identity_number ?? '') }}" placeholder="National ID, passport or tax no." class="mt-1 w-full rounded-md border border-slate-300 p-2">
+            @error('identity_number')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-slate-700">Phone</label>
