@@ -5,6 +5,11 @@
 @php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
 
 <x-page-header :title="$customer->name" subtitle="Customer profile, wallet &amp; loyalty">
+    @permission('pos.use')
+        @if ($outstanding > 0)
+            <a href="{{ route('customers.receive-payment', $customer) }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Receive payment</a>
+        @endif
+    @endpermission
     <a href="{{ route('customers.statement', $customer) }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Statement</a>
     @permission('customers.manage')
         <a href="{{ route('customers.edit', $customer) }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Edit</a>
@@ -41,6 +46,16 @@
                 @endif
             </div>
         </div>
+
+        @if ($outstanding > 0)
+            <div class="bg-white rounded-lg shadow-sm p-5 border border-rose-100">
+                <p class="text-sm text-slate-500">Outstanding (owes you)</p>
+                <p class="mt-1 text-2xl font-bold text-rose-600">{{ $symbol }} {{ number_format($outstanding, 2) }}</p>
+                @permission('pos.use')
+                    <a href="{{ route('customers.receive-payment', $customer) }}" class="mt-3 inline-block rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700">Receive payment</a>
+                @endpermission
+            </div>
+        @endif
 
         @permission('customers.manage')
         <x-card title="Top up wallet">

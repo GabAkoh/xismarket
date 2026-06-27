@@ -57,8 +57,87 @@ class CustomerController extends Controller
         ]);
         $recentSales = $customer->sales()->latest('completed_at')->limit(10)->get();
         $loyalty = LoyaltySetting::current();
+        $outstanding = round((float) $customer->sales()->where('status', 'partially_paid')->sum('balance_due'), 2);
 
-        return view('customers.show', compact('customer', 'recentSales', 'loyalty'));
+        return view('customers.show', compact('customer', 'recentSales', 'loyalty', 'outstanding'));
+    }
+
+    /** Form to receive one payment and apply it across the customer's open credit sales. */
+    public function receivePaymentForm(Customer $customer)
+    {
+        $this->authorizeTenant($customer);
+
+        $openSales = $customer->sales()
+            ->where('status', 'partially_paid')
+            ->orderBy('completed_at')->orderBy('id')
+            ->get();
+        $outstanding = round((float) $openSales->sum('balance_due'), 2);
+
+        $methods = collect($this->tenancy->current()->paymentMethods())
+            ->reject(fn ($m) => ! empty($m['credit']))
+            ->map(fn ($m) => ['key' => $m['key'], 'label' => $m['label']])
+            ->values();
+
+        return view('customers.receive-payment', compact('customer', 'openSales', 'outstanding', 'methods'));
+    }
+
+    /**
+     * Apply a single received amount across the customer's open credit sales
+     * (oldest first); any overpayment of real money becomes store credit.
+     */
+    public function receivePayment(Request $request, Customer $customer, \App\Services\Pos\SaleService $sales)
+    {
+        $this->authorizeTenant($customer);
+
+        $store = $this->tenancy->current();
+        $allowed = collect($store->paymentMethods())
+            ->reject(fn ($m) => ! empty($m['credit']))
+            ->pluck('key')->push('wallet')->all();
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:100000000'],
+            'method' => ['required', 'string', Rule::in($allowed)],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'remainder_to_credit' => ['nullable'],
+        ]);
+
+        $remainderToCredit = $request->boolean('remainder_to_credit');
+        $outstanding = round((float) $customer->sales()->where('status', 'partially_paid')->sum('balance_due'), 2);
+
+        // Real money beyond what's owed must go somewhere — to store credit, or
+        // be reduced. (A wallet draw is capped to the balance, so this can't apply.)
+        if ($data['method'] !== 'wallet' && ! $remainderToCredit && (float) $data['amount'] > $outstanding + 0.01) {
+            return back()->withInput()->with('error',
+                'Amount exceeds the outstanding balance ('.number_format($outstanding, 2)
+                .'). Reduce it, or tick “add overpayment to store credit”.');
+        }
+
+        try {
+            $result = $sales->receivePayment(
+                $customer,
+                (float) $data['amount'],
+                $data['method'],
+                $data['reference'] ?? null,
+                $remainderToCredit,
+            );
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        $parts = [];
+        if ($result['applied'] > 0) {
+            $parts[] = number_format($result['applied'], 2).' applied to '.count($result['allocations']).' sale(s)';
+        }
+        if ($result['credited'] > 0) {
+            $parts[] = number_format($result['credited'], 2).' added to store credit';
+        }
+
+        if (! $parts) {
+            return back()->withInput()->with('error', 'Nothing was applied — the customer has no open balance.');
+        }
+
+        return redirect()->route('customers.show', $customer)
+            ->with('status', 'Payment received: '.implode(', ', $parts).'.');
     }
 
     /**

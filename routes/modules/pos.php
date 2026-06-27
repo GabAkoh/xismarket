@@ -39,6 +39,12 @@ Route::middleware(['web', 'auth'])->group(function () {
     // Recording a follow-up payment on a credit sale is a register action.
     Route::middleware('permission:pos.use')->group(function () {
         Route::post('sales/{sale}/payment', [SalesController::class, 'addPayment'])->name('sales.payment');
+
+        // Receive one payment and apply it across a customer's open credit sales.
+        Route::get('customers/{customer}/receive-payment', [CustomerController::class, 'receivePaymentForm'])
+            ->whereNumber('customer')->name('customers.receive-payment');
+        Route::post('customers/{customer}/receive-payment', [CustomerController::class, 'receivePayment'])
+            ->whereNumber('customer')->name('customers.receive-payment.store');
     });
 
     Route::middleware('permission:sales.refund')->group(function () {

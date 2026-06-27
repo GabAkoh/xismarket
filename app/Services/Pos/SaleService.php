@@ -580,6 +580,103 @@ class SaleService
         });
     }
 
+    /**
+     * Apply a single received amount across a customer's open (partially-paid)
+     * sales, oldest first, settling each one's balance. Any leftover of real
+     * money (not a wallet draw-down) is banked as store credit when
+     * $remainderToCredit is set — i.e. an advance on account.
+     *
+     * Each settled sale records a Payment and posts the same settlement journal
+     * as a single sale payment (Dr Cash/Wallet, Cr Accounts Receivable).
+     *
+     * @return array{applied: float, credited: float, allocations: array<int, array{number:string, applied:float, balance:float}>}
+     */
+    public function receivePayment(Customer $customer, float $amount, string $method = 'cash', ?string $reference = null, bool $remainderToCredit = true): array
+    {
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            throw new \RuntimeException('Enter a payment amount greater than zero.');
+        }
+
+        return DB::transaction(function () use ($customer, $amount, $method, $reference, $remainderToCredit) {
+            $remaining = $amount;
+
+            // A wallet settlement can't draw more than the customer's store credit.
+            if ($method === 'wallet') {
+                $balance = round((float) Customer::whereKey($customer->id)->value('balance'), 2);
+                $remaining = min($remaining, $balance);
+                if ($remaining <= 0) {
+                    throw new \RuntimeException('This customer has no store-credit balance to apply.');
+                }
+            }
+
+            $sales = Sale::query()
+                ->where('tenant_id', $this->tenancy->id())
+                ->where('customer_id', $customer->id)
+                ->where('status', 'partially_paid')
+                ->orderBy('completed_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $applied = 0.0;
+            $allocations = [];
+
+            foreach ($sales as $sale) {
+                if ($remaining <= 0.001) {
+                    break;
+                }
+
+                $balanceDue = round((float) $sale->total - (float) $sale->paid_total, 2);
+                if ($balanceDue <= 0) {
+                    continue;
+                }
+
+                $pay = round(min($remaining, $balanceDue), 2);
+                if ($pay <= 0) {
+                    continue;
+                }
+
+                // Wallet draws down store credit as it settles each sale.
+                if ($method === 'wallet') {
+                    app(WalletService::class)->debit($customer, $pay, 'Payment for sale '.$sale->number, $sale);
+                }
+
+                Payment::create([
+                    'tenant_id' => $this->tenancy->id(),
+                    'sale_id' => $sale->id,
+                    'method' => $method,
+                    'amount' => $pay,
+                    'reference' => $reference,
+                    'paid_at' => now(),
+                ]);
+
+                $newPaid = round((float) $sale->paid_total + $pay, 2);
+                $newBalance = max(0.0, round((float) $sale->total - $newPaid, 2));
+                $sale->update([
+                    'paid_total' => $newPaid,
+                    'balance_due' => $newBalance,
+                    'status' => $newBalance <= 0.001 ? 'completed' : 'partially_paid',
+                ]);
+
+                $this->postSettlementJournal($sale, $pay, $method, now());
+
+                $applied = round($applied + $pay, 2);
+                $remaining = round($remaining - $pay, 2);
+                $allocations[] = ['number' => $sale->number, 'applied' => $pay, 'balance' => $newBalance];
+            }
+
+            // Leftover real money becomes store credit (an advance on account).
+            $credited = 0.0;
+            if ($remaining > 0.001 && $method !== 'wallet' && $remainderToCredit) {
+                app(WalletService::class)->credit($customer, $remaining, 'Advance / overpayment received', null, null, true);
+                $credited = round($remaining, 2);
+            }
+
+            return ['applied' => $applied, 'credited' => $credited, 'allocations' => $allocations];
+        });
+    }
+
     /** Post a credit-sale settlement: Dr Cash/Wallet, Cr Accounts Receivable. */
     protected function postSettlementJournal(Sale $sale, float $amount, string $method, Carbon $date): void
     {
