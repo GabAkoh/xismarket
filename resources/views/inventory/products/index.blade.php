@@ -161,11 +161,13 @@
                     </td>
                     <td class="text-right">
                         @permission('products.manage')
-                            <a href="{{ route('products.edit', $product) }}" class="text-indigo-600 hover:underline">Edit</a>
-                            <form method="POST" action="{{ route('products.destroy', $product) }}" class="inline" onsubmit="return confirm('Remove this product?')">
-                                @csrf @method('DELETE')
-                                <button class="ml-3 text-red-600 hover:underline">Delete</button>
-                            </form>
+                            <div class="flex items-center justify-end gap-5">
+                                <a href="{{ route('products.edit', $product) }}" class="text-indigo-600 hover:underline">Edit</a>
+                                <form method="POST" action="{{ route('products.destroy', $product) }}" onsubmit="return confirm('Remove this product?')">
+                                    @csrf @method('DELETE')
+                                    <button class="text-red-600 hover:underline">Delete</button>
+                                </form>
+                            </div>
                         @endpermission
                     </td>
                 </tr>
