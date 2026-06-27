@@ -55,6 +55,15 @@ class OrderService
         return DB::transaction(function () use ($data) {
             $tenantId = $this->tenancy->id();
 
+            // Out-of-stock products cannot be ordered (tracked products at <= 0 on hand).
+            $soldOut = $this->outOfStock($data['items'] ?? []);
+            if ($soldOut !== []) {
+                throw new \RuntimeException(
+                    'Out of stock: '.implode(', ', $soldOut).'. Remove '
+                    .(count($soldOut) === 1 ? 'it' : 'them').' to place the order.'
+                );
+            }
+
             // --- Build line items (with product snapshots) ---
             $lines = [];
             $subtotal = 0.0;         // sum of line gross (before discount, before tax)
@@ -286,6 +295,43 @@ class OrderService
         app(\App\Services\Storefront\BestsellerService::class)->forget($this->tenancy->id());
 
         return $order;
+    }
+
+    /**
+     * Names of out-of-stock products among the given order lines — tracked
+     * products whose on-hand quantity in the fulfilment warehouse (the default
+     * warehouse, which is where orders draw stock at fulfilment) is <= 0.
+     *
+     * Public so the checkout can reject sold-out items *before* charging the
+     * card. Returns [] when stock can't be determined (no Inventory module /
+     * warehouse), keeping the guard a no-op in those setups.
+     *
+     * @param  array<int,array{product_id?:int}>  $items
+     * @return array<int,string>
+     */
+    public function outOfStock(array $items): array
+    {
+        if (! class_exists(\App\Models\Inventory\Warehouse::class)) {
+            return [];
+        }
+
+        $warehouse = \App\Models\Inventory\Warehouse::default();
+        if (! $warehouse) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($items as $row) {
+            $product = Product::find($row['product_id'] ?? null);
+            if (! $product || ! $product->track_stock) {
+                continue;
+            }
+            if ($product->stockIn($warehouse) <= 0) {
+                $names[] = $product->name;
+            }
+        }
+
+        return $names;
     }
 
     /** Generate the next per-tenant sequential order number (ORD-0001 …). */

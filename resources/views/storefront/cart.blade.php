@@ -12,6 +12,7 @@
         <a href="{{ route('shop.home') }}" class="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Browse products</a>
     </div>
 @else
+    @php $hasOutOfStock = collect($lines)->contains(fn ($l) => $l['product']->isOutOfStock()); @endphp
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 bg-white rounded-lg border border-slate-200 divide-y">
             @foreach ($lines as $line)
@@ -20,6 +21,9 @@
                     <div class="min-w-0 flex-1">
                         <a href="{{ route('shop.product', ['product' => $line['product']->id]) }}" class="font-medium text-slate-700 hover:text-indigo-600">{{ $line['product']->name }}</a>
                         <div class="text-sm text-slate-400">{{ $symbol }} {{ number_format($line['unit_price'], 2) }} each</div>
+                        @if ($line['product']->isOutOfStock())
+                            <span class="mt-0.5 inline-block rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-semibold text-rose-600">Out of stock — remove to checkout</span>
+                        @endif
                     </div>
                     <form method="POST" action="{{ route('shop.cart.update') }}" class="flex items-center gap-1">
                         @csrf
@@ -45,7 +49,12 @@
                 <div class="flex justify-between font-bold text-slate-800 pt-2 border-t"><dt>Total</dt><dd>{{ $symbol }} {{ number_format($totals['total'], 2) }}</dd></div>
             </dl>
             <p class="text-xs text-slate-400 mt-1">Delivery fee (if any) added at checkout.</p>
-            <a href="{{ route('shop.checkout') }}" class="mt-4 block text-center rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Checkout</a>
+            @if ($hasOutOfStock)
+                <button type="button" disabled class="mt-4 block w-full text-center rounded-md bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">Checkout</button>
+                <p class="mt-2 text-xs text-rose-500">Remove out-of-stock items to checkout.</p>
+            @else
+                <a href="{{ route('shop.checkout') }}" class="mt-4 block text-center rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Checkout</a>
+            @endif
             <a href="{{ route('shop.home') }}" class="mt-2 block text-center text-sm text-slate-500 hover:underline">Continue shopping</a>
         </div>
     </div>

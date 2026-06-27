@@ -53,6 +53,19 @@ class SaleService
                 ? Carbon::parse($data['completed_at'])
                 : now();
 
+            // The warehouse this register sells from — also used to reject
+            // out-of-stock items below and to decrement stock at the end.
+            $warehouse = $this->resolveWarehouse($register);
+
+            // Out-of-stock products cannot be sold (tracked products at <= 0 on hand).
+            $soldOut = $this->outOfStock($data['items'] ?? [], $warehouse);
+            if ($soldOut !== []) {
+                throw new \RuntimeException(
+                    'Out of stock: '.implode(', ', $soldOut).'. Remove '
+                    .(count($soldOut) === 1 ? 'it' : 'them').' to complete the sale.'
+                );
+            }
+
             // --- Build line items (with product snapshots) ---
             $lines = [];
             $subtotal = 0.0;     // sum of line nets BEFORE tax, AFTER line discounts
@@ -280,8 +293,6 @@ class SaleService
             }
 
             // --- Cross-module: decrement stock & post the journal ---
-            $warehouse = $this->resolveWarehouse($register);
-
             $this->decrementStock($sale, $products, $lines, $warehouse);
             $this->postSaleJournal($sale, $netRevenue, $taxTotal, $total, $cogsTotal, $walletUsed, $balanceDue, $completedAt);
 
@@ -610,6 +621,35 @@ class SaleService
         }
 
         return 'INV-'.str_pad((string) ($seq + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Names of out-of-stock products among the given lines — tracked products
+     * whose on-hand quantity in the selling warehouse is <= 0. Returns [] when
+     * stock can't be determined (no Inventory module / warehouse), so the guard
+     * stays a no-op in those setups.
+     *
+     * @param  array<int,array{product_id?:int}>  $items
+     * @return array<int,string>
+     */
+    protected function outOfStock(array $items, ?Warehouse $warehouse): array
+    {
+        if (! $warehouse) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($items as $row) {
+            $product = Product::find($row['product_id'] ?? null);
+            if (! $product || ! $product->track_stock) {
+                continue;
+            }
+            if ($product->stockIn($warehouse) <= 0) {
+                $names[] = $product->name;
+            }
+        }
+
+        return $names;
     }
 
     /** Resolve the warehouse a register sells from, falling back to the default. */

@@ -40,12 +40,22 @@
             <p class="mt-4 text-sm text-slate-600 leading-relaxed">{{ $product->description }}</p>
         @endif
 
-        <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-6 flex items-center gap-3">
-            @csrf
-            <input type="hidden" name="product_id" value="{{ $product->id }}">
-            <input type="number" name="qty" value="1" min="1" max="999" class="w-20 rounded-md border border-slate-300 p-2 text-sm text-center">
-            <button class="rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Add to cart</button>
-        </form>
+        @if ($product->isOutOfStock())
+            <div class="mt-6">
+                <button type="button" disabled
+                        class="rounded-md bg-slate-100 px-6 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">
+                    Sold out
+                </button>
+                <p class="mt-2 text-xs text-rose-500">This product is currently out of stock.</p>
+            </div>
+        @else
+            <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-6 flex items-center gap-3">
+                @csrf
+                <input type="hidden" name="product_id" value="{{ $product->id }}">
+                <input type="number" name="qty" value="1" min="1" max="999" class="w-20 rounded-md border border-slate-300 p-2 text-sm text-center">
+                <button class="rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Add to cart</button>
+            </form>
+        @endif
 
         <p class="mt-3 text-xs text-slate-400">SKU: {{ $product->sku }}</p>
     </div>

@@ -81,4 +81,26 @@ class Product extends Model
     {
         return (float) $this->stocks()->sum('quantity');
     }
+
+    /**
+     * Has this stock-tracked product sold out — on-hand <= 0 in the fulfilment
+     * (default) warehouse? Mirrors the order/sale guards so the storefront can
+     * hide "Add to cart". Untracked products, or setups without an Inventory
+     * warehouse, are always treated as available. Read-only: unlike
+     * Warehouse::default() this never creates a warehouse.
+     */
+    public function isOutOfStock(): bool
+    {
+        if (! $this->track_stock || ! class_exists(Warehouse::class)) {
+            return false;
+        }
+
+        $warehouse = Warehouse::query()->where('is_default', true)->first()
+            ?? Warehouse::query()->first();
+        if (! $warehouse) {
+            return false;
+        }
+
+        return $this->stockIn($warehouse) <= 0;
+    }
 }

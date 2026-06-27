@@ -63,6 +63,21 @@ class CheckoutController extends Controller
         }
         $fee = (float) $method['fee'];
 
+        // Build the order lines up front so we can vet stock before taking payment.
+        $items = [];
+        foreach ($this->cart->raw() as $productId => $qty) {
+            $items[] = ['product_id' => (int) $productId, 'quantity' => (int) $qty];
+        }
+
+        // Reject sold-out products BEFORE charging the card (no order = no charge).
+        $soldOut = $orders->outOfStock($items);
+        if ($soldOut !== []) {
+            return back()->with('error',
+                'Out of stock: '.implode(', ', $soldOut).'. Please remove '
+                .(count($soldOut) === 1 ? 'it' : 'them').' from your cart to checkout.'
+            );
+        }
+
         $payByCard = true;
 
         // --- Authorise the card BEFORE creating the order (decline = no order). ---
@@ -97,11 +112,6 @@ class CheckoutController extends Controller
                 'phone' => $data['phone'],
                 'address' => $data['address'] ?? null,
             ]);
-        }
-
-        $items = [];
-        foreach ($this->cart->raw() as $productId => $qty) {
-            $items[] = ['product_id' => (int) $productId, 'quantity' => (int) $qty];
         }
 
         $order = $orders->create([

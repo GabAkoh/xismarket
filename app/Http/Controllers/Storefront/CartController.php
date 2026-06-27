@@ -25,6 +25,15 @@ class CartController extends Controller
             'qty' => ['nullable', 'integer', 'min:1', 'max:999'],
         ]);
 
+        // Don't let a sold-out product into the cart (the disabled button is only UI).
+        $product = \App\Models\Inventory\Product::where('is_active', true)->find($data['product_id']);
+        if (! $product) {
+            return back()->with('error', 'That product is no longer available.');
+        }
+        if ($product->isOutOfStock()) {
+            return back()->with('error', $product->name.' is out of stock.');
+        }
+
         $this->cart->add($data['product_id'], $data['qty'] ?? 1);
 
         return back()->with('status', 'Added to cart.');
