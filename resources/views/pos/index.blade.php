@@ -56,8 +56,9 @@
                 @endphp
                 <div class="grid grid-cols-2 sm:grid-cols-{{ $sm }} lg:grid-cols-{{ $lg }} xl:grid-cols-{{ $xl }} gap-2">
                     <template x-for="p in filteredProducts" :key="p.id">
-                        <button type="button" @click="addToCart(p)"
-                                class="text-left rounded-lg border border-slate-200 p-2 hover:border-indigo-400 hover:shadow transition">
+                        <button type="button" @click="addToCart(p)" :disabled="isOut(p)"
+                                class="text-left rounded-lg border p-2 transition"
+                                :class="isOut(p) ? 'border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed' : 'border-slate-200 hover:border-indigo-400 hover:shadow'">
                             <div class="mb-1.5 aspect-square w-full overflow-hidden rounded bg-slate-100 flex items-center justify-center">
                                 <template x-if="p.image">
                                     <img :src="p.image" :alt="p.name" class="h-full w-full object-cover" loading="lazy">
@@ -71,8 +72,8 @@
                             <div class="mt-1 flex items-center justify-between gap-1">
                                 <span class="font-semibold text-indigo-600 text-xs" x-text="money(p.price)"></span>
                                 <template x-if="p.track_stock && p.stock !== null">
-                                    <span class="text-[11px] whitespace-nowrap" :class="p.stock > 0 ? 'text-slate-400' : 'text-red-500'"
-                                          x-text="(p.stock ?? 0)"></span>
+                                    <span class="text-[11px] whitespace-nowrap" :class="isOut(p) ? 'text-red-500 font-medium' : 'text-slate-400'"
+                                          x-text="isOut(p) ? 'Sold out' : (p.stock ?? 0)"></span>
                                 </template>
                             </div>
                         </button>
@@ -337,7 +338,10 @@ function posRegister() {
             }
             this.$refs.scan?.focus();
         },
+        // A tracked product with no quantity on hand can't be sold (mirrors the server guard).
+        isOut(p) { return p.track_stock && p.stock !== null && p.stock <= 0; },
         addToCart(p) {
+            if (this.isOut(p)) { this.scanError = p.name + ' is out of stock.'; return; }
             const existing = this.cart.find(l => l.id === p.id);
             if (existing) { existing.qty = Math.round((existing.qty + 1) * 1000) / 1000; return; }
             this.cart.push({ id: p.id, name: p.name, price: p.price, tax_rate: p.tax_rate, qty: 1, discount: 0 });
