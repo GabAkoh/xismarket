@@ -174,6 +174,13 @@
             <div class="border-t border-slate-100 p-4 space-y-3">
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Customer</label>
+                    <div class="relative mb-1">
+                        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔎</span>
+                        <input type="text" x-model="customerSearch" @keydown.enter.prevent="findCustomer()"
+                               placeholder="Scan loyalty card or search name / phone… (Enter)"
+                               class="w-full rounded-md border border-slate-300 pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <p x-show="customerScanError" x-cloak class="mb-1 text-xs text-red-500" x-text="customerScanError"></p>
                     <select x-model.number="customerId" @change="onCustomerChange()" class="w-full rounded-md border border-slate-300 p-2 text-sm">
                         <option value="">Walk-in customer</option>
                         @foreach ($customers as $c)
@@ -333,6 +340,8 @@ function posRegister() {
         search: '',
         scanError: '',
         customerId: '',
+        customerSearch: '',
+        customerScanError: '',
         cartDiscount: 0,
         redeemPoints: 0,
         useWallet: 0,
@@ -356,6 +365,27 @@ function posRegister() {
             // Reset wallet/loyalty inputs when the customer changes.
             this.redeemPoints = 0;
             this.useWallet = 0;
+        },
+        // Scan a loyalty card or search by name/phone, then select the match.
+        // Prefers an exact loyalty number (the primary key), then exact phone,
+        // then the first name/phone contains-match.
+        findCustomer() {
+            const t = this.customerSearch.trim();
+            if (!t) return;
+            const low = t.toLowerCase();
+            const digits = s => String(s ?? '').replace(/\D/g, '');
+            const c = this.customers.find(c => c.loyalty_no && String(c.loyalty_no).toLowerCase() === low)
+                   || this.customers.find(c => c.phone && digits(c.phone) === digits(t) && digits(t) !== '')
+                   || this.customers.find(c => (c.name && c.name.toLowerCase().includes(low))
+                        || (c.phone && digits(c.phone).includes(digits(t)) && digits(t) !== ''));
+            if (c) {
+                this.customerId = c.id;
+                this.onCustomerChange();
+                this.customerSearch = '';
+                this.customerScanError = '';
+            } else {
+                this.customerScanError = 'No customer found for "' + t + '".';
+            }
         },
 
         get filteredProducts() {
@@ -487,7 +517,8 @@ function posRegister() {
             return Math.round((this.netRevenue + this.taxTotal) * 100) / 100;
         },
         get pointsToEarn() {
-            if (!this.loyalty.active || !this.customer) return 0;
+            // Only enrolled customers (with a loyalty number) earn points.
+            if (!this.loyalty.active || !this.customer || !this.customer.loyalty_no) return 0;
             return Math.floor(this.netRevenue * this.loyalty.earnRate);
         },
 

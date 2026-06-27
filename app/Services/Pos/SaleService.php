@@ -179,8 +179,9 @@ class SaleService
             }
             $creditOwed = round(min($creditOwed, $total), 2);
 
-            // Points earned on the realised net revenue.
-            $pointsEarned = ($customer && $settings->is_active)
+            // Points earned on the realised net revenue — only for enrolled
+            // customers (those with a loyalty number).
+            $pointsEarned = ($customer && ! empty($customer->loyalty_no) && $settings->is_active)
                 ? $settings->pointsFor($netRevenue)
                 : 0;
 
