@@ -22,6 +22,12 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('products/movements/export', [StockMovementController::class, 'reportExport'])->name('products.movements.export');
         Route::get('products/valuation', [StockValuationController::class, 'report'])->name('products.valuation');
         Route::get('products/valuation/export', [StockValuationController::class, 'reportExport'])->name('products.valuation.export');
+        // Printable barcode labels (?ids=1,2,3).
+        Route::get('products/labels', [ProductController::class, 'labels'])->name('products.labels');
+    });
+    Route::middleware('permission:products.manage')->group(function () {
+        // Fresh unique barcode for the "Generate" button (literal — before {product}).
+        Route::get('products/barcode/next', [ProductController::class, 'nextBarcode'])->name('products.barcode.next');
     });
     Route::middleware('permission:products.manage')->group(function () {
         // Import (literal segments — before products/{product} routes).

@@ -7,9 +7,18 @@
         <label class="block text-sm font-medium text-slate-700">SKU</label>
         <input name="sku" value="{{ old('sku', $product->sku ?? '') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
     </div>
-    <div>
+    <div x-data="{ async generate() {
+            const r = await fetch('{{ route('products.barcode.next') }}', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+            if (r.ok) { this.$refs.bc.value = (await r.json()).barcode; }
+        } }">
         <label class="block text-sm font-medium text-slate-700">Barcode</label>
-        <input name="barcode" value="{{ old('barcode', $product->barcode ?? '') }}" class="mt-1 w-full rounded-md border border-slate-300 p-2">
+        <div class="mt-1 flex gap-2">
+            <input x-ref="bc" name="barcode" value="{{ old('barcode', $product->barcode ?? '') }}" class="flex-1 rounded-md border border-slate-300 p-2">
+            <button type="button" @click="generate()" class="rounded-md border border-slate-300 px-3 text-sm hover:bg-slate-50" title="Generate a unique barcode">Generate</button>
+        </div>
+        @if (! empty($product?->barcode))
+            <a href="{{ route('products.labels', ['ids' => $product->id]) }}" target="_blank" class="mt-1 inline-block text-xs text-indigo-600 hover:underline">🏷 Print label</a>
+        @endif
     </div>
     <div>
         <label class="block text-sm font-medium text-slate-700">Category</label>

@@ -26,6 +26,10 @@
             this.action = a;
             this.$nextTick(() => this.$refs.bulkForm.submit());
         },
+        printLabels() {
+            if (!this.sel.length) return;
+            window.open('{{ route('products.labels') }}?ids=' + this.sel.join(','), '_blank');
+        },
      }">
 <x-card>
     {{-- Search + category filter --}}
@@ -82,6 +86,8 @@
                 <button type="button" @click="run('activate')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Activate</button>
                 <button type="button" @click="run('feature')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">★ Feature</button>
                 <button type="button" @click="run('unfeature')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Un-feature</button>
+                <button type="button" @click="run('generate_barcode')" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">Generate barcodes</button>
+                <button type="button" @click="printLabels()" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">🏷 Print labels</button>
 
                 <div class="flex items-center gap-1">
                     <span class="text-xs text-slate-400">{{ $currentTenant->currencySymbol() }}</span>

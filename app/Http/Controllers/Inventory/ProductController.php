@@ -246,7 +246,7 @@ class ProductController extends Controller
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer'],
-            'action' => ['required', 'in:activate,deactivate,feature,unfeature,price,restock,reorder,reorder_demand'],
+            'action' => ['required', 'in:activate,deactivate,feature,unfeature,price,restock,reorder,reorder_demand,generate_barcode'],
             'price' => ['required_if:action,price', 'nullable', 'numeric', 'min:0'],
             'quantity' => ['required_if:action,restock', 'nullable', 'numeric', 'not_in:0'],
             'reorder' => ['required_if:action,reorder', 'nullable', 'numeric', 'min:0'],
@@ -334,9 +334,52 @@ class ProductController extends Controller
                 }
                 $msg = "Set reorder to {$coverDays} day(s) of demand (90-day average) on {$n} product(s).";
                 break;
+
+            case 'generate_barcode':
+                $barcode = app(\App\Services\Inventory\BarcodeService::class);
+                $assigned = 0;
+                foreach ($products as $product) {
+                    if (trim((string) $product->barcode) === '') {
+                        $product->update(['barcode' => $barcode->generate()]);
+                        $assigned++;
+                    }
+                }
+                $skipped = $n - $assigned;
+                $msg = "Generated barcodes for {$assigned} product(s)."
+                    .($skipped > 0 ? " {$skipped} already had one." : '');
+                break;
         }
 
         return back()->with('status', $msg);
+    }
+
+    /** Return a fresh, unique barcode value (for the "Generate" button on the form). */
+    public function nextBarcode()
+    {
+        return response()->json([
+            'barcode' => app(\App\Services\Inventory\BarcodeService::class)->generate(),
+        ]);
+    }
+
+    /**
+     * Printable barcode labels for the given product ids (?ids=1,2,3), with a
+     * label size preset and a per-product quantity. Barcodes are rendered in the
+     * browser with JsBarcode.
+     */
+    public function labels(Request $request)
+    {
+        $ids = collect(explode(',', (string) $request->query('ids', '')))
+            ->map(fn ($i) => (int) trim($i))->filter()->unique()->take(500)->all();
+
+        $qty = max(1, min(50, (int) $request->query('qty', 1)));
+        $size = in_array($request->query('size'), ['50x25', '40x30', '38x25'], true)
+            ? $request->query('size') : '50x25';
+
+        $products = $ids
+            ? Product::whereIn('id', $ids)->orderBy('name')->get()
+            : collect();
+
+        return view('inventory.products.labels', compact('products', 'qty', 'size'));
     }
 
     public function create()
