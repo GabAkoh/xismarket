@@ -35,6 +35,11 @@ class PosController extends Controller
         $products = Product::query()
             ->where('is_active', true)
             ->with('category')
+            // Eager-load just this warehouse's stock row so we don't query per
+            // product (an 8k-product catalogue otherwise fires 8k queries).
+            ->when($warehouse, fn ($q) => $q->with([
+                'stocks' => fn ($s) => $s->where('warehouse_id', $warehouse->id),
+            ]))
             ->orderBy('name')
             ->get()
             ->map(function (Product $p) use ($warehouse) {
@@ -49,7 +54,7 @@ class PosController extends Controller
                     'category' => $p->category?->name,
                     'image' => $p->image_path ? asset('storage/'.$p->image_path) : null,
                     'track_stock' => (bool) $p->track_stock,
-                    'stock' => $warehouse && method_exists($p, 'stockIn') ? $p->stockIn($warehouse) : null,
+                    'stock' => $warehouse ? (float) ($p->stocks->first()->quantity ?? 0) : null,
                 ];
             })
             ->values();

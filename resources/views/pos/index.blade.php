@@ -125,7 +125,12 @@
                         </button>
                     </template>
                 </div>
-                <p x-show="filteredProducts.length === 0" class="text-sm text-slate-400 text-center py-10">No products match your search.</p>
+                <p x-show="matchedProducts.length === 0" class="text-sm text-slate-400 text-center py-10">No products match your search.</p>
+                <p x-show="hiddenCount > 0" x-cloak class="text-xs text-slate-400 text-center py-3">
+                    Showing first <span x-text="displayLimit"></span> of <span x-text="matchedProducts.length"></span> —
+                    <span x-show="!search.trim()">search by name, SKU or barcode to find more.</span>
+                    <span x-show="search.trim()">refine your search to narrow the results.</span>
+                </p>
             </div>
         </div>
 
@@ -339,6 +344,7 @@ function posRegister() {
         cart: [],
         search: '',
         scanError: '',
+        displayLimit: 60,
         customerId: '',
         customerSearch: '',
         customerScanError: '',
@@ -388,7 +394,8 @@ function posRegister() {
             }
         },
 
-        get filteredProducts() {
+        // Full set of products matching the current search.
+        get matchedProducts() {
             const t = this.search.trim().toLowerCase();
             if (!t) return this.products;
             return this.products.filter(p =>
@@ -396,6 +403,14 @@ function posRegister() {
                 (p.sku && p.sku.toLowerCase().includes(t)) ||
                 (p.barcode && String(p.barcode).toLowerCase().includes(t))
             );
+        },
+        // Only render a capped slice — a large catalogue (thousands of items) is
+        // slow to render and impossible to scroll. Search narrows it down.
+        get filteredProducts() {
+            return this.matchedProducts.slice(0, this.displayLimit);
+        },
+        get hiddenCount() {
+            return Math.max(0, this.matchedProducts.length - this.displayLimit);
         },
         // Enter / scanner: prefer an EXACT barcode or SKU match, else the first fuzzy match.
         scanOrAddFirst() {
