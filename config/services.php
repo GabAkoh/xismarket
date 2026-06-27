@@ -35,6 +35,23 @@ return [
         ],
     ],
 
+    // Outbound SMS alerts (e.g. "new online order"). 'log' is a no-op driver
+    // that records the message to the log; switch to a real provider once you
+    // have credentials and map it in AppServiceProvider's SmsSender binding.
+    'sms' => [
+        'provider' => env('SMS_PROVIDER', 'log'),
+        'from' => env('SMS_FROM'),
+        'termii' => [
+            'key' => env('TERMII_API_KEY'),
+            'endpoint' => env('TERMII_ENDPOINT', 'https://api.ng.termii.com'),
+        ],
+        'twilio' => [
+            'sid' => env('TWILIO_SID'),
+            'token' => env('TWILIO_TOKEN'),
+            'from' => env('TWILIO_FROM'),
+        ],
+    ],
+
     // AI product-image generation (background removal, recolor, side views,
     // model shots). Set IMAGE_AI_KEY to enable; the 'stub' provider echoes the
     // source image for local testing without an external call.

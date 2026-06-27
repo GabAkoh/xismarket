@@ -143,6 +143,14 @@ class CheckoutController extends Controller
             }
         }
 
+        // Alert the store (owner + admins) that a new order arrived — email now,
+        // SMS once a provider is configured. Best-effort; never fail the order.
+        try {
+            app(\App\Services\Orders\OrderAlertService::class)->notifyNewOrder($order->fresh());
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         // Remember which orders this browser placed so only they can see the
         // confirmation (prevents enumerating other people's orders).
         $placed = $request->session()->get('shop.orders', []);
