@@ -29,6 +29,10 @@ class StorefrontSettingsController extends Controller
         $data = $request->validate([
             'phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:255'],
+            'order_alert_emails' => ['nullable', 'array', 'max:20'],
+            'order_alert_emails.*' => ['nullable', 'email', 'max:255'],
+            'order_alert_phones' => ['nullable', 'array', 'max:20'],
+            'order_alert_phones.*' => ['nullable', 'string', 'max:50'],
             'promo' => ['nullable', 'string', 'max:255'],
             'hero_title' => ['nullable', 'string', 'max:150'],
             'hero_subtitle' => ['nullable', 'string', 'max:500'],
@@ -131,6 +135,26 @@ class StorefrontSettingsController extends Controller
             ->all();
         if (! empty($social)) {
             $storefront['social'] = $social;
+        }
+
+        // Order alert recipients — trimmed, de-duped. Empty lists are omitted so
+        // OrderAlertService falls back to the store contact + owner accounts.
+        $alertEmails = collect($data['order_alert_emails'] ?? [])
+            ->map(fn ($e) => trim((string) $e))
+            ->filter()
+            ->unique()
+            ->values()->all();
+        if (! empty($alertEmails)) {
+            $storefront['order_alert_emails'] = $alertEmails;
+        }
+
+        $alertPhones = collect($data['order_alert_phones'] ?? [])
+            ->map(fn ($p) => trim((string) $p))
+            ->filter()
+            ->unique()
+            ->values()->all();
+        if (! empty($alertPhones)) {
+            $storefront['order_alert_phones'] = $alertPhones;
         }
 
         // Shipping methods — keep rows that have a label.

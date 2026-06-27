@@ -28,6 +28,51 @@
         <p class="mt-1 text-xs text-slate-400">Displayed in the shop footer, on POS receipts, and on order emails.</p>
     </x-card>
 
+    {{-- Order alert recipients --}}
+    @php
+        $alertEmailRows = array_values(old('order_alert_emails', $store->setting('storefront.order_alert_emails', [])) ?: []);
+        $alertPhoneRows = array_values(old('order_alert_phones', $store->setting('storefront.order_alert_phones', [])) ?: []);
+    @endphp
+    <x-card>
+        <h2 class="text-sm font-semibold text-slate-700 mb-1">Order alert recipients</h2>
+        <p class="text-xs text-slate-400 mb-3">Who to notify when a new online order is placed. Leave a list empty to fall back to the store contact (and owner accounts for email). SMS only sends once an SMS provider is configured.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {{-- Email recipients --}}
+            <div x-data="{ rows: @js(array_map(fn ($v) => ['value' => $v], $alertEmailRows)) }">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Email addresses</span>
+                    <button type="button" @click="rows.push({ value: '' })" class="text-sm font-medium text-indigo-600 hover:underline">+ Add</button>
+                </div>
+                <template x-for="(row, i) in rows" :key="i">
+                    <div class="mb-2 flex items-center gap-2">
+                        <input type="email" :name="`order_alert_emails[${i}]`" x-model="row.value" maxlength="255"
+                               placeholder="alerts@yourstore.com" class="flex-1 rounded-md border border-slate-300 p-2 text-sm">
+                        <button type="button" @click="rows.splice(i, 1)" class="w-5 text-slate-300 hover:text-red-500 text-sm" title="Remove">✕</button>
+                    </div>
+                </template>
+                <p x-show="rows.length === 0" class="text-xs text-slate-400">Falls back to store email + owner accounts.</p>
+            </div>
+
+            {{-- Phone recipients --}}
+            <div x-data="{ rows: @js(array_map(fn ($v) => ['value' => $v], $alertPhoneRows)) }">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Phone numbers (SMS)</span>
+                    <button type="button" @click="rows.push({ value: '' })" class="text-sm font-medium text-indigo-600 hover:underline">+ Add</button>
+                </div>
+                <template x-for="(row, i) in rows" :key="i">
+                    <div class="mb-2 flex items-center gap-2">
+                        <input type="tel" :name="`order_alert_phones[${i}]`" x-model="row.value" maxlength="50"
+                               placeholder="+234 801 234 5678" class="flex-1 rounded-md border border-slate-300 p-2 text-sm">
+                        <button type="button" @click="rows.splice(i, 1)" class="w-5 text-slate-300 hover:text-red-500 text-sm" title="Remove">✕</button>
+                    </div>
+                </template>
+                <p x-show="rows.length === 0" class="text-xs text-slate-400">Falls back to the store phone.</p>
+            </div>
+        </div>
+        @error('order_alert_emails.*')<p class="mt-2 text-xs text-red-600">{{ $message }}</p>@enderror
+    </x-card>
+
     {{-- Branding --}}
     <x-card>
         <h2 class="text-sm font-semibold text-slate-700 mb-3">Logo</h2>

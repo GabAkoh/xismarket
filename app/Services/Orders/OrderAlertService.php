@@ -45,9 +45,21 @@ class OrderAlertService
         }
     }
 
-    /** Store contact email plus the emails of active owners, deduped & validated. */
+    /**
+     * Email recipients. The list configured in storefront settings wins; when
+     * it's empty we fall back to the store contact plus active owner accounts.
+     * Always deduped & validated.
+     */
     protected function recipientEmails(Tenant $store): array
     {
+        $configured = array_filter(
+            (array) $store->setting('storefront.order_alert_emails', []),
+            fn ($e) => is_string($e) && filter_var($e, FILTER_VALIDATE_EMAIL),
+        );
+        if (! empty($configured)) {
+            return array_values(array_unique($configured));
+        }
+
         $owners = User::query()
             ->where('tenant_id', $store->id)
             ->where('is_owner', true)
@@ -64,13 +76,21 @@ class OrderAlertService
     }
 
     /**
-     * Phone numbers to text. Only the store's contact phone is on record today
-     * (users carry no phone column); add a configurable list later if needed.
+     * Phone numbers to text. The list configured in storefront settings wins;
+     * when it's empty we fall back to the store's contact phone.
      *
      * @return array<int,string>
      */
     protected function recipientPhones(Tenant $store): array
     {
+        $configured = array_values(array_filter(array_map(
+            fn ($p) => trim((string) $p),
+            (array) $store->setting('storefront.order_alert_phones', []),
+        )));
+        if (! empty($configured)) {
+            return array_values(array_unique($configured));
+        }
+
         $phone = trim((string) ($store->phone ?? ''));
 
         return $phone === '' ? [] : [$phone];
