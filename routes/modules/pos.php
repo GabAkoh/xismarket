@@ -17,6 +17,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     // --- Register / checkout ---
     Route::middleware('permission:pos.use')->group(function () {
         Route::get('pos', [PosController::class, 'index'])->name('pos.index');
+        Route::get('pos/products', [PosController::class, 'products'])->name('pos.products');
         Route::post('pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
         Route::get('pos/receipt/{sale}', [PosController::class, 'receipt'])->name('pos.receipt');
         Route::post('pos/receipt/{sale}/email', [PosController::class, 'emailReceipt'])->name('pos.receipt.email');

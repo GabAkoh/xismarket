@@ -14,6 +14,9 @@ use Illuminate\Http\Request;
 
 class PosController extends Controller
 {
+    /** How many products the register grid loads / shows per search. */
+    protected const PRODUCT_LIMIT = 60;
+
     public function __construct(protected Tenancy $tenancy) {}
 
     /** The register / checkout screen. */
@@ -32,32 +35,17 @@ class PosController extends Controller
 
         $warehouse = $this->warehouseFor($register);
 
-        $products = Product::query()
-            ->where('is_active', true)
-            ->with('category')
-            // Eager-load just this warehouse's stock row so we don't query per
-            // product (an 8k-product catalogue otherwise fires 8k queries).
-            ->when($warehouse, fn ($q) => $q->with([
-                'stocks' => fn ($s) => $s->where('warehouse_id', $warehouse->id),
-            ]))
+        // Only the first page of products is embedded; the rest are fetched on
+        // demand from the search endpoint so the register isn't shipping an
+        // 8k-product catalogue on every load.
+        $products = $this->productQuery($warehouse)
             ->orderBy('name')
+            ->limit(self::PRODUCT_LIMIT)
             ->get()
-            ->map(function (Product $p) use ($warehouse) {
-                return [
-                    'id' => $p->id,
-                    'name' => $p->name,
-                    'sku' => $p->sku,
-                    'barcode' => $p->barcode,
-                    'price' => (float) $p->sale_price,
-                    // Stored as a percent (e.g. 8.0); expose as a fraction for the cart math.
-                    'tax_rate' => (float) $p->tax_rate / 100,
-                    'category' => $p->category?->name,
-                    'image' => $p->image_path ? asset('storage/'.$p->image_path) : null,
-                    'track_stock' => (bool) $p->track_stock,
-                    'stock' => $warehouse ? (float) ($p->stocks->first()->quantity ?? 0) : null,
-                ];
-            })
+            ->map(fn (Product $p) => $this->productRow($p, $warehouse))
             ->values();
+
+        $productTotal = Product::where('is_active', true)->count();
 
         $customers = Customer::orderBy('name')
             ->get(['id', 'name', 'phone', 'loyalty_no', 'balance', 'loyalty_points'])
@@ -80,7 +68,73 @@ class PosController extends Controller
         $payMethods = $this->tenancy->current()->paymentMethods();
         $creditMethods = $this->tenancy->current()->creditPaymentMethodKeys();
 
-        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'customers', 'loyalty', 'gridColumns', 'payMethods', 'creditMethods'));
+        return view('pos.index', compact('register', 'registers', 'openShift', 'products', 'productTotal', 'customers', 'loyalty', 'gridColumns', 'payMethods', 'creditMethods'));
+    }
+
+    /**
+     * JSON product search for the register grid. Returns up to PRODUCT_LIMIT
+     * matches (exact barcode/SKU first), with the total match count so the UI
+     * can show "first N of M". Stock is for the requested register's warehouse.
+     */
+    public function products(Request $request)
+    {
+        $register = $request->filled('register')
+            ? Register::where('is_active', true)->find($request->integer('register'))
+            : null;
+        $warehouse = $this->warehouseFor($register);
+
+        $term = trim((string) $request->input('q', ''));
+        $query = $this->productQuery($warehouse);
+
+        if ($term !== '') {
+            $like = '%'.addcslashes($term, '%_\\').'%';
+            $query->where(fn ($w) => $w
+                ->where('name', 'like', $like)
+                ->orWhere('sku', 'like', $like)
+                ->orWhere('barcode', 'like', $like));
+        }
+
+        // Count the full match set before ordering, then surface exact
+        // barcode/SKU hits (a scan) first within the returned page.
+        $total = (clone $query)->count();
+        if ($term !== '') {
+            $query->orderByRaw('CASE WHEN barcode = ? OR sku = ? THEN 0 ELSE 1 END', [$term, $term]);
+        }
+
+        $products = $query->orderBy('name')->limit(self::PRODUCT_LIMIT)->get()
+            ->map(fn (Product $p) => $this->productRow($p, $warehouse))
+            ->values();
+
+        return response()->json(['products' => $products, 'total' => $total]);
+    }
+
+    /** Base product query for the register, eager-loading the warehouse stock row. */
+    protected function productQuery(?Warehouse $warehouse)
+    {
+        return Product::query()
+            ->where('is_active', true)
+            ->with('category')
+            ->when($warehouse, fn ($q) => $q->with([
+                'stocks' => fn ($s) => $s->where('warehouse_id', $warehouse->id),
+            ]));
+    }
+
+    /** Shape a product for the register grid / cart. */
+    protected function productRow(Product $p, ?Warehouse $warehouse): array
+    {
+        return [
+            'id' => $p->id,
+            'name' => $p->name,
+            'sku' => $p->sku,
+            'barcode' => $p->barcode,
+            'price' => (float) $p->sale_price,
+            // Stored as a percent (e.g. 8.0); expose as a fraction for the cart math.
+            'tax_rate' => (float) $p->tax_rate / 100,
+            'category' => $p->category?->name,
+            'image' => $p->image_path ? asset('storage/'.$p->image_path) : null,
+            'track_stock' => (bool) $p->track_stock,
+            'stock' => $warehouse ? (float) ($p->stocks->first()->quantity ?? 0) : null,
+        ];
     }
 
     /** Process a checkout and redirect to the printable receipt. */

@@ -88,6 +88,7 @@
                     <input type="text" x-ref="scan" x-model="search"
                            placeholder="Scan barcode or search by name / SKU…  (Enter to add)"
                            class="w-full rounded-md border border-slate-300 pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
+                           @input.debounce.300ms="searchProducts()"
                            @keydown.enter.prevent="scanOrAddFirst()">
                 </div>
                 <p x-show="scanError" x-cloak class="mt-1 text-xs text-red-500" x-text="scanError"></p>
@@ -125,9 +126,10 @@
                         </button>
                     </template>
                 </div>
-                <p x-show="matchedProducts.length === 0" class="text-sm text-slate-400 text-center py-10">No products match your search.</p>
+                <p x-show="loadingProducts && products.length === 0" class="text-sm text-slate-400 text-center py-10">Searching…</p>
+                <p x-show="!loadingProducts && products.length === 0" class="text-sm text-slate-400 text-center py-10">No products match your search.</p>
                 <p x-show="hiddenCount > 0" x-cloak class="text-xs text-slate-400 text-center py-3">
-                    Showing first <span x-text="displayLimit"></span> of <span x-text="matchedProducts.length"></span> —
+                    Showing first <span x-text="products.length"></span> of <span x-text="total"></span> —
                     <span x-show="!search.trim()">search by name, SKU or barcode to find more.</span>
                     <span x-show="search.trim()">refine your search to narrow the results.</span>
                 </p>
@@ -344,7 +346,12 @@ function posRegister() {
         cart: [],
         search: '',
         scanError: '',
-        displayLimit: 60,
+        // Server-side product search: the page embeds only the first page; the
+        // rest are fetched from the search endpoint as the cashier types/scans.
+        total: {{ (int) $productTotal }},
+        searchUrl: @js(route('pos.products')),
+        registerId: {{ $register?->id ?? 'null' }},
+        loadingProducts: false,
         customerId: '',
         customerSearch: '',
         customerScanError: '',
@@ -394,36 +401,56 @@ function posRegister() {
             }
         },
 
-        // Full set of products matching the current search.
-        get matchedProducts() {
-            const t = this.search.trim().toLowerCase();
-            if (!t) return this.products;
-            return this.products.filter(p =>
-                (p.name && p.name.toLowerCase().includes(t)) ||
-                (p.sku && p.sku.toLowerCase().includes(t)) ||
-                (p.barcode && String(p.barcode).toLowerCase().includes(t))
-            );
-        },
-        // Only render a capped slice — a large catalogue (thousands of items) is
-        // slow to render and impossible to scroll. Search narrows it down.
+        // The grid renders the current server page directly.
         get filteredProducts() {
-            return this.matchedProducts.slice(0, this.displayLimit);
+            return this.products;
         },
         get hiddenCount() {
-            return Math.max(0, this.matchedProducts.length - this.displayLimit);
+            return Math.max(0, this.total - this.products.length);
         },
-        // Enter / scanner: prefer an EXACT barcode or SKU match, else the first fuzzy match.
-        scanOrAddFirst() {
+        // Build the search endpoint URL for a term.
+        productSearchUrl(term) {
+            const url = new URL(this.searchUrl, window.location.origin);
+            if (term) url.searchParams.set('q', term);
+            if (this.registerId) url.searchParams.set('register', this.registerId);
+            return url;
+        },
+        async fetchProducts(term) {
+            const res = await fetch(this.productSearchUrl(term), {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) return { products: [], total: 0 };
+            return await res.json();
+        },
+        // Debounced grid search as the cashier types.
+        async searchProducts() {
+            this.loadingProducts = true;
+            try {
+                const data = await this.fetchProducts(this.search.trim());
+                this.products = data.products || [];
+                this.total = data.total ?? this.products.length;
+            } catch (e) {
+                // Keep the current list on a transient error.
+            } finally {
+                this.loadingProducts = false;
+            }
+        },
+        // Enter / scanner: fetch the term, prefer an EXACT barcode or SKU match,
+        // else the first result.
+        async scanOrAddFirst() {
             const t = this.search.trim();
             if (!t) return;
             const low = t.toLowerCase();
-            let p = this.products.find(p => p.barcode && String(p.barcode).toLowerCase() === low)
-                 || this.products.find(p => p.sku && p.sku.toLowerCase() === low)
-                 || this.filteredProducts[0];
+            const list = (await this.fetchProducts(t)).products || [];
+            const p = list.find(x => x.barcode && String(x.barcode).toLowerCase() === low)
+                   || list.find(x => x.sku && x.sku.toLowerCase() === low)
+                   || list[0];
             if (p) {
                 this.addToCart(p);
                 this.search = '';
                 this.scanError = '';
+                this.searchProducts();   // reset the grid to the initial page
             } else {
                 this.scanError = 'No product found for "' + t + '".';
             }
