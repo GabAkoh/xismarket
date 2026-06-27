@@ -88,6 +88,80 @@ class Tenant extends Model
         ));
     }
 
+    /**
+     * Built-in cash-drawer reasons (Shopify-style cash in / out) used when a
+     * tenant hasn't configured its own. Each maps to the counterpart account the
+     * journal posts to (the cash leg is always 1000).
+     *
+     * @var array<int, array{key:string, label:string, type:string, account:string}>
+     */
+    public const DEFAULT_CASH_REASONS = [
+        ['key' => 'bank', 'label' => 'From bank / safe', 'type' => 'in', 'account' => '1010'],
+        ['key' => 'owner', 'label' => 'Owner contribution', 'type' => 'in', 'account' => '3000'],
+        ['key' => 'other', 'label' => 'Other', 'type' => 'in', 'account' => '3000'],
+        ['key' => 'bank', 'label' => 'Bank deposit / safe drop', 'type' => 'out', 'account' => '1010'],
+        ['key' => 'expense', 'label' => 'Expense / petty cash', 'type' => 'out', 'account' => '6000'],
+        ['key' => 'owner', 'label' => 'Owner drawings', 'type' => 'out', 'account' => '3000'],
+        ['key' => 'other', 'label' => 'Other', 'type' => 'out', 'account' => '6000'],
+    ];
+
+    /**
+     * Configured cash-drawer reasons, falling back to the built-ins.
+     *
+     * @return array<int, array{key:string, label:string, type:string, account:string}>
+     */
+    public function cashReasons(): array
+    {
+        $rows = $this->setting('pos.cash_reasons');
+
+        if (! is_array($rows) || $rows === []) {
+            return self::DEFAULT_CASH_REASONS;
+        }
+
+        return array_values(array_filter(array_map(function ($r) {
+            $key = trim((string) ($r['key'] ?? ''));
+            $label = trim((string) ($r['label'] ?? ''));
+
+            return ($key !== '' && $label !== '') ? [
+                'key' => $key,
+                'label' => $label,
+                'type' => ($r['type'] ?? 'in') === 'out' ? 'out' : 'in',
+                'account' => trim((string) ($r['account'] ?? '')),
+            ] : null;
+        }, $rows)));
+    }
+
+    /**
+     * key => label map for one direction ('in'|'out') — the POS reason dropdown.
+     *
+     * @return array<string, string>
+     */
+    public function cashReasonsByType(string $type): array
+    {
+        $type = $type === 'out' ? 'out' : 'in';
+
+        $out = [];
+        foreach ($this->cashReasons() as $r) {
+            if ($r['type'] === $type) {
+                $out[$r['key']] = $r['label'];
+            }
+        }
+
+        return $out ?: ['other' => 'Other'];
+    }
+
+    /** Counterpart account code configured for a (type, key) reason, or null. */
+    public function cashReasonAccount(string $type, string $key): ?string
+    {
+        foreach ($this->cashReasons() as $r) {
+            if ($r['type'] === $type && $r['key'] === $key && $r['account'] !== '') {
+                return $r['account'];
+            }
+        }
+
+        return null;
+    }
+
     /** Built-in shipping methods used when a tenant hasn't configured its own. */
     public const DEFAULT_SHIPPING_METHODS = [
         ['label' => 'Standard Delivery', 'fee' => 5.00, 'pickup' => false],

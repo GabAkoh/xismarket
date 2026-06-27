@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Pos\CashDrawerController;
+use App\Http\Controllers\Pos\CashReasonController;
 use App\Http\Controllers\Pos\CustomerController;
 use App\Http\Controllers\Pos\LoyaltyController;
 use App\Http\Controllers\Pos\PaymentMethodController;
@@ -93,5 +94,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         // Payment method (tender) configuration.
         Route::get('pos/payment-methods', [PaymentMethodController::class, 'edit'])->name('payment-methods.settings');
         Route::put('pos/payment-methods', [PaymentMethodController::class, 'update'])->name('payment-methods.update');
+
+        // Cash-drawer reason (cash in / out) configuration.
+        Route::get('pos/cash-reasons', [CashReasonController::class, 'edit'])->name('cash-reasons.settings');
+        Route::put('pos/cash-reasons', [CashReasonController::class, 'update'])->name('cash-reasons.update');
     });
 });

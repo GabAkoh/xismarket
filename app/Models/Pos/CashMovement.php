@@ -71,11 +71,18 @@ class CashMovement extends Model
         return round(($this->type === 'out' ? -1 : 1) * (float) $this->amount, 2);
     }
 
-    /** Human label for the reason, given the movement direction. */
+    /** Human label for the reason, resolved from the tenant's configured reasons. */
     public function reasonLabel(): string
     {
+        $store = app(\App\Support\Tenancy::class)->current();
+        $labels = $store?->cashReasonsByType($this->type) ?? [];
+        if (isset($labels[$this->reason])) {
+            return $labels[$this->reason];
+        }
+
+        // Fallbacks: built-in defaults, then a titleised key.
         $map = $this->type === 'out' ? self::OUT_REASONS : self::IN_REASONS;
 
-        return $map[$this->reason] ?? 'Other';
+        return $map[$this->reason] ?? \Illuminate\Support\Str::headline($this->reason);
     }
 }

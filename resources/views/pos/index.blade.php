@@ -24,7 +24,7 @@
         <div class="flex items-center gap-2">
             {{-- Cash in / Cash out — drawer adjustments on the open shift (Shopify-style) --}}
             @if ($register && $openShift)
-                <div x-data="{ show: false, type: 'in', reasons: { in: @js(\App\Models\Pos\CashMovement::IN_REASONS), out: @js(\App\Models\Pos\CashMovement::OUT_REASONS) } }" class="flex items-center gap-2">
+                <div x-data="{ show: false, type: 'in', reasons: { in: @js($currentTenant->cashReasonsByType('in')), out: @js($currentTenant->cashReasonsByType('out')) } }" class="flex items-center gap-2">
                     <button type="button" @click="type = 'in'; show = true"
                             class="rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100">Cash in</button>
                     <button type="button" @click="type = 'out'; show = true"

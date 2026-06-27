@@ -41,9 +41,9 @@ class CashDrawerService
             throw new \RuntimeException('Enter a cash amount greater than zero.');
         }
 
-        // Normalise the reason to one valid for this direction.
-        $valid = $type === 'out' ? CashMovement::OUT_REASONS : CashMovement::IN_REASONS;
-        if (! array_key_exists($reason, $valid)) {
+        // Normalise the reason to one configured for this direction.
+        $validKeys = array_keys($this->tenancy->current()?->cashReasonsByType($type) ?? []);
+        if (! in_array($reason, $validKeys, true)) {
             $reason = 'other';
         }
 
@@ -69,11 +69,17 @@ class CashDrawerService
     }
 
     /**
-     * Counterpart chart-of-accounts code for a (type, reason) pair.
-     * Falls back to a sensible default per direction.
+     * Counterpart chart-of-accounts code for a (type, reason) pair. Uses the
+     * account configured for the reason in settings, then the built-in mapping,
+     * then a sensible default per direction.
      */
     protected function counterpartCode(string $type, string $reason): string
     {
+        $configured = $this->tenancy->current()?->cashReasonAccount($type, $reason);
+        if ($configured) {
+            return $configured;
+        }
+
         return match ([$type, $reason]) {
             ['in', 'bank'] => '1010',     // Bank / safe
             ['in', 'owner'] => '3000',    // Owner Equity
