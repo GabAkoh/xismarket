@@ -33,6 +33,8 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('sales/returns/export', [SalesController::class, 'returnsExport'])->name('sales.returns.export');
         Route::get('sales/report', [SalesController::class, 'report'])->name('sales.report');
         Route::get('sales/report/export', [SalesController::class, 'reportExport'])->name('sales.report.export');
+        Route::get('sales/payments-summary', [SalesController::class, 'paymentsSummary'])->name('sales.payments-summary');
+        Route::get('sales/payments-summary/export', [SalesController::class, 'paymentsSummaryExport'])->name('sales.payments-summary.export');
         Route::get('sales/{sale}', [SalesController::class, 'show'])->name('sales.show');
     });
 

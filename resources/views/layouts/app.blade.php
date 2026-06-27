@@ -41,6 +41,7 @@
                         ['route' => 'pos.index', 'label' => 'Register', 'perm' => 'pos.use'],
                         ['route' => 'sales.index', 'label' => 'Sales', 'perm' => 'sales.view'],
                         ['route' => 'sales.report', 'label' => 'Sales Report', 'perm' => 'sales.view'],
+                        ['route' => 'sales.payments-summary', 'label' => 'Payments Summary', 'perm' => 'sales.view'],
                         ['route' => 'customers.index', 'label' => 'Customers', 'perm' => 'customers.view'],
                         ['route' => 'wallets.index', 'label' => 'Wallets', 'perm' => 'customers.view'],
                         ['route' => 'loyalty.settings', 'label' => 'Loyalty Program', 'perm' => 'customers.manage'],

@@ -11,7 +11,7 @@ class Payment extends Model
     use BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id', 'sale_id', 'method', 'amount', 'reference', 'paid_at',
+        'tenant_id', 'sale_id', 'method', 'kind', 'amount', 'reference', 'paid_at',
     ];
 
     protected function casts(): array

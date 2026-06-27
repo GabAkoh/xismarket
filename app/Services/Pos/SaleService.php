@@ -254,6 +254,7 @@ class SaleService
                     'tenant_id' => $tenantId,
                     'sale_id' => $sale->id,
                     'method' => 'wallet',
+                    'kind' => 'sale',
                     'amount' => $walletUsed,
                     'reference' => null,
                     'paid_at' => $completedAt,
@@ -274,6 +275,7 @@ class SaleService
                     'tenant_id' => $tenantId,
                     'sale_id' => $sale->id,
                     'method' => $p['method'] ?? 'cash',
+                    'kind' => 'sale',
                     'amount' => $amount,
                     'reference' => $p['reference'] ?? null,
                     'paid_at' => $completedAt,
@@ -484,13 +486,13 @@ class SaleService
             if ($walletInc > 0) {
                 Payment::create([
                     'tenant_id' => $this->tenancy->id(), 'sale_id' => $sale->id,
-                    'method' => 'wallet', 'amount' => -$walletInc, 'reference' => $ref, 'paid_at' => now(),
+                    'method' => 'wallet', 'kind' => 'refund', 'amount' => -$walletInc, 'reference' => $ref, 'paid_at' => now(),
                 ]);
             }
             if ($cashRefund > 0) {
                 Payment::create([
                     'tenant_id' => $this->tenancy->id(), 'sale_id' => $sale->id,
-                    'method' => 'cash', 'amount' => -$cashRefund, 'reference' => $ref, 'paid_at' => now(),
+                    'method' => 'cash', 'kind' => 'refund', 'amount' => -$cashRefund, 'reference' => $ref, 'paid_at' => now(),
                 ]);
             }
 
@@ -557,6 +559,7 @@ class SaleService
                 'tenant_id' => $this->tenancy->id(),
                 'sale_id' => $sale->id,
                 'method' => $method,
+                'kind' => 'settlement',
                 'amount' => $applied,
                 'reference' => $data['reference'] ?? null,
                 'paid_at' => now(),
@@ -646,6 +649,7 @@ class SaleService
                     'tenant_id' => $this->tenancy->id(),
                     'sale_id' => $sale->id,
                     'method' => $method,
+                    'kind' => 'settlement',
                     'amount' => $pay,
                     'reference' => $reference,
                     'paid_at' => now(),

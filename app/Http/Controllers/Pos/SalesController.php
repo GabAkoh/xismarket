@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
 use App\Models\Orders\Order;
+use App\Models\Pos\CashMovement;
 use App\Models\Pos\Payment;
 use App\Models\Pos\Sale;
 use App\Models\Pos\SaleItem;
@@ -151,6 +152,159 @@ class SalesController extends Controller
     public function report(Request $request)
     {
         return view('sales.report', $this->reportData($request));
+    }
+
+    /**
+     * Payments summary: every money movement in the period grouped by source —
+     * POS sales, customer settlements, online sales, cash in (received) and cash
+     * out + refunds (paid out) — each broken down by payment method.
+     */
+    public function paymentsSummary(Request $request)
+    {
+        return view('sales.payments-summary', $this->paymentsSummaryData($request));
+    }
+
+    /** CSV of the payments summary (every source + the combined method mix). */
+    public function paymentsSummaryExport(Request $request)
+    {
+        $data = $this->paymentsSummaryData($request);
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $filename = 'payments-summary-'.$data['from']->toDateString().'-to-'.$data['to']->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($data, $num) {
+            $out = fopen('php://output', 'w');
+            $put = fn ($row) => fputcsv($out, $row, ',', '"', '');
+
+            $put(['Payments summary', $data['from']->toDateString().' to '.$data['to']->toDateString()]);
+            $put([]);
+
+            $section = function (string $title, $rows, float $total) use ($put, $num) {
+                $put([$title, 'Count', 'Amount']);
+                foreach ($rows as $r) {
+                    $put([$r->label, $r->n, $num($r->amount)]);
+                }
+                $put(['Subtotal', '', $num($total)]);
+                $put([]);
+            };
+
+            foreach ($data['sources'] as $s) {
+                $section($s['title'].' (received)', $s['rows'], $s['total']);
+            }
+            foreach ($data['outflows'] as $s) {
+                $section($s['title'].' (paid out)', $s['rows'], $s['total']);
+            }
+            $section('All received by method', $data['combined'], $data['totalReceived']);
+
+            $put(['Totals']);
+            $put(['Total received', '', $num($data['totalReceived'])]);
+            $put(['Total paid out', '', $num($data['totalOut'])]);
+            $put(['Net movement', '', $num($data['net'])]);
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Assemble the payments summary for the request's date range.
+     *
+     * @return array{from: Carbon, to: Carbon, sources: array, outflows: array, combined: \Illuminate\Support\Collection, totalReceived: float, totalOut: float, net: float}
+     */
+    protected function paymentsSummaryData(Request $request): array
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : now()->endOfDay();
+
+        $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
+        $methodLabel = fn ($m) => $labels[$m] ?? ucfirst((string) ($m ?: 'other'));
+        $row = fn ($method, $label, $n, $amount) => (object) [
+            'method' => $method, 'label' => $label, 'n' => (int) $n, 'amount' => round((float) $amount, 2),
+        ];
+
+        // POS payments table: sales (checkout), settlements (later), refunds (negative).
+        $pos = Payment::query()
+            ->whereHas('sale', fn ($q) => $q->where('status', '!=', 'void'))
+            ->whereBetween('paid_at', [$from, $to])
+            ->selectRaw('kind, method, SUM(amount) as amount, COUNT(*) as n')
+            ->groupBy('kind', 'method')
+            ->get();
+
+        $posByKind = fn (string $kind, bool $abs = false) => $pos
+            ->where('kind', $kind)
+            ->map(fn ($r) => $row($r->method, $methodLabel($r->method), $r->n, $abs ? abs((float) $r->amount) : $r->amount))
+            ->sortByDesc('amount')->values();
+
+        $posSales = $posByKind('sale');
+        $settlements = $posByKind('settlement');
+        $posRefunds = $posByKind('refund', abs: true);
+
+        // Online order payments (paid in the period).
+        $online = collect();
+        $onlineRefunds = 0.0;
+        if (class_exists(Order::class)) {
+            $online = Order::query()
+                ->whereIn('payment_status', ['paid', 'refunded'])
+                ->whereNotNull('paid_at')
+                ->whereBetween('paid_at', [$from, $to])
+                ->selectRaw('payment_method, SUM(paid_total) as amount, COUNT(*) as n')
+                ->groupBy('payment_method')
+                ->get()
+                ->map(fn ($r) => $row($r->payment_method ?: 'card', $methodLabel($r->payment_method ?: 'card'), $r->n, $r->amount))
+                ->sortByDesc('amount')->values();
+
+            $onlineRefunds = round((float) Order::where('payment_status', 'refunded')
+                ->whereBetween('refunded_at', [$from, $to])->sum('total'), 2);
+        }
+
+        // Cash drawer movements, grouped by reason.
+        $cashIn = collect();
+        $cashOut = collect();
+        if (class_exists(CashMovement::class)) {
+            $cm = CashMovement::query()
+                ->whereBetween('created_at', [$from, $to])
+                ->selectRaw('type, reason, SUM(amount) as amount, COUNT(*) as n')
+                ->groupBy('type', 'reason')->get();
+
+            $mapCm = fn (string $type) => $cm->where('type', $type)
+                ->map(fn ($r) => $row($r->reason, ucfirst(str_replace('_', ' ', (string) $r->reason)), $r->n, $r->amount))
+                ->sortByDesc('amount')->values();
+
+            $cashIn = $mapCm('in');
+            $cashOut = $mapCm('out');
+        }
+
+        // Online refunds folded into the POS-refunds section as a single line.
+        if ($onlineRefunds > 0) {
+            $posRefunds = $posRefunds->push($row('online', 'Online refunds', 0, $onlineRefunds))->values();
+        }
+
+        $sum = fn ($c) => round($c->sum('amount'), 2);
+
+        // Combined "received by method" across POS sales + settlements + online.
+        $combined = collect()->concat($posSales)->concat($settlements)->concat($online)
+            ->groupBy('method')
+            ->map(fn ($g, $m) => $row($m, $methodLabel($m), $g->sum('n'), $g->sum('amount')))
+            ->sortByDesc('amount')->values();
+
+        $sources = [
+            ['key' => 'pos', 'title' => 'POS sales', 'rows' => $posSales, 'total' => $sum($posSales)],
+            ['key' => 'settlements', 'title' => 'Customer settlements', 'rows' => $settlements, 'total' => $sum($settlements)],
+            ['key' => 'online', 'title' => 'Online sales', 'rows' => $online, 'total' => $sum($online)],
+            ['key' => 'cash_in', 'title' => 'Cash in', 'rows' => $cashIn, 'total' => $sum($cashIn)],
+        ];
+        $outflows = [
+            ['key' => 'cash_out', 'title' => 'Cash out', 'rows' => $cashOut, 'total' => $sum($cashOut)],
+            ['key' => 'refunds', 'title' => 'Refunds', 'rows' => $posRefunds, 'total' => $sum($posRefunds)],
+        ];
+
+        $totalReceived = round($sum($posSales) + $sum($settlements) + $sum($online) + $sum($cashIn), 2);
+        $totalOut = round($sum($cashOut) + $sum($posRefunds), 2);
+        $net = round($totalReceived - $totalOut, 2);
+
+        return compact('from', 'to', 'sources', 'outflows', 'combined', 'totalReceived', 'totalOut', 'net');
     }
 
     /**
