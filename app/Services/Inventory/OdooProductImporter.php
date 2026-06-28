@@ -422,6 +422,14 @@ class OdooProductImporter
                 continue;
             }
 
+            // Only fill products that have no image yet — never clobber an
+            // existing image (e.g. a higher-res one already set from Shopify).
+            if ($product->image_path) {
+                $result['skipped']++;
+
+                continue;
+            }
+
             $bytes = $this->decodeBase64Image($raw);
             $stored = $bytes !== null ? $this->storeImageData($bytes) : null;
             if (! $stored) {
@@ -430,12 +438,8 @@ class OdooProductImporter
                 continue;
             }
 
-            $old = $product->image_path;
             $product->update(['image_path' => $stored]);
             $variant?->update(['image_path' => $stored]);
-            if ($old && $old !== $stored) {
-                Storage::disk('public')->delete($old);
-            }
             $result['images']++;
         }
         fclose($fh);
