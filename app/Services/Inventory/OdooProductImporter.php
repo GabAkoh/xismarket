@@ -142,57 +142,83 @@ class OdooProductImporter
     }
 
     /**
-     * Update the sale price and/or active status of products that already exist
-     * here (matched by name). Rows with no matching product are skipped.
+     * Update the sale price and/or on-hand quantity of products that already
+     * exist here (matched by Internal Reference, then name). Quantity is set to
+     * the file's value via a stock adjustment (delta from the current on-hand),
+     * keeping the inventory ledger consistent. Rows with no match are skipped.
      *
      * @param  resource  $fh
      */
     protected function runUpdate($fh, callable $col, array $idx, array $result): array
     {
-        if ($idx['price'] === null && $idx['active'] === null) {
+        if ($idx['price'] === null && $idx['qty'] === null) {
             fclose($fh);
-            $result['errors'][] = 'No Sales Price or status column found — nothing to update.';
+            $result['errors'][] = 'No Sales Price or Quantity On Hand column found — nothing to update.';
 
             return $result;
         }
 
-        // name key => product id (last occurrence wins).
+        // Match on Internal Reference (SKU) first — stable and encoding-safe —
+        // then fall back to name. (last occurrence wins)
+        $bySku = [];
         $byName = [];
-        foreach (Product::query()->get(['id', 'name']) as $p) {
+        foreach (Product::query()->get(['id', 'sku', 'name']) as $p) {
+            if (trim((string) $p->sku) !== '') {
+                $bySku[strtolower(trim($p->sku))] = $p->id;
+            }
             $byName[$this->key($p->name)] = $p->id;
         }
+
+        $warehouse = ($idx['qty'] !== null && class_exists(Warehouse::class)) ? Warehouse::default() : null;
+        $stock = ($warehouse && class_exists(StockService::class)) ? app(StockService::class) : null;
 
         $rowNum = 1;
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
             $rowNum++;
             $name = $col($row, 'name');
-            if ($name === '') {
+            $sku = $col($row, 'sku');
+            if ($name === '' && $sku === '') {
                 continue;
             }
 
-            $id = $byName[$this->key($name)] ?? null;
+            $id = ($sku !== '' ? ($bySku[strtolower($sku)] ?? null) : null)
+                ?? ($name !== '' ? ($byName[$this->key($name)] ?? null) : null);
             if (! $id) {
                 $result['skipped']++;   // not the same product — leave it alone
                 continue;
             }
 
-            $changes = [];
-            $price = $col($row, 'price');
-            if ($idx['price'] !== null && is_numeric($price)) {
-                $changes['sale_price'] = (float) $price;
-            }
-            if ($idx['active'] !== null && $col($row, 'active') !== '') {
-                $changes['is_active'] = $this->isActive($col($row, 'active'));
-            }
-
-            if ($changes === []) {
-                $result['skipped']++;   // matched but nothing to change in this row
-                continue;
-            }
-
             try {
-                Product::where('id', $id)->update($changes);
-                $result['updated']++;
+                $changed = false;
+
+                // Sale price.
+                $price = $this->number($col($row, 'price'));
+                if ($idx['price'] !== null && $price !== null) {
+                    Product::where('id', $id)->update(['sale_price' => $price]);
+                    $changed = true;
+                }
+
+                // On-hand quantity → set to the file value via an adjustment.
+                $target = $this->number($col($row, 'qty'));
+                if ($idx['qty'] !== null && $target !== null && $stock && $warehouse) {
+                    $product = Product::find($id);
+                    if ($product) {
+                        $current = round($product->stockIn($warehouse), 3);
+                        $delta = round($target - $current, 3);
+                        if ($delta != 0.0) {
+                            $stock->recordMovement(
+                                $product, $warehouse, 'adjustment', $delta,
+                                (float) $product->cost_price, null, 'Odoo update',
+                            );
+                        }
+                        if (! $product->track_stock) {
+                            $product->update(['track_stock' => true]);
+                        }
+                        $changed = true;
+                    }
+                }
+
+                $changed ? $result['updated']++ : $result['skipped']++;
             } catch (\Throwable $e) {
                 $result['skipped']++;
                 $result['errors'][] = "Row {$rowNum} ({$name}): ".$e->getMessage();
@@ -206,9 +232,9 @@ class OdooProductImporter
 
     protected function createProduct(array $row, callable $col, string $name, ?Warehouse $warehouse, array &$result): void
     {
-        $cost = (float) ($col($row, 'cost') ?: 0);
-        $qty = $col($row, 'qty');
-        $trackStock = is_numeric($qty);
+        $cost = $this->number($col($row, 'cost')) ?? 0.0;
+        $qty = $this->number($col($row, 'qty'));
+        $trackStock = $qty !== null;
 
         $product = Product::create([
             'name' => $name,
@@ -217,7 +243,7 @@ class OdooProductImporter
             'description' => $col($row, 'description') ?: null,
             'category_id' => $this->categoryId($col($row, 'category')),
             'cost_price' => $cost,
-            'sale_price' => (float) ($col($row, 'price') ?: 0),
+            'sale_price' => $this->number($col($row, 'price')) ?? 0.0,
             'tax_rate' => 0,
             'track_stock' => $trackStock,
             'is_active' => $this->isActive($col($row, 'active')),
@@ -225,11 +251,24 @@ class OdooProductImporter
         $result['created']++;
 
         // Opening stock from "Quantity On Hand".
-        if ($trackStock && $warehouse && (float) $qty != 0 && class_exists(StockService::class)) {
+        if ($trackStock && $warehouse && $qty != 0.0 && class_exists(StockService::class)) {
             app(StockService::class)->recordMovement(
-                $product, $warehouse, 'import', (float) $qty, $cost, null, 'Odoo import',
+                $product, $warehouse, 'import', $qty, $cost, null, 'Odoo import',
             );
         }
+    }
+
+    /**
+     * Parse a numeric cell tolerant of currency symbols and thousands
+     * separators — e.g. Odoo's "530,000.00" or "N 1,200.50" → 530000.0 / 1200.5.
+     * Returns null when there's no usable number.
+     */
+    protected function number(string $value): ?float
+    {
+        $v = str_replace(',', '', trim($value));     // drop thousands separators
+        $v = preg_replace('/[^0-9.\-]/', '', $v);    // strip currency symbols/spaces
+
+        return ($v !== '' && is_numeric($v)) ? (float) $v : null;
     }
 
     /** A SKU that's unique per tenant: the Internal Reference, else a slug of the name. */
