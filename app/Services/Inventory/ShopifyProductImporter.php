@@ -4,6 +4,7 @@ namespace App\Services\Inventory;
 
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
+use App\Models\Inventory\ProductVariant;
 use App\Models\Inventory\Warehouse;
 use App\Support\Tenancy;
 use Illuminate\Http\Client\Pool;
@@ -39,6 +40,9 @@ class ShopifyProductImporter
         'type' => ['type', 'producttype', 'productcategory', 'category', 'categories', 'collection'],
         'published' => ['published', 'visible'],
         'status' => ['status'],
+        'option1name' => ['option1name'],
+        'option2name' => ['option2name'],
+        'option3name' => ['option3name'],
         'option1' => ['option1value', 'option1', 'variant', 'variantname'],
         'option2' => ['option2value', 'option2'],
         'option3' => ['option3value', 'option3'],
@@ -65,7 +69,7 @@ class ShopifyProductImporter
      */
     public function import(string $path, bool $downloadImages = true, bool $refreshImages = false): array
     {
-        $result = ['created' => 0, 'updated' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
+        $result = ['created' => 0, 'updated' => 0, 'variants' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
 
         if (! is_file($path) || ! is_readable($path)) {
             $result['errors'][] = 'Import file not found or unreadable: '.$path;
@@ -158,17 +162,25 @@ class ShopifyProductImporter
                     'category' => $col($row, 'type'),
                     'active' => $this->isActive($col($row, 'status'), $col($row, 'published')),
                     'image' => $col($row, 'image'),
+                    'option_names' => [$col($row, 'option1name'), $col($row, 'option2name'), $col($row, 'option3name')],
+                    'product' => null,   // the Product, created on the first variant row
+                    'position' => 0,     // variant position within the product
                 ];
             }
-            $ctx = $context[$handle] ?? null;
+            if (! isset($context[$handle])) {
+                continue;
+            }
 
-            // Only variant rows (a SKU or price) become products; skip image-only rows.
-            if (! $ctx || ($col($row, 'sku') === '' && $col($row, 'price') === '')) {
+            // Only variant rows (a SKU or price) create variants; skip image-only rows.
+            if ($col($row, 'sku') === '' && $col($row, 'price') === '') {
                 continue;
             }
 
             try {
-                $this->importVariant($row, $col, $ctx, $handle, $rowNum, $warehouse, $downloadImages, $refreshImages, $pendingImages, $result);
+                if ($context[$handle]['product'] === null) {
+                    $context[$handle]['product'] = $this->createProduct($context[$handle], $downloadImages, $refreshImages, $pendingImages, $result);
+                }
+                $this->importVariant($row, $col, $context[$handle], $warehouse, $result);
             } catch (\Throwable $e) {
                 $result['skipped']++;
                 $result['errors'][] = "Row {$rowNum}: ".$e->getMessage();
@@ -198,58 +210,108 @@ class ShopifyProductImporter
         return strtolower(preg_replace('/[^a-z0-9]/i', '', $header));
     }
 
-    protected function importVariant(array $row, callable $col, array $ctx, string $handle, int $rowNum, ?Warehouse $warehouse, bool $downloadImages, bool $refreshImages, array &$pendingImages, array &$result): void
+    /** Create the parent Product for a Handle (option names + product-level fields). */
+    protected function createProduct(array $ctx, bool $downloadImages, bool $refreshImages, array &$pendingImages, array &$result): Product
     {
-        // Distinguish variants by their option values (skip Shopify's "Default Title").
-        $opts = array_values(array_filter(
-            [$col($row, 'option1'), $col($row, 'option2'), $col($row, 'option3')],
-            fn ($v) => $v !== '' && strtolower($v) !== 'default title',
-        ));
-        $name = $ctx['title'].($opts ? ' - '.implode(' / ', $opts) : '');
-
-        // Shopify prefixes numeric SKUs/barcodes with an apostrophe to force text
-        // format in spreadsheets — strip it so SKUs are clean and don't duplicate.
-        $sku = $this->cleanCode($col($row, 'sku'));
-        if ($sku === '') {
-            $sku = strtoupper(Str::slug($handle.'-'.implode('-', $opts))) ?: 'SHOPIFY-'.$rowNum;
+        $names = array_map(fn ($n) => trim((string) $n) ?: null, $ctx['option_names'] ?? []);
+        // Shopify's single "Title" option means "no real options".
+        if (($names[0] ?? null) !== null && strtolower($names[0]) === 'title') {
+            $names = [null, null, null];
         }
 
-        $cost = (float) ($col($row, 'cost') ?: 0);
-        $invQty = $col($row, 'invqty');
-        $trackStock = $col($row, 'tracker') === 'shopify' || $invQty !== '';
-
-        $values = [
-            'name' => $name !== '' ? $name : $sku,
-            'barcode' => $this->cleanCode($col($row, 'barcode')) ?: null,
+        $product = Product::create([
+            'name' => $ctx['title'],
+            'option1_name' => $names[0] ?? null,
+            'option2_name' => $names[1] ?? null,
+            'option3_name' => $names[2] ?? null,
             'description' => $ctx['description'] ?: null,
             'category_id' => $this->categoryId($ctx['category']),
-            'cost_price' => $cost,
-            'sale_price' => (float) ($col($row, 'price') ?: 0),
             'tax_rate' => 0,
-            'track_stock' => $trackStock,
+            'track_stock' => true,
             'is_active' => $ctx['active'],
-        ];
+            // Denormalised default fields — filled from the first variant below.
+            'sku' => 'TMP-'.Str::random(10),
+            'sale_price' => 0,
+            'cost_price' => 0,
+        ]);
+        $result['created']++;
 
-        $product = Product::updateOrCreate(['sku' => $sku], $values);
-        $result[$product->wasRecentlyCreated ? 'created' : 'updated']++;
-
-        // Queue the image for a concurrent download pass after all rows are read.
-        // Skip products that already have an image (re-imports keep their existing
-        // image) unless a refresh was requested.
+        // Product cover image (downloaded after all rows are read).
         if ($downloadImages && ($refreshImages || ! $product->image_path)) {
-            $url = trim((string) ($col($row, 'variantimage') ?: $ctx['image']));
+            $url = trim((string) $ctx['image']);
             if ($url !== '' && preg_match('#^https?://#i', $url)) {
                 $pendingImages[$url][] = $product->id;
             }
         }
 
-        // Opening stock — only on first import to avoid double-counting on re-runs.
-        if ($product->wasRecentlyCreated && $trackStock && $warehouse && is_numeric($invQty) && (float) $invQty != 0
-            && class_exists(StockService::class)) {
+        return $product;
+    }
+
+    /** Create one variant under the product; the first variant fills the product's defaults. */
+    protected function importVariant(array $row, callable $col, array &$ctx, ?Warehouse $warehouse, array &$result): void
+    {
+        /** @var Product $product */
+        $product = $ctx['product'];
+
+        // Option values (drop Shopify's "Default Title").
+        $opts = array_map(function ($v) {
+            $v = trim((string) $v);
+
+            return (strtolower($v) === 'default title' || $v === '') ? null : $v;
+        }, [$col($row, 'option1'), $col($row, 'option2'), $col($row, 'option3')]);
+
+        $sku = $this->cleanCode($col($row, 'sku'));
+        if ($sku === '') {
+            $sku = strtoupper(Str::slug($product->name.'-'.implode('-', array_filter($opts)))) ?: 'VAR';
+        }
+        $sku = $this->uniqueSku($sku);
+
+        $cost = (float) ($col($row, 'cost') ?: 0);
+        $price = (float) ($col($row, 'price') ?: 0);
+        $invQty = $col($row, 'invqty');
+        $trackStock = $col($row, 'tracker') === 'shopify' || $invQty !== '';
+
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'sku' => $sku,
+            'barcode' => $this->cleanCode($col($row, 'barcode')) ?: null,
+            'option1' => $opts[0], 'option2' => $opts[1], 'option3' => $opts[2],
+            'cost_price' => $cost,
+            'sale_price' => $price,
+            'position' => $ctx['position'],
+        ]);
+        $result['variants'] = ($result['variants'] ?? 0) + 1;
+
+        // First variant mirrors onto the product's denormalised default fields.
+        if ($ctx['position'] === 0) {
+            $product->update([
+                'sku' => $sku,
+                'barcode' => $variant->barcode,
+                'sale_price' => $price,
+                'cost_price' => $cost,
+                'track_stock' => $trackStock,
+            ]);
+        }
+        $ctx['position']++;
+
+        // Per-variant opening stock.
+        if ($trackStock && $warehouse && is_numeric($invQty) && (float) $invQty != 0 && class_exists(StockService::class)) {
             app(StockService::class)->recordMovement(
-                $product, $warehouse, 'import', (float) $invQty, $cost, null, 'Shopify import',
+                $product, $warehouse, 'import', (float) $invQty, $cost, null, 'Shopify import', $variant->id,
             );
         }
+    }
+
+    /** A SKU unique across both products and variants (tenant-scoped). */
+    protected function uniqueSku(string $base): string
+    {
+        $sku = $base;
+        $n = 1;
+        while (ProductVariant::where('sku', $sku)->exists() || Product::where('sku', $sku)->exists()) {
+            $sku = $base.'-'.(++$n);
+        }
+
+        return $sku;
     }
 
     protected function isActive(string $status, string $published): bool
