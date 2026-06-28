@@ -12,7 +12,7 @@ class SaleItem extends Model
     use BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id', 'sale_id', 'product_id', 'name', 'sku',
+        'tenant_id', 'sale_id', 'product_id', 'variant_id', 'name', 'sku',
         'quantity', 'returned_quantity', 'unit_price', 'unit_cost', 'tax_rate', 'discount', 'line_total',
     ];
 

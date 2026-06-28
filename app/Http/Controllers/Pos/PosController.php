@@ -114,26 +114,41 @@ class PosController extends Controller
         return Product::query()
             ->where('is_active', true)
             ->with('category')
+            ->with(['variants' => fn ($v) => $v->where('is_active', true)])
             ->when($warehouse, fn ($q) => $q->with([
-                'stocks' => fn ($s) => $s->where('warehouse_id', $warehouse->id),
+                'variants.stocks' => fn ($s) => $s->where('warehouse_id', $warehouse->id),
             ]));
     }
 
-    /** Shape a product for the register grid / cart. */
+    /** Shape a product (and its variants) for the register grid / cart. */
     protected function productRow(Product $p, ?Warehouse $warehouse): array
     {
+        $taxRate = (float) $p->tax_rate / 100;   // percent → fraction for cart math
+        $variants = $p->variants->map(fn ($v) => [
+            'id' => $v->id,
+            'label' => $v->optionLabel(),
+            'sku' => $v->sku,
+            'barcode' => $v->barcode,
+            'price' => (float) $v->sale_price,
+            'stock' => $warehouse ? (float) ($v->stocks->first()->quantity ?? 0) : null,
+        ])->values();
+
+        $prices = $variants->pluck('price');
+
         return [
             'id' => $p->id,
             'name' => $p->name,
             'sku' => $p->sku,
             'barcode' => $p->barcode,
-            'price' => (float) $p->sale_price,
-            // Stored as a percent (e.g. 8.0); expose as a fraction for the cart math.
-            'tax_rate' => (float) $p->tax_rate / 100,
+            'price' => $prices->isNotEmpty() ? (float) $prices->min() : (float) $p->sale_price,
+            'price_max' => $prices->isNotEmpty() ? (float) $prices->max() : (float) $p->sale_price,
+            'tax_rate' => $taxRate,
             'category' => $p->category?->name,
             'image' => $p->image_path ? asset('storage/'.$p->image_path) : null,
             'track_stock' => (bool) $p->track_stock,
-            'stock' => $warehouse ? (float) ($p->stocks->first()->quantity ?? 0) : null,
+            // Aggregate stock across variants (for the tile's sold-out check).
+            'stock' => $warehouse ? (float) $variants->sum('stock') : null,
+            'variants' => $variants,
         ];
     }
 
@@ -150,6 +165,7 @@ class PosController extends Controller
             'points_redeemed' => ['nullable', 'integer', 'min:0'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer'],
+            'items.*.variant_id' => ['nullable', 'integer'],
             'items.*.quantity' => ['required', 'numeric', 'min:0.001'],
             'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
