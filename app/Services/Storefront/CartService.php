@@ -66,28 +66,36 @@ class CartService
         Session::put($this->key(), $items);
     }
 
-    public function add(int $productId, int $qty = 1): void
+    public function add(int $productId, ?int $variantId = null, int $qty = 1): void
     {
         $items = $this->raw();
-        $items[$productId] = max(1, ($items[$productId] ?? 0) + $qty);
+        $k = $this->lineKey($productId, $variantId);
+        $items[$k] = max(1, ($items[$k] ?? 0) + $qty);
         $this->save($items);
     }
 
-    public function setQty(int $productId, int $qty): void
+    /** Cart key for a product+variant ("pid:vid"; vid 0 means the default variant). */
+    protected function lineKey(int $productId, ?int $variantId): string
+    {
+        return $productId.':'.($variantId ?: 0);
+    }
+
+    public function setQty(int $productId, ?int $variantId, int $qty): void
     {
         $items = $this->raw();
+        $k = $this->lineKey($productId, $variantId);
         if ($qty <= 0) {
-            unset($items[$productId]);
+            unset($items[$k]);
         } else {
-            $items[$productId] = $qty;
+            $items[$k] = $qty;
         }
         $this->save($items);
     }
 
-    public function remove(int $productId): void
+    public function remove(int $productId, ?int $variantId): void
     {
         $items = $this->raw();
-        unset($items[$productId]);
+        unset($items[$this->lineKey($productId, $variantId)]);
         $this->save($items);
     }
 
@@ -119,25 +127,40 @@ class CartService
             return [];
         }
 
-        $products = Product::whereIn('id', array_keys($items))
+        $productIds = array_map(fn ($k) => (int) explode(':', $k)[0], array_keys($items));
+        $products = Product::whereIn('id', $productIds)
             ->where('is_active', true)
+            ->with('variants')
             ->get()
             ->keyBy('id');
 
         $lines = [];
-        foreach ($items as $id => $qty) {
-            $product = $products->get($id);
+        foreach ($items as $key => $qty) {
+            [$pid, $vid] = array_pad(explode(':', (string) $key), 2, 0);
+            $product = $products->get((int) $pid);
             if (! $product) {
                 continue;
             }
+            // A specific variant, else the product's default variant.
+            $variant = (int) $vid
+                ? $product->variants->firstWhere('id', (int) $vid)
+                : $product->variants->first();
+            if (! $variant) {
+                continue;   // variant no longer exists
+            }
+
             $qty = (int) $qty;
-            $price = round((float) $product->sale_price, 2);
+            $price = round((float) $variant->sale_price, 2);
             $taxRate = (float) $product->tax_rate / 100;
             $lineNet = round($price * $qty, 2);
             $lineTax = round($lineNet * $taxRate, 2);
 
             $lines[] = [
                 'product' => $product,
+                'variant' => $variant,
+                'product_id' => $product->id,
+                'variant_id' => $variant->id,
+                'label' => $variant->optionLabel(),
                 'qty' => $qty,
                 'unit_price' => $price,
                 'tax_rate' => $taxRate,

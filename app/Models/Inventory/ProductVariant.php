@@ -58,6 +58,17 @@ class ProductVariant extends Model
         return (float) $this->stocks()->sum('quantity');
     }
 
+    /** No quantity on hand in the default warehouse (caller checks track_stock). */
+    public function isOutOfStock(): bool
+    {
+        if (! class_exists(Warehouse::class)) {
+            return false;
+        }
+        $wh = Warehouse::query()->where('is_default', true)->first() ?? Warehouse::query()->first();
+
+        return $wh ? $this->stockIn($wh) <= 0 : false;
+    }
+
     /** "Red / L" — the non-empty option values joined. Empty for a simple variant. */
     public function optionLabel(): string
     {

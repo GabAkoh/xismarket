@@ -111,12 +111,12 @@ class Product extends Model
         return $urls;
     }
 
-    /** Quantity on hand for this product in the given warehouse. */
+    /** Total quantity on hand for this product (all variants) in the warehouse. */
     public function stockIn(Warehouse $w): float
     {
-        return (float) ($this->stocks()
+        return (float) $this->stocks()
             ->where('warehouse_id', $w->id)
-            ->value('quantity') ?? 0);
+            ->sum('quantity');
     }
 
     /** Total quantity on hand across all warehouses. */

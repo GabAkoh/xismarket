@@ -252,7 +252,9 @@ class StorefrontController extends Controller
      */
     public function product($store, $product)
     {
-        $item = Product::where('id', (int) $product)->where('is_active', true)->firstOrFail();
+        $item = Product::where('id', (int) $product)->where('is_active', true)
+            ->with(['variants' => fn ($v) => $v->where('is_active', true)])
+            ->firstOrFail();
 
         return view('storefront.product', ['product' => $item]);
     }

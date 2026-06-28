@@ -81,10 +81,18 @@ class OrderService
                     continue;
                 }
 
+                // Resolve the ordered variant (price/cost/stock come from it).
+                $variant = ! empty($row['variant_id'])
+                    ? \App\Models\Inventory\ProductVariant::find($row['variant_id'])
+                    : null;
+                if ($variant && $variant->product_id !== $product->id) {
+                    $variant = null;
+                }
+
                 $unitPrice = isset($row['unit_price'])
                     ? round((float) $row['unit_price'], 2)
-                    : round((float) $product->sale_price, 2);
-                $unitCost = round((float) $product->cost_price, 2);
+                    : round((float) ($variant?->sale_price ?? $product->sale_price), 2);
+                $unitCost = round((float) ($variant?->cost_price ?? $product->cost_price), 2);
                 // Product tax_rate is stored as a percentage (e.g. 8.0 == 8%).
                 $taxRate = (float) $product->tax_rate / 100;
                 $discount = round((float) ($row['discount'] ?? 0), 2);
@@ -104,8 +112,11 @@ class OrderService
                 $lines[] = [
                     'tenant_id' => $tenantId,
                     'product_id' => $product->id,
-                    'name' => $product->name,
-                    'sku' => $product->sku,
+                    'variant_id' => $variant?->id,
+                    'name' => $variant && $variant->optionLabel() !== ''
+                        ? $product->name.' - '.$variant->optionLabel()
+                        : $product->name,
+                    'sku' => $variant?->sku ?? $product->sku,
                     'quantity' => $qty,
                     'unit_price' => $unitPrice,
                     'unit_cost' => $unitCost,
@@ -343,8 +354,14 @@ class OrderService
             if (! $product || ! $product->track_stock) {
                 continue;
             }
-            if ($product->stockIn($warehouse) <= 0) {
-                $names[] = $product->name;
+            $variant = ! empty($row['variant_id'])
+                ? \App\Models\Inventory\ProductVariant::find($row['variant_id'])
+                : null;
+            $onHand = $variant ? $variant->stockIn($warehouse) : $product->stockIn($warehouse);
+            if ($onHand <= 0) {
+                $names[] = $variant && $variant->optionLabel() !== ''
+                    ? $product->name.' - '.$variant->optionLabel()
+                    : $product->name;
             }
         }
 
@@ -404,6 +421,7 @@ class OrderService
                 (float) $item->unit_cost,
                 $order,
                 'Order '.$order->number,
+                $item->variant_id,
             );
         }
     }
@@ -441,6 +459,7 @@ class OrderService
                 (float) $item->unit_cost,
                 $order,
                 'Refund '.$order->number,
+                $item->variant_id,
             );
         }
     }
