@@ -204,6 +204,11 @@ class StorefrontController extends Controller
             ['name' => $data['name'] ?? null],
         );
 
+        // Re-subscribing after opting out clears the opt-out.
+        if (! $subscriber->wasRecentlyCreated && $subscriber->unsubscribed_at !== null) {
+            $subscriber->update(['unsubscribed_at' => null]);
+        }
+
         // Welcome email on first signup only (best-effort — never block the signup).
         if ($subscriber->wasRecentlyCreated) {
             $tenant = app(\App\Support\Tenancy::class)->current();
@@ -218,6 +223,20 @@ class StorefrontController extends Controller
         }
 
         return back()->with('status', "Thanks for joining the {$this->storeName()} community! We'll be in touch.");
+    }
+
+    /** One-click unsubscribe from the community mailing list (link in emails). */
+    public function unsubscribe($store, $token)
+    {
+        $subscriber = Subscriber::where('token', $token)->first();
+        if ($subscriber && $subscriber->unsubscribed_at === null) {
+            $subscriber->update(['unsubscribed_at' => now()]);
+        }
+
+        return view('storefront.unsubscribed', [
+            'store' => app(\App\Support\Tenancy::class)->current(),
+            'email' => $subscriber?->email,
+        ]);
     }
 
     /** Current store name (tenancy is resolved by the storefront middleware). */

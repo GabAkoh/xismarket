@@ -19,6 +19,7 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('subscribers/export', [SubscriberController::class, 'export'])->name('subscribers.export');
     });
     Route::middleware('permission:orders.manage')->group(function () {
+        Route::post('subscribers/broadcast', [SubscriberController::class, 'broadcast'])->name('subscribers.broadcast');
         Route::delete('subscribers/{subscriber}', [SubscriberController::class, 'destroy'])->name('subscribers.destroy');
     });
 

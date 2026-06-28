@@ -11,6 +11,7 @@ See you soon,<br>
 {{ $store->name }}
 
 <x-slot:subcopy>
-You're receiving this because you subscribed at {{ $store->name }}. If this wasn't you, you can ignore this email.
+You're receiving this because you subscribed at {{ $store->name }}.
+[Unsubscribe]({{ route('shop.unsubscribe', ['store' => $store->slug, 'token' => $subscriber->token]) }}) at any time.
 </x-slot:subcopy>
 </x-mail::message>

@@ -25,6 +25,7 @@ Route::middleware(['web', ResolveStoreTenant::class])
         Route::post('cart/remove', [CartController::class, 'remove'])->name('cart.remove');
 
         Route::post('subscribe', [StorefrontController::class, 'subscribe'])->name('subscribe');
+        Route::get('unsubscribe/{token}', [StorefrontController::class, 'unsubscribe'])->name('unsubscribe');
 
         // Customer accounts (Sign in / Sign up).
         Route::get('register', [CustomerAuthController::class, 'showRegister'])->name('register');
