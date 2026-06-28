@@ -85,7 +85,7 @@
         <div x-show="source === 'odoo'" x-cloak class="mt-4 rounded-md bg-slate-50 border border-slate-100 p-3 text-xs text-slate-500 space-y-1">
             <p class="font-semibold text-slate-600">How it works</p>
             <p>In Odoo: <span class="font-medium">Inventory or Sales → Products → select → Export</span>, choose <span class="font-medium">CSV</span> (include Name, Internal Reference, Barcode, Sales Price, Cost, Product Category, Quantity On Hand).</p>
-            <p x-show="mode === 'create'"><span class="font-medium text-slate-600">Create:</span> only products whose name isn't already here are added — existing ones are skipped. Name, category, price, cost, barcode and on-hand stock are mapped; tax rate defaults to 0.</p>
+            <p x-show="mode === 'create'"><span class="font-medium text-slate-600">Create:</span> only products not already here are added (matched by Internal Reference, then name) — existing ones are skipped. Name, category, price, cost, barcode and on-hand stock are mapped; tax rate defaults to 0.</p>
             <p x-show="mode === 'update'"><span class="font-medium text-slate-600">Update:</span> for products that already exist here (matched by Internal Reference, then name), the sale price and on-hand quantity are updated from the file (quantity is set to the file's value). Products not found here are skipped; nothing new is created. Prices with thousands separators (e.g. 530,000.00) are handled.</p>
             <p>The import runs in the background — the summary appears here when it finishes.</p>
         </div>

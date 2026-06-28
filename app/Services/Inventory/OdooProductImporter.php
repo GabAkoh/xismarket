@@ -10,8 +10,9 @@ use Illuminate\Support\Str;
 
 /**
  * Imports products from an Odoo product CSV export (Inventory/Sales → Products
- * → Export). One row per product. Only products whose NAME does not already
- * exist here are created — existing ones are skipped, never updated.
+ * → Export). One row per product. Products are matched on Internal Reference
+ * (SKU) — falling back to name when a row has none. In "create" mode only
+ * products that don't already exist here are added; existing ones are skipped.
  *
  * Header matching is lenient: headers are normalised (case/space/punctuation
  * insensitive) and resolved from a list of aliases, so both Odoo's technical
@@ -43,9 +44,10 @@ class OdooProductImporter
     public function __construct(protected Tenancy $tenancy) {}
 
     /**
-     * @param  string  $mode  'create' (only add products whose name isn't here)
-     *                        or 'update' (only update existing products' sale
-     *                        price + status, matched by name).
+     * @param  string  $mode  'create' (only add products not already here) or
+     *                        'update' (only update existing products' sale price
+     *                        + on-hand quantity). Matched by Internal Reference
+     *                        (SKU), falling back to name.
      * @return array{created:int, updated:int, images:int, skipped:int, errors:array<int,string>}
      */
     public function import(string $path, string $mode = 'create'): array
@@ -109,30 +111,46 @@ class OdooProductImporter
 
         $warehouse = class_exists(Warehouse::class) ? Warehouse::default() : null;
 
-        // Names already present in this store — the dedupe set (lower-cased).
-        $existing = Product::query()->pluck('name')
+        // Dedupe sets: existing Internal References (SKUs) — the primary key —
+        // and names as a fallback for rows that carry no reference.
+        $existingSku = Product::query()->whereNotNull('sku')->where('sku', '!=', '')
+            ->pluck('sku')->map(fn ($s) => strtolower(trim($s)))->flip();
+        $existingName = Product::query()->pluck('name')
             ->map(fn ($n) => $this->key($n))->flip();
 
         $rowNum = 1;
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
             $rowNum++;
             $name = $col($row, 'name');
-            if ($name === '') {
+            $sku = $col($row, 'sku');
+            if ($name === '' && $sku === '') {
                 continue; // blank line / sub-row
             }
 
-            $nameKey = $this->key($name);
-            if ($existing->has($nameKey)) {
+            $skuKey = $sku !== '' ? strtolower($sku) : null;
+            $nameKey = $name !== '' ? $this->key($name) : null;
+
+            // Skip when the reference already exists; for rows without a
+            // reference, fall back to matching on name.
+            $exists = $skuKey !== null
+                ? $existingSku->has($skuKey)
+                : ($nameKey !== null && $existingName->has($nameKey));
+            if ($exists) {
                 $result['skipped']++;   // already available here — skip
                 continue;
             }
 
             try {
-                $this->createProduct($row, $col, $name, $warehouse, $result);
-                $existing->put($nameKey, true);  // guard against duplicate names within the file
+                $this->createProduct($row, $col, $name !== '' ? $name : $sku, $warehouse, $result);
+                if ($skuKey !== null) {
+                    $existingSku->put($skuKey, true);  // guard against dups within the file
+                }
+                if ($nameKey !== null) {
+                    $existingName->put($nameKey, true);
+                }
             } catch (\Throwable $e) {
                 $result['skipped']++;
-                $result['errors'][] = "Row {$rowNum} ({$name}): ".$e->getMessage();
+                $result['errors'][] = "Row {$rowNum} (".($name !== '' ? $name : $sku)."): ".$e->getMessage();
             }
         }
 
