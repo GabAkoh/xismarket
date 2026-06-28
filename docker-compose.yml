@@ -34,6 +34,26 @@ services:
     networks:
       - xismarket
 
+  # Runs the Laravel scheduler (fires `schedule:run` every minute) so scheduled
+  # tasks like the weekly subscriber digest run without a host cron entry.
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: xismarket-scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan schedule:work
+    volumes:
+      - ./:/var/www
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - xismarket
+
   nginx:
     image: nginx:1.27-alpine
     container_name: xismarket-nginx
