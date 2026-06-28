@@ -25,17 +25,23 @@ class StockService
         ?float $unitCost = null,
         ?Model $reference = null,
         ?string $note = null,
+        ?int $variantId = null,
     ): StockMovement {
-        return DB::transaction(function () use ($p, $w, $type, $signedQty, $unitCost, $reference, $note) {
+        return DB::transaction(function () use ($p, $w, $type, $signedQty, $unitCost, $reference, $note, $variantId) {
+            // Stock is keyed per variant when one is given (the variant model),
+            // else per product (legacy / simple products).
             $stock = ProductStock::firstOrCreate(
-                ['product_id' => $p->id, 'warehouse_id' => $w->id],
-                ['quantity' => 0, 'reorder_level' => 0],
+                $variantId
+                    ? ['variant_id' => $variantId, 'warehouse_id' => $w->id]
+                    : ['product_id' => $p->id, 'warehouse_id' => $w->id],
+                ['product_id' => $p->id, 'quantity' => 0, 'reorder_level' => 0],
             );
 
             $stock->increment('quantity', $signedQty);
 
             return StockMovement::create([
                 'product_id' => $p->id,
+                'variant_id' => $variantId,
                 'warehouse_id' => $w->id,
                 'type' => $type,
                 'quantity' => $signedQty,

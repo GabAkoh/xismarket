@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
 use App\Models\Inventory\ProductStock;
+use App\Models\Inventory\ProductVariant;
 use App\Models\Inventory\Warehouse;
 use App\Services\Inventory\StockService;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
@@ -395,11 +397,15 @@ class ProductController extends Controller
         $data['track_stock'] = $request->boolean('track_stock');
         $data['is_active'] = $request->boolean('is_active');
         $data['is_featured'] = $request->boolean('is_featured');
-        unset($data['reorder_level']);   // lives on product_stocks, not products
+        $data['sku'] = $data['sku'] ?: 'TMP-'.Str::random(10);   // overwritten from the first variant
+        $data['cost_price'] = $data['cost_price'] ?? 0;
+        $data['sale_price'] = $data['sale_price'] ?? 0;
+        unset($data['reorder_level'], $data['variants']);   // not products columns
         $this->applyImage($request, $data);
         $this->stripGalleryKeys($data);
 
         $product = Product::create($data);
+        $this->syncVariants($product, $request);
         $this->applyReorderLevel($product, $request);
         $this->applyGallery($request, $product);
 
@@ -409,6 +415,7 @@ class ProductController extends Controller
     public function edit(Product $product)
     {
         $this->authorizeTenant($product);
+        $product->load('variants');
         $categories = Category::orderBy('name')->get();
         // Reorder level for the default warehouse (shown/edited on the form).
         $warehouse = Warehouse::default();
@@ -426,11 +433,15 @@ class ProductController extends Controller
         $data['track_stock'] = $request->boolean('track_stock');
         $data['is_active'] = $request->boolean('is_active');
         $data['is_featured'] = $request->boolean('is_featured');
-        unset($data['reorder_level']);
+        $data['sku'] = $data['sku'] ?: $product->sku;
+        $data['cost_price'] = $data['cost_price'] ?? $product->cost_price;
+        $data['sale_price'] = $data['sale_price'] ?? $product->sale_price;
+        unset($data['reorder_level'], $data['variants']);
         $this->applyImage($request, $data, $product);
         $this->stripGalleryKeys($data);
 
         $product->update($data);
+        $this->syncVariants($product, $request);
         $this->applyReorderLevel($product, $request);
         $this->applyGallery($request, $product);
 
@@ -451,6 +462,94 @@ class ProductController extends Controller
             ['product_id' => $product->id, 'warehouse_id' => $warehouse->id],
             ['reorder_level' => (float) $request->input('reorder_level')],
         );
+    }
+
+    /**
+     * Create/update/delete a product's variants from the form's variant grid,
+     * set each variant's stock, and mirror the first variant onto the product's
+     * denormalised default fields. A product always ends with at least one variant.
+     */
+    protected function syncVariants(Product $product, Request $request): void
+    {
+        $warehouse = Warehouse::default();
+        $kept = [];
+        $pos = 0;
+
+        foreach ($request->input('variants', []) as $row) {
+            $opts = [
+                trim((string) ($row['option1'] ?? '')) ?: null,
+                trim((string) ($row['option2'] ?? '')) ?: null,
+                trim((string) ($row['option3'] ?? '')) ?: null,
+            ];
+            $sku = trim((string) ($row['sku'] ?? ''));
+            if ($sku === '' && ! array_filter($opts)) {
+                continue;   // wholly empty row
+            }
+            if ($sku === '') {
+                $sku = $this->uniqueVariantSku($product, $opts);
+            }
+
+            $attrs = [
+                'product_id' => $product->id,
+                'sku' => $sku,
+                'barcode' => trim((string) ($row['barcode'] ?? '')) ?: null,
+                'option1' => $opts[0], 'option2' => $opts[1], 'option3' => $opts[2],
+                'cost_price' => (float) ($row['cost_price'] ?? 0),
+                'sale_price' => (float) ($row['sale_price'] ?? 0),
+                'is_active' => (bool) ($row['is_active'] ?? true),
+                'position' => $pos,
+            ];
+
+            $id = (int) ($row['id'] ?? 0);
+            $variant = $id ? $product->variants()->whereKey($id)->first() : null;
+            $variant ? $variant->update($attrs) : $variant = ProductVariant::create($attrs);
+            $kept[] = $variant->id;
+
+            // Set stock to the entered value via an adjustment (delta from current).
+            if ($warehouse && isset($row['stock']) && $row['stock'] !== '') {
+                $delta = round((float) $row['stock'] - $variant->stockIn($warehouse), 3);
+                if ($delta != 0.0) {
+                    $this->stock->recordMovement(
+                        $product, $warehouse, 'adjustment', $delta,
+                        (float) $variant->cost_price, null, 'Manual stock set', $variant->id,
+                    );
+                }
+            }
+            $pos++;
+        }
+
+        // Remove variants no longer present in the grid.
+        $product->variants()->whereNotIn('id', $kept ?: [0])->get()->each(function (ProductVariant $v) {
+            $v->stocks()->delete();
+            $v->movements()->delete();
+            $v->delete();
+        });
+
+        // Ensure at least one variant; mirror the first onto the product.
+        $first = $product->variants()->orderBy('position')->orderBy('id')->first();
+        if (! $first) {
+            $first = ProductVariant::create([
+                'product_id' => $product->id, 'sku' => $product->sku, 'barcode' => $product->barcode,
+                'sale_price' => $product->sale_price, 'cost_price' => $product->cost_price, 'position' => 0,
+            ]);
+        }
+        $product->update([
+            'sku' => $first->sku, 'barcode' => $first->barcode,
+            'sale_price' => $first->sale_price, 'cost_price' => $first->cost_price,
+        ]);
+    }
+
+    /** A variant SKU unique across products and variants for this tenant. */
+    protected function uniqueVariantSku(Product $product, array $opts): string
+    {
+        $base = strtoupper(Str::slug($product->name.'-'.implode('-', array_filter($opts)))) ?: 'VAR';
+        $sku = $base;
+        $n = 1;
+        while (ProductVariant::where('sku', $sku)->exists() || Product::where('sku', $sku)->exists()) {
+            $sku = $base.'-'.(++$n);
+        }
+
+        return $sku;
     }
 
     public function destroy(Product $product)
@@ -476,14 +575,29 @@ class ProductController extends Controller
         return $request->validate([
             'category_id' => ['nullable', Rule::exists('categories', 'id')->where('tenant_id', $tenantId)],
             'name' => ['required', 'string', 'max:255'],
+            // sku/prices are derived from the first variant (hidden mirror), so nullable here.
             'sku' => [
-                'required', 'string', 'max:100',
+                'nullable', 'string', 'max:100',
                 Rule::unique('products', 'sku')->where('tenant_id', $tenantId)->ignore($product?->id),
             ],
             'barcode' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
-            'cost_price' => ['required', 'numeric', 'min:0'],
-            'sale_price' => ['required', 'numeric', 'min:0'],
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
+            'sale_price' => ['nullable', 'numeric', 'min:0'],
+            'option1_name' => ['nullable', 'string', 'max:50'],
+            'option2_name' => ['nullable', 'string', 'max:50'],
+            'option3_name' => ['nullable', 'string', 'max:50'],
+            'variants' => ['nullable', 'array', 'max:200'],
+            'variants.*.id' => ['nullable', 'integer'],
+            'variants.*.sku' => ['nullable', 'string', 'max:100'],
+            'variants.*.barcode' => ['nullable', 'string', 'max:100'],
+            'variants.*.option1' => ['nullable', 'string', 'max:100'],
+            'variants.*.option2' => ['nullable', 'string', 'max:100'],
+            'variants.*.option3' => ['nullable', 'string', 'max:100'],
+            'variants.*.cost_price' => ['nullable', 'numeric', 'min:0'],
+            'variants.*.sale_price' => ['nullable', 'numeric', 'min:0'],
+            'variants.*.stock' => ['nullable', 'numeric'],
+            'variants.*.is_active' => ['nullable'],
             'tax_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'reorder_level' => ['nullable', 'numeric', 'min:0'],
             'track_stock' => ['boolean'],

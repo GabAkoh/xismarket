@@ -14,12 +14,16 @@
             <span class="text-[11px] uppercase tracking-wide text-slate-400">{{ $product->category->name }}</span>
         @endif
         <a href="{{ route('shop.product', ['product' => $product->id]) }}" class="text-sm font-medium text-slate-700 hover:text-indigo-600 leading-tight">{{ $product->name }}</a>
-        <div class="mt-1 font-bold text-indigo-600">{{ $symbol }} {{ number_format($product->sale_price, 2) }}</div>
+        <div class="mt-1 font-bold text-indigo-600">{{ $product->option1_name ? 'From ' : '' }}{{ $symbol }} {{ number_format($product->sale_price, 2) }}</div>
         @if ($product->isOutOfStock())
             <button type="button" disabled
                     class="mt-3 w-full rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400 cursor-not-allowed">
                 Sold out
             </button>
+        @elseif ($product->option1_name)
+            {{-- Variant product: choose options on the product page. --}}
+            <a href="{{ route('shop.product', ['product' => $product->id]) }}"
+               class="mt-3 block text-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Choose options</a>
         @else
             <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-3">
                 @csrf

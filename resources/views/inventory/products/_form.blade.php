@@ -1,24 +1,20 @@
+@php
+    $symbol = $currentTenant->currencySymbol() ?? '';
+    $wh = \App\Models\Inventory\Warehouse::default();
+    // Variant rows for the editor (one row per variant; one default row for a new product).
+    $variantRows = isset($product) && $product->exists
+        ? $product->variants->map(fn ($v) => [
+            'id' => $v->id, 'option1' => $v->option1, 'option2' => $v->option2, 'option3' => $v->option3,
+            'sku' => $v->sku, 'barcode' => $v->barcode,
+            'cost' => (float) $v->cost_price, 'price' => (float) $v->sale_price,
+            'stock' => $wh ? $v->stockIn($wh) : 0, 'active' => (bool) $v->is_active,
+        ])->values()->all()
+        : [];
+@endphp
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     <div>
         <label class="block text-sm font-medium text-slate-700">Name</label>
         <input name="name" value="{{ old('name', $product->name ?? '') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
-    </div>
-    <div>
-        <label class="block text-sm font-medium text-slate-700">SKU</label>
-        <input name="sku" value="{{ old('sku', $product->sku ?? '') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
-    </div>
-    <div x-data="{ async generate() {
-            const r = await fetch('{{ route('products.barcode.next') }}', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
-            if (r.ok) { this.$refs.bc.value = (await r.json()).barcode; }
-        } }">
-        <label class="block text-sm font-medium text-slate-700">Barcode</label>
-        <div class="mt-1 flex gap-2">
-            <input x-ref="bc" name="barcode" value="{{ old('barcode', $product->barcode ?? '') }}" class="flex-1 rounded-md border border-slate-300 p-2">
-            <button type="button" @click="generate()" class="rounded-md border border-slate-300 px-3 text-sm hover:bg-slate-50" title="Generate a unique barcode">Generate</button>
-        </div>
-        @if (! empty($product?->barcode))
-            <a href="{{ route('products.labels', ['ids' => $product->id]) }}" target="_blank" class="mt-1 inline-block text-xs text-indigo-600 hover:underline">🏷 Print label</a>
-        @endif
     </div>
     <div>
         <label class="block text-sm font-medium text-slate-700">Category</label>
@@ -30,14 +26,6 @@
         </select>
     </div>
     <div>
-        <label class="block text-sm font-medium text-slate-700">Cost price ({{ $currentTenant->currencySymbol() }})</label>
-        <input name="cost_price" type="number" step="0.01" min="0" value="{{ old('cost_price', $product->cost_price ?? '0.00') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
-    </div>
-    <div>
-        <label class="block text-sm font-medium text-slate-700">Sale price ({{ $currentTenant->currencySymbol() }})</label>
-        <input name="sale_price" type="number" step="0.01" min="0" value="{{ old('sale_price', $product->sale_price ?? '0.00') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
-    </div>
-    <div>
         <label class="block text-sm font-medium text-slate-700">Tax rate (%)</label>
         <input name="tax_rate" type="number" step="0.0001" min="0" value="{{ old('tax_rate', $product->tax_rate ?? '0') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
     </div>
@@ -47,6 +35,84 @@
         <p class="mt-1 text-xs text-slate-400">Flag for reorder when stock drops to this level. Leave blank for none.</p>
     </div>
 </div>
+
+{{-- ===== Variants ===== --}}
+<div class="mt-5" x-data="variantEditor({
+        rows: @js($variantRows),
+        opt1: @js(old('option1_name', $product->option1_name ?? '')),
+        opt2: @js(old('option2_name', $product->option2_name ?? '')),
+        opt3: @js(old('option3_name', $product->option3_name ?? '')),
+     })">
+    <h2 class="text-sm font-semibold text-slate-700">Variants</h2>
+    <p class="text-xs text-slate-400 mb-2">Name up to 3 option axes (e.g. Size, Colour) for a variant product. A simple product just has one row.</p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+        <input name="option1_name" x-model="opt1" maxlength="50" placeholder="Option 1 name (e.g. Size)" class="rounded-md border border-slate-300 p-2 text-sm">
+        <input name="option2_name" x-model="opt2" maxlength="50" placeholder="Option 2 name (e.g. Colour)" class="rounded-md border border-slate-300 p-2 text-sm">
+        <input name="option3_name" x-model="opt3" maxlength="50" placeholder="Option 3 name" class="rounded-md border border-slate-300 p-2 text-sm">
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="text-left text-slate-400 border-b">
+                <tr>
+                    <th class="py-1 pr-2" x-show="opt1" x-text="opt1 || 'Option 1'"></th>
+                    <th class="py-1 pr-2" x-show="opt2" x-text="opt2 || 'Option 2'"></th>
+                    <th class="py-1 pr-2" x-show="opt3" x-text="opt3 || 'Option 3'"></th>
+                    <th class="py-1 pr-2">SKU</th>
+                    <th class="py-1 pr-2">Cost</th>
+                    <th class="py-1 pr-2">Price</th>
+                    <th class="py-1 pr-2">Stock</th>
+                    <th class="py-1 pr-2">Active</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="(r, i) in rows" :key="i">
+                    <tr>
+                        <input type="hidden" :name="`variants[${i}][id]`" :value="r.id || ''">
+                        <input type="hidden" :name="`variants[${i}][barcode]`" :value="r.barcode || ''">
+                        <td class="py-1 pr-2" x-show="opt1"><input :name="`variants[${i}][option1]`" x-model="r.option1" class="w-24 rounded border border-slate-200 p-1"></td>
+                        <td class="py-1 pr-2" x-show="opt2"><input :name="`variants[${i}][option2]`" x-model="r.option2" class="w-24 rounded border border-slate-200 p-1"></td>
+                        <td class="py-1 pr-2" x-show="opt3"><input :name="`variants[${i}][option3]`" x-model="r.option3" class="w-24 rounded border border-slate-200 p-1"></td>
+                        <td class="py-1 pr-2"><input :name="`variants[${i}][sku]`" x-model="r.sku" class="w-32 rounded border border-slate-200 p-1"></td>
+                        <td class="py-1 pr-2"><input type="number" step="0.01" min="0" :name="`variants[${i}][cost_price]`" x-model="r.cost" class="w-20 rounded border border-slate-200 p-1 text-right"></td>
+                        <td class="py-1 pr-2"><input type="number" step="0.01" min="0" :name="`variants[${i}][sale_price]`" x-model="r.price" class="w-20 rounded border border-slate-200 p-1 text-right"></td>
+                        <td class="py-1 pr-2"><input type="number" step="0.001" :name="`variants[${i}][stock]`" x-model="r.stock" class="w-20 rounded border border-slate-200 p-1 text-right"></td>
+                        <td class="py-1 pr-2 text-center">
+                            <input type="hidden" :name="`variants[${i}][is_active]`" :value="r.active ? 1 : 0">
+                            <input type="checkbox" x-model="r.active" class="rounded border-slate-300">
+                        </td>
+                        <td class="py-1"><button type="button" @click="remove(i)" class="text-slate-300 hover:text-red-500" title="Remove" x-show="rows.length > 1">✕</button></td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+    <button type="button" @click="add()" class="mt-2 text-sm text-indigo-600 hover:underline">+ Add variant</button>
+
+    {{-- The first variant fills the product's denormalised default fields. --}}
+    <input type="hidden" name="sku" :value="(rows[0] && rows[0].sku) || ''">
+    <input type="hidden" name="barcode" :value="(rows[0] && rows[0].barcode) || ''">
+    <input type="hidden" name="cost_price" :value="(rows[0] && rows[0].cost) || 0">
+    <input type="hidden" name="sale_price" :value="(rows[0] && rows[0].price) || 0">
+    @error('sku')<p class="mt-1 text-xs text-red-600">First variant SKU: {{ $message }}</p>@enderror
+    @error('variants.*.sku')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+</div>
+
+@push('scripts')
+<script>
+function variantEditor(cfg) {
+    const blank = () => ({ id: '', option1: '', option2: '', option3: '', sku: '', barcode: '', cost: 0, price: 0, stock: '', active: true });
+    return {
+        rows: (cfg.rows && cfg.rows.length) ? cfg.rows : [blank()],
+        opt1: cfg.opt1 || '', opt2: cfg.opt2 || '', opt3: cfg.opt3 || '',
+        add() { this.rows.push(blank()); },
+        remove(i) { this.rows.splice(i, 1); if (!this.rows.length) this.add(); },
+    };
+}
+</script>
+@endpush
 
 <div class="mt-4">
     <label class="block text-sm font-medium text-slate-700">Description</label>

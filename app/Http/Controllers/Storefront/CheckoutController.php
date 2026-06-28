@@ -65,8 +65,12 @@ class CheckoutController extends Controller
 
         // Build the order lines up front so we can vet stock before taking payment.
         $items = [];
-        foreach ($this->cart->raw() as $productId => $qty) {
-            $items[] = ['product_id' => (int) $productId, 'quantity' => (int) $qty];
+        foreach ($this->cart->lines() as $line) {
+            $items[] = [
+                'product_id' => $line['product_id'],
+                'variant_id' => $line['variant_id'],
+                'quantity' => $line['qty'],
+            ];
         }
 
         // Reject sold-out products BEFORE charging the card (no order = no charge).

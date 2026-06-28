@@ -34,30 +34,90 @@
     <div class="flex flex-col">
         <h1 class="text-2xl font-bold text-slate-800">{{ $product->name }}</h1>
         @if ($product->category)<p class="text-sm text-slate-400 mt-1">{{ $product->category->name }}</p>@endif
-        <div class="mt-3 text-2xl font-bold text-indigo-600">{{ $symbol }} {{ number_format($product->sale_price, 2) }}</div>
+        @php
+            $wh = \App\Models\Inventory\Warehouse::default();
+            $vs = $product->variants->where('is_active', true)->values();
+            $variantPayload = [
+                'variants' => $vs->map(fn ($v) => [
+                    'id' => $v->id, 'o1' => $v->option1, 'o2' => $v->option2, 'o3' => $v->option3,
+                    'price' => (float) $v->sale_price,
+                    'out' => ($product->track_stock && $wh) ? ($v->stockIn($wh) <= 0) : false,
+                ])->values(),
+                'names' => array_values($product->optionNames()),
+                'symbol' => $symbol,
+            ];
+        @endphp
+        <div x-data="variantBuy(@js($variantPayload))" class="contents">
+            <div class="mt-3 text-2xl font-bold text-indigo-600" x-text="priceLabel"></div>
 
-        @if ($product->description)
-            <p class="mt-4 text-sm text-slate-600 leading-relaxed">{{ $product->description }}</p>
-        @endif
+            @if ($product->description)
+                <p class="mt-4 text-sm text-slate-600 leading-relaxed">{{ $product->description }}</p>
+            @endif
 
-        @if ($product->isOutOfStock())
-            <div class="mt-6">
-                <button type="button" disabled
-                        class="rounded-md bg-slate-100 px-6 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">
-                    Sold out
-                </button>
-                <p class="mt-2 text-xs text-rose-500">This product is currently out of stock.</p>
-            </div>
-        @else
-            <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-6 flex items-center gap-3">
+            {{-- Option selectors --}}
+            <template x-if="hasOptions">
+                <div class="mt-4 space-y-3">
+                    <template x-for="(name, i) in names" :key="i">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700" x-text="name"></label>
+                            <select x-model="sel[i + 1]" class="mt-1 w-full sm:w-56 rounded-md border border-slate-300 p-2 text-sm">
+                                <option value="">Choose…</option>
+                                <template x-for="val in optionValues(i + 1)" :key="val">
+                                    <option :value="val" x-text="val"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-6 flex items-center gap-3" @submit="if (!canAdd) $event.preventDefault()">
                 @csrf
                 <input type="hidden" name="product_id" value="{{ $product->id }}">
+                <input type="hidden" name="variant_id" :value="current ? current.id : ''">
                 <input type="number" name="qty" value="1" min="1" max="999" class="w-20 rounded-md border border-slate-300 p-2 text-sm text-center">
-                <button class="rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Add to cart</button>
+                <button :disabled="!canAdd"
+                        class="rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        x-text="(current && current.out) ? 'Sold out' : 'Add to cart'"></button>
             </form>
-        @endif
+            <p x-show="hasOptions && !current" x-cloak class="mt-2 text-xs text-slate-500">Select your options to add to cart.</p>
+            <p x-show="current && current.out" x-cloak class="mt-2 text-xs text-rose-500">This option is sold out.</p>
+        </div>
 
         <p class="mt-3 text-xs text-slate-400">SKU: {{ $product->sku }}</p>
     </div>
 </div>
+
+<script>
+function variantBuy(cfg) {
+    return {
+        variants: cfg.variants || [],
+        names: cfg.names || [],
+        symbol: cfg.symbol || '',
+        sel: { 1: '', 2: '', 3: '' },
+        get hasOptions() { return this.names.length > 0; },
+        optionValues(idx) {
+            const key = 'o' + idx;
+            return [...new Set(this.variants.map(v => v[key]).filter(x => x !== null && x !== ''))];
+        },
+        get current() {
+            if (!this.hasOptions) return this.variants[0] || null;
+            return this.variants.find(v =>
+                (this.names.length < 1 || v.o1 === this.sel[1]) &&
+                (this.names.length < 2 || v.o2 === this.sel[2]) &&
+                (this.names.length < 3 || v.o3 === this.sel[3])
+            ) || null;
+        },
+        get canAdd() { return !!this.current && !this.current.out; },
+        get priceLabel() {
+            const fmt = n => this.symbol + ' ' + Number(n).toFixed(2);
+            if (this.current) return fmt(this.current.price);
+            if (!this.variants.length) return fmt(0);
+            const min = Math.min(...this.variants.map(v => v.price));
+            const max = Math.max(...this.variants.map(v => v.price));
+            return (max > min ? 'from ' : '') + fmt(min);
+        },
+    };
+}
+</script>
 @endsection

@@ -117,7 +117,7 @@
                             <div class="font-medium text-slate-700 text-xs leading-tight line-clamp-2" x-text="p.name"></div>
                             <div class="text-[11px] text-slate-400 mt-0.5 truncate" x-text="p.sku"></div>
                             <div class="mt-1 flex items-center justify-between gap-1">
-                                <span class="font-semibold text-indigo-600 text-xs" x-text="money(p.price)"></span>
+                                <span class="font-semibold text-indigo-600 text-xs" x-text="(p.price_max > p.price ? 'from ' : '') + money(p.price)"></span>
                                 <template x-if="p.track_stock && p.stock !== null">
                                     <span class="text-[11px] whitespace-nowrap" :class="isOut(p) ? 'text-red-500 font-medium' : 'text-slate-400'"
                                           x-text="isOut(p) ? 'Sold out' : (p.stock ?? 0)"></span>
@@ -150,7 +150,7 @@
             {{-- Cart lines --}}
             <div class="p-4 space-y-2">
                 <p x-show="cart.length === 0" class="text-sm text-slate-400 text-center py-8">Scan or click a product to add it.</p>
-                <template x-for="(line, i) in cart" :key="line.id">
+                <template x-for="(line, i) in cart" :key="line.id+'-'+(line.variant_id||0)">
                     <div class="rounded-md border border-slate-100 p-2">
                         <div class="flex items-start justify-between">
                             <div class="min-w-0">
@@ -324,6 +324,31 @@
         </div>
     </div>
 
+    {{-- Variant picker --}}
+    <div x-show="variantPick" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @click.self="variantPick = null" @keydown.escape.window="variantPick = null">
+        <div class="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-slate-800" x-text="variantPick?.name"></h3>
+                <button type="button" @click="variantPick = null" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div class="space-y-1 max-h-80 overflow-y-auto">
+                <template x-for="v in (variantPick?.variants || [])" :key="v.id">
+                    <button type="button" @click="addVariant(variantPick, v)"
+                            :disabled="variantPick.track_stock && v.stock !== null && v.stock <= 0"
+                            class="w-full flex items-center justify-between rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <span class="font-medium text-slate-700" x-text="v.label || v.sku"></span>
+                        <span class="flex items-center gap-3">
+                            <span class="text-indigo-600" x-text="money(v.price)"></span>
+                            <span class="text-xs" :class="(variantPick.track_stock && v.stock !== null && v.stock <= 0) ? 'text-red-500' : 'text-slate-400'"
+                                  x-text="(variantPick.track_stock && v.stock !== null) ? (v.stock <= 0 ? 'Sold out' : (v.stock + ' left')) : ''"></span>
+                        </span>
+                    </button>
+                </template>
+            </div>
+        </div>
+    </div>
+
     {{-- Hidden POST form submitted via JS --}}
     <form x-ref="checkoutForm" method="POST" action="{{ route('pos.checkout') }}" class="hidden">
         @csrf
@@ -333,9 +358,10 @@
         <input type="hidden" name="discount" x-bind:value="cartDiscount || 0">
         <input type="hidden" name="coupon_code" x-bind:value="couponCode">
         <input type="hidden" name="points_redeemed" x-bind:value="effectivePoints">
-        <template x-for="(line, i) in cart" :key="'f'+line.id">
+        <template x-for="(line, i) in cart" :key="'f'+line.id+'-'+(line.variant_id||0)">
             <div>
                 <input type="hidden" :name="'items['+i+'][product_id]'" :value="line.id">
+                <input type="hidden" :name="'items['+i+'][variant_id]'" :value="line.variant_id || ''">
                 <input type="hidden" :name="'items['+i+'][quantity]'" :value="line.qty">
                 <input type="hidden" :name="'items['+i+'][unit_price]'" :value="line.price">
                 <input type="hidden" :name="'items['+i+'][discount]'" :value="line.discount || 0">
@@ -363,6 +389,7 @@ function posRegister() {
             minRedeem: {{ (int) $loyalty->min_redeem_points }},
         },
         cart: [],
+        variantPick: null,
         search: '',
         scanError: '',
         // Server-side product search: the page embeds only the first page; the
@@ -456,33 +483,46 @@ function posRegister() {
                 this.loadingProducts = false;
             }
         },
-        // Enter / scanner: fetch the term, prefer an EXACT barcode or SKU match,
-        // else the first result.
+        // Enter / scanner: prefer an exact variant barcode/SKU (a scanned variant),
+        // then an exact product barcode/SKU, else the first result.
         async scanOrAddFirst() {
             const t = this.search.trim();
             if (!t) return;
             const low = t.toLowerCase();
             const list = (await this.fetchProducts(t)).products || [];
-            const p = list.find(x => x.barcode && String(x.barcode).toLowerCase() === low)
-                   || list.find(x => x.sku && x.sku.toLowerCase() === low)
-                   || list[0];
-            if (p) {
-                this.addToCart(p);
-                this.search = '';
-                this.scanError = '';
-                this.searchProducts();   // reset the grid to the initial page
-            } else {
-                this.scanError = 'No product found for "' + t + '".';
+            let added = false;
+            for (const p of list) {
+                const v = (p.variants || []).find(v =>
+                    (v.barcode && String(v.barcode).toLowerCase() === low) || (v.sku && v.sku.toLowerCase() === low));
+                if (v) { this.addVariant(p, v); added = true; break; }
             }
+            if (!added) {
+                const p = list.find(x => x.barcode && String(x.barcode).toLowerCase() === low)
+                       || list.find(x => x.sku && x.sku.toLowerCase() === low)
+                       || list[0];
+                if (p) { this.addToCart(p); added = true; }
+            }
+            if (added) { this.search = ''; this.scanError = ''; this.searchProducts(); }
+            else { this.scanError = 'No product found for "' + t + '".'; }
             this.$refs.scan?.focus();
         },
-        // A tracked product with no quantity on hand can't be sold (mirrors the server guard).
+        // A product is sold out when its aggregate variant stock is gone.
         isOut(p) { return p.track_stock && p.stock !== null && p.stock <= 0; },
+        // Tap a tile: pick a variant if there's more than one, else add the only one.
         addToCart(p) {
-            if (this.isOut(p)) { this.scanError = p.name + ' is out of stock.'; return; }
-            const existing = this.cart.find(l => l.id === p.id);
-            if (existing) { existing.qty = Math.round((existing.qty + 1) * 1000) / 1000; return; }
-            this.cart.push({ id: p.id, name: p.name, price: p.price, tax_rate: p.tax_rate, qty: 1, discount: 0 });
+            const variants = p.variants || [];
+            if (variants.length > 1) { this.variantPick = p; return; }
+            this.addVariant(p, variants[0] || null);
+        },
+        addVariant(p, v) {
+            const vid = v ? v.id : null;
+            const label = (v && v.label) ? ' - ' + v.label : '';
+            if (p.track_stock && v && v.stock !== null && v.stock <= 0) { this.scanError = p.name + label + ' is out of stock.'; this.variantPick = null; return; }
+            if (!v && this.isOut(p)) { this.scanError = p.name + ' is out of stock.'; return; }
+            const existing = this.cart.find(l => l.id === p.id && (l.variant_id || null) === vid);
+            if (existing) { existing.qty = Math.round((existing.qty + 1) * 1000) / 1000; }
+            else { this.cart.push({ id: p.id, variant_id: vid, name: p.name + label, price: (v ? v.price : p.price), tax_rate: p.tax_rate, qty: 1, discount: 0 }); }
+            this.variantPick = null;
         },
         inc(line) { line.qty = Math.round((line.qty + 1) * 1000) / 1000; },
         dec(line) { line.qty = Math.max(0, Math.round((line.qty - 1) * 1000) / 1000); },

@@ -4,6 +4,7 @@ namespace App\Services\Inventory;
 
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
+use App\Models\Inventory\ProductVariant;
 use App\Models\Inventory\Warehouse;
 use App\Support\Tenancy;
 use Illuminate\Support\Str;
@@ -208,32 +209,30 @@ class OdooProductImporter
 
             try {
                 $changed = false;
+                // The default variant carries the price/stock for a single-variant product.
+                $variant = ProductVariant::where('product_id', $id)->orderBy('position')->first();
 
-                // Sale price.
+                // Sale price — on the product (denormalised) and its default variant.
                 $price = $this->number($col($row, 'price'));
                 if ($idx['price'] !== null && $price !== null) {
                     Product::where('id', $id)->update(['sale_price' => $price]);
+                    $variant?->update(['sale_price' => $price]);
                     $changed = true;
                 }
 
-                // On-hand quantity → set to the file value via an adjustment.
+                // On-hand quantity → set to the file value via a variant stock adjustment.
                 $target = $this->number($col($row, 'qty'));
-                if ($idx['qty'] !== null && $target !== null && $stock && $warehouse) {
-                    $product = Product::find($id);
-                    if ($product) {
-                        $current = round($product->stockIn($warehouse), 3);
-                        $delta = round($target - $current, 3);
-                        if ($delta != 0.0) {
-                            $stock->recordMovement(
-                                $product, $warehouse, 'adjustment', $delta,
-                                (float) $product->cost_price, null, 'Odoo update',
-                            );
-                        }
-                        if (! $product->track_stock) {
-                            $product->update(['track_stock' => true]);
-                        }
-                        $changed = true;
+                if ($idx['qty'] !== null && $target !== null && $stock && $warehouse && $variant) {
+                    $current = round($variant->stockIn($warehouse), 3);
+                    $delta = round($target - $current, 3);
+                    if ($delta != 0.0) {
+                        $stock->recordMovement(
+                            Product::find($id), $warehouse, 'adjustment', $delta,
+                            (float) $variant->cost_price, null, 'Odoo update', $variant->id,
+                        );
                     }
+                    Product::where('id', $id)->where('track_stock', false)->update(['track_stock' => true]);
+                    $changed = true;
                 }
 
                 $changed ? $result['updated']++ : $result['skipped']++;
@@ -268,10 +267,20 @@ class OdooProductImporter
         ]);
         $result['created']++;
 
-        // Opening stock from "Quantity On Hand".
+        // Odoo rows are single products → one default variant mirroring the product.
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'sku' => $product->sku,
+            'barcode' => $product->barcode,
+            'sale_price' => $product->sale_price,
+            'cost_price' => $product->cost_price,
+            'position' => 0,
+        ]);
+
+        // Opening stock from "Quantity On Hand" — on the variant.
         if ($trackStock && $warehouse && $qty != 0.0 && class_exists(StockService::class)) {
             app(StockService::class)->recordMovement(
-                $product, $warehouse, 'import', $qty, $cost, null, 'Odoo import',
+                $product, $warehouse, 'import', $qty, $cost, null, 'Odoo import', $variant->id,
             );
         }
     }
