@@ -11,7 +11,7 @@ class ProductStock extends Model
     use BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id', 'product_id', 'warehouse_id', 'quantity', 'reorder_level',
+        'tenant_id', 'product_id', 'variant_id', 'warehouse_id', 'quantity', 'reorder_level',
     ];
 
     protected function casts(): array

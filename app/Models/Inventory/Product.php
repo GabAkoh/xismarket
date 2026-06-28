@@ -12,7 +12,8 @@ class Product extends Model
     use BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id', 'category_id', 'name', 'sku', 'barcode', 'description',
+        'tenant_id', 'category_id', 'name', 'option1_name', 'option2_name', 'option3_name',
+        'sku', 'barcode', 'description',
         'cost_price', 'sale_price', 'tax_rate', 'track_stock', 'is_active', 'is_featured', 'image_path',
     ];
 
@@ -33,9 +34,51 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class)->orderBy('position')->orderBy('id');
+    }
+
     public function stocks(): HasMany
     {
         return $this->hasMany(ProductStock::class);
+    }
+
+    /** Whether this product carries multiple variants / defined option axes. */
+    public function hasVariants(): bool
+    {
+        return ! empty($this->option1_name) || $this->variants()->count() > 1;
+    }
+
+    /** The non-empty option axis names, e.g. ['Size', 'Colour']. */
+    public function optionNames(): array
+    {
+        return array_values(array_filter([$this->option1_name, $this->option2_name, $this->option3_name]));
+    }
+
+    /** The first/default variant (a simple product has exactly one). */
+    public function defaultVariant(): ?ProductVariant
+    {
+        return $this->relationLoaded('variants')
+            ? $this->variants->first()
+            : $this->variants()->first();
+    }
+
+    /**
+     * Min/max active sale price across variants — for "from N" storefront pricing.
+     *
+     * @return array{min: float, max: float}
+     */
+    public function priceRange(): array
+    {
+        $prices = $this->variants()->where('is_active', true)->pluck('sale_price')
+            ->map(fn ($p) => (float) $p);
+
+        if ($prices->isEmpty()) {
+            return ['min' => (float) $this->sale_price, 'max' => (float) $this->sale_price];
+        }
+
+        return ['min' => (float) $prices->min(), 'max' => (float) $prices->max()];
     }
 
     public function movements(): HasMany
