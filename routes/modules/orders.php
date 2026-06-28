@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Orders\OrderController;
 use App\Http\Controllers\Storefront\StorefrontSettingsController;
+use App\Http\Controllers\Storefront\SubscriberController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth'])->group(function () {
@@ -10,6 +11,15 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::middleware('permission:orders.manage')->group(function () {
         Route::get('storefront/settings', [StorefrontSettingsController::class, 'edit'])->name('storefront.settings');
         Route::put('storefront/settings', [StorefrontSettingsController::class, 'update'])->name('storefront.settings.update');
+    });
+
+    // --- Community / newsletter subscribers ---
+    Route::middleware('permission:orders.view')->group(function () {
+        Route::get('subscribers', [SubscriberController::class, 'index'])->name('subscribers.index');
+        Route::get('subscribers/export', [SubscriberController::class, 'export'])->name('subscribers.export');
+    });
+    Route::middleware('permission:orders.manage')->group(function () {
+        Route::delete('subscribers/{subscriber}', [SubscriberController::class, 'destroy'])->name('subscribers.destroy');
     });
 
     // --- Order list + detail ---

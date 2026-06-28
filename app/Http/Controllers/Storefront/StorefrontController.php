@@ -199,10 +199,23 @@ class StorefrontController extends Controller
         ]);
 
         // Idempotent — re-subscribing with the same email is a no-op success.
-        Subscriber::firstOrCreate(
+        $subscriber = Subscriber::firstOrCreate(
             ['email' => strtolower($data['email'])],
             ['name' => $data['name'] ?? null],
         );
+
+        // Welcome email on first signup only (best-effort — never block the signup).
+        if ($subscriber->wasRecentlyCreated) {
+            $tenant = app(\App\Support\Tenancy::class)->current();
+            if ($tenant) {
+                try {
+                    \Illuminate\Support\Facades\Mail::to($subscriber->email)
+                        ->send(new \App\Mail\WelcomeSubscriberMail($subscriber, $tenant));
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+        }
 
         return back()->with('status', "Thanks for joining the {$this->storeName()} community! We'll be in touch.");
     }

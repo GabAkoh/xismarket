@@ -55,6 +55,7 @@
                         ['route' => 'orders.report', 'label' => 'Orders Report', 'perm' => 'orders.view'],
                         ['route' => 'orders.create', 'label' => 'New Order', 'perm' => 'orders.manage'],
                         ['route' => 'storefront.settings', 'label' => 'Storefront', 'perm' => 'orders.manage'],
+                        ['route' => 'subscribers.index', 'label' => 'Subscribers', 'perm' => 'orders.view'],
                     ]],
                     ['heading' => 'Delivery', 'links' => [
                         ['route' => 'deliveries.index', 'label' => 'Deliveries', 'perm' => 'deliveries.view'],
