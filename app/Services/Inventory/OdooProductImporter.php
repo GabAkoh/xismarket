@@ -37,6 +37,10 @@ class OdooProductImporter
         'qty' => ['quantityonhand', 'qtyavailable', 'onhand', 'quantity', 'qty', 'stock'],
         'active' => ['active', 'canbesold', 'saleok', 'status'],
         'description' => ['salesdescription', 'description', 'descriptionforcustomers'],
+        // Variant-level export: the template groups variants; variant values hold
+        // the option axes, e.g. "Color: Red, Size: M".
+        'template' => ['producttemplate', 'producttmpl', 'producttemplatename', 'template'],
+        'variantvalues' => ['variantvalues', 'attributevalues', 'variantvalue', 'attributevalue', 'variantattributes', 'productvariantvalues'],
     ];
 
     /** @var array<string, int> slug => category id */
@@ -53,7 +57,7 @@ class OdooProductImporter
      */
     public function import(string $path, string $mode = 'create'): array
     {
-        $result = ['created' => 0, 'updated' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
+        $result = ['created' => 0, 'updated' => 0, 'variants' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
 
         if (! is_file($path) || ! is_readable($path)) {
             $result['errors'][] = 'Import file not found or unreadable.';
@@ -118,6 +122,12 @@ class OdooProductImporter
             ->pluck('sku')->map(fn ($s) => strtolower(trim($s)))->flip();
         $existingName = Product::query()->pluck('name')
             ->map(fn ($n) => $this->key($n))->flip();
+
+        // A variant-level export (with a Variant Values column) groups rows into
+        // products with real variants; otherwise each row is its own product.
+        if ($idx['variantvalues'] !== null) {
+            return $this->runVariantCreate($fh, $col, $idx, $result, $existingSku, $existingName, $warehouse);
+        }
 
         $rowNum = 1;
         while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
@@ -245,6 +255,172 @@ class OdooProductImporter
         fclose($fh);
 
         return $result;
+    }
+
+    /**
+     * Reconstruct grouped products from an Odoo variant-level export. Rows are
+     * grouped by product template (or the variant name with its parenthetical
+     * stripped); option axes come from the "Variant Values" column (e.g.
+     * "Color: Red, Size: M"). Only products whose name isn't already here are
+     * created — so this adds Odoo-only products on top of an existing catalogue.
+     *
+     * @param  resource  $fh
+     */
+    protected function runVariantCreate($fh, callable $col, array $idx, array $result, $existingSku, $existingName, ?Warehouse $warehouse): array
+    {
+        // Group all rows by their product template.
+        $groups = [];
+        $order = [];
+        while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
+            $template = $col($row, 'template');
+            $groupName = $template !== '' ? $template : $this->stripVariantSuffix($col($row, 'name'));
+            if ($groupName === '') {
+                continue;
+            }
+            $gk = $this->key($groupName);
+            if (! isset($groups[$gk])) {
+                $groups[$gk] = ['name' => $groupName, 'category' => $col($row, 'category'), 'rows' => []];
+                $order[] = $gk;
+            }
+            $groups[$gk]['rows'][] = [
+                'sku' => $col($row, 'sku'),
+                'barcode' => $col($row, 'barcode'),
+                'price' => $this->number($col($row, 'price')),
+                'cost' => $this->number($col($row, 'cost')),
+                'qty' => $this->number($col($row, 'qty')),
+                'active' => $col($row, 'active'),
+                'pairs' => $this->parseVariantValues($col($row, 'variantvalues')),
+            ];
+        }
+        fclose($fh);
+
+        foreach ($order as $gk) {
+            $g = $groups[$gk];
+
+            if ($existingName->has($this->key($g['name']))) {
+                $result['skipped'] += count($g['rows']);   // already here — skip
+                continue;
+            }
+
+            try {
+                // Option axis names = union of attribute keys across the variants (max 3).
+                $optionNames = [];
+                foreach ($g['rows'] as $r) {
+                    foreach (array_keys($r['pairs']) as $attr) {
+                        if (! in_array($attr, $optionNames, true)) {
+                            $optionNames[] = $attr;
+                        }
+                    }
+                }
+                $optionNames = array_slice($optionNames, 0, 3);
+
+                $product = Product::create([
+                    'name' => $g['name'],
+                    'option1_name' => $optionNames[0] ?? null,
+                    'option2_name' => $optionNames[1] ?? null,
+                    'option3_name' => $optionNames[2] ?? null,
+                    'category_id' => $this->categoryId($g['category']),
+                    'tax_rate' => 0,
+                    'track_stock' => true,
+                    'is_active' => $this->isActive($g['rows'][0]['active']),
+                    'sku' => 'TMP-'.Str::random(10),
+                    'sale_price' => 0,
+                    'cost_price' => 0,
+                ]);
+                $result['created']++;
+
+                foreach ($g['rows'] as $i => $r) {
+                    $opt = [];
+                    foreach ([0, 1, 2] as $j) {
+                        $opt[$j] = isset($optionNames[$j]) ? ($r['pairs'][$optionNames[$j]] ?? null) : null;
+                    }
+                    $sku = $r['sku'] !== ''
+                        ? $r['sku']
+                        : (strtoupper(Str::slug($g['name'].'-'.implode('-', array_filter($opt)))) ?: 'VAR');
+                    $sku = $this->makeUniqueSku($sku);
+
+                    $variant = ProductVariant::create([
+                        'product_id' => $product->id,
+                        'sku' => $sku,
+                        'barcode' => $r['barcode'] ?: null,
+                        'option1' => $opt[0], 'option2' => $opt[1], 'option3' => $opt[2],
+                        'cost_price' => $r['cost'] ?? 0,
+                        'sale_price' => $r['price'] ?? 0,
+                        'position' => $i,
+                    ]);
+                    $result['variants'] = ($result['variants'] ?? 0) + 1;
+
+                    if ($i === 0) {
+                        $product->update([
+                            'sku' => $sku, 'barcode' => $variant->barcode,
+                            'sale_price' => $variant->sale_price, 'cost_price' => $variant->cost_price,
+                        ]);
+                    }
+
+                    if ($warehouse && $r['qty'] !== null && $r['qty'] != 0.0 && class_exists(StockService::class)) {
+                        app(StockService::class)->recordMovement(
+                            $product, $warehouse, 'import', $r['qty'], $r['cost'] ?? 0, null, 'Odoo import', $variant->id,
+                        );
+                    }
+                }
+
+                $existingName->put($this->key($g['name']), true);
+            } catch (\Throwable $e) {
+                $result['skipped'] += count($g['rows']);
+                $result['errors'][] = $g['name'].': '.$e->getMessage();
+            }
+        }
+
+        return $result;
+    }
+
+    /** Parse Odoo "Variant Values" like "Color: Red, Size: M" → ['Color'=>'Red','Size'=>'M']. */
+    protected function parseVariantValues(string $value): array
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return [];
+        }
+
+        $pairs = [];
+        $pos = 0;
+        foreach (explode(',', $value) as $part) {
+            $part = trim($part);
+            if ($part === '') {
+                continue;
+            }
+            if (str_contains($part, ':')) {
+                [$attr, $val] = explode(':', $part, 2);
+                $attr = trim($attr);
+                $val = trim($val);
+                if ($attr !== '' && $val !== '') {
+                    $pairs[$attr] = $val;
+                }
+            } else {
+                // A bare value with no attribute name → positional option.
+                $pairs['Option '.(++$pos)] = $part;
+            }
+        }
+
+        return $pairs;
+    }
+
+    /** Strip a trailing variant parenthetical: "Tee (Red, M)" → "Tee". */
+    protected function stripVariantSuffix(string $name): string
+    {
+        return trim(preg_replace('/\s*\([^)]*\)\s*$/', '', $name));
+    }
+
+    /** A SKU unique across both products and variants for this tenant. */
+    protected function makeUniqueSku(string $base): string
+    {
+        $sku = $base;
+        $n = 1;
+        while (ProductVariant::where('sku', $sku)->exists() || Product::where('sku', $sku)->exists()) {
+            $sku = $base.'-'.(++$n);
+        }
+
+        return $sku;
     }
 
     protected function createProduct(array $row, callable $col, string $name, ?Warehouse $warehouse, array &$result): void
