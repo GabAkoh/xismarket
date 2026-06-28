@@ -57,6 +57,15 @@
             </div>
         </div>
 
+        {{-- Mobile search — the inline search above is hidden on small screens,
+             so phones get a full-width search row here instead. --}}
+        <div class="sm:hidden border-t border-slate-100 px-4 py-2">
+            <form method="GET" action="{{ route('shop.home') }}">
+                <input name="q" value="{{ request('q') }}" placeholder="Search products…"
+                       class="w-full rounded-full border border-slate-300 px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+            </form>
+        </div>
+
         {{-- Category navigation --}}
         @if ($navCategories->isNotEmpty())
             <nav class="border-t border-slate-100 bg-white">
