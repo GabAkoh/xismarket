@@ -43,9 +43,12 @@ class OdooProductImporter
     public function __construct(protected Tenancy $tenancy) {}
 
     /**
+     * @param  string  $mode  'create' (only add products whose name isn't here)
+     *                        or 'update' (only update existing products' sale
+     *                        price + status, matched by name).
      * @return array{created:int, updated:int, images:int, skipped:int, errors:array<int,string>}
      */
-    public function import(string $path): array
+    public function import(string $path, string $mode = 'create'): array
     {
         $result = ['created' => 0, 'updated' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
 
@@ -99,6 +102,11 @@ class OdooProductImporter
             ? trim((string) $row[$idx[$field]])
             : '';
 
+        // --- Update mode: only touch products already here (matched by name) ---
+        if ($mode === 'update') {
+            return $this->runUpdate($fh, $col, $idx, $result);
+        }
+
         $warehouse = class_exists(Warehouse::class) ? Warehouse::default() : null;
 
         // Names already present in this store — the dedupe set (lower-cased).
@@ -122,6 +130,69 @@ class OdooProductImporter
             try {
                 $this->createProduct($row, $col, $name, $warehouse, $result);
                 $existing->put($nameKey, true);  // guard against duplicate names within the file
+            } catch (\Throwable $e) {
+                $result['skipped']++;
+                $result['errors'][] = "Row {$rowNum} ({$name}): ".$e->getMessage();
+            }
+        }
+
+        fclose($fh);
+
+        return $result;
+    }
+
+    /**
+     * Update the sale price and/or active status of products that already exist
+     * here (matched by name). Rows with no matching product are skipped.
+     *
+     * @param  resource  $fh
+     */
+    protected function runUpdate($fh, callable $col, array $idx, array $result): array
+    {
+        if ($idx['price'] === null && $idx['active'] === null) {
+            fclose($fh);
+            $result['errors'][] = 'No Sales Price or status column found — nothing to update.';
+
+            return $result;
+        }
+
+        // name key => product id (last occurrence wins).
+        $byName = [];
+        foreach (Product::query()->get(['id', 'name']) as $p) {
+            $byName[$this->key($p->name)] = $p->id;
+        }
+
+        $rowNum = 1;
+        while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
+            $rowNum++;
+            $name = $col($row, 'name');
+            if ($name === '') {
+                continue;
+            }
+
+            $id = $byName[$this->key($name)] ?? null;
+            if (! $id) {
+                $result['skipped']++;   // not the same product — leave it alone
+                continue;
+            }
+
+            $changes = [];
+            $price = $col($row, 'price');
+            if ($idx['price'] !== null && is_numeric($price)) {
+                $changes['sale_price'] = (float) $price;
+            }
+            if ($idx['active'] !== null && $col($row, 'active') !== '') {
+                $changes['is_active'] = $this->isActive($col($row, 'active'));
+            }
+
+            if ($changes === []) {
+                $result['skipped']++;   // matched but nothing to change in this row
+                continue;
+            }
+
+            try {
+                Product::where('id', $id)->update($changes);
+                $result['updated']++;
             } catch (\Throwable $e) {
                 $result['skipped']++;
                 $result['errors'][] = "Row {$rowNum} ({$name}): ".$e->getMessage();

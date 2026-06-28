@@ -34,7 +34,7 @@
 @endif
 
 <form method="POST" action="{{ route('products.import.store') }}" enctype="multipart/form-data" class="max-w-2xl space-y-4"
-      x-data="{ source: '{{ old('source', 'shopify') }}' }">
+      x-data="{ source: '{{ old('source', 'shopify') }}', mode: '{{ old('mode', 'create') }}' }">
     @csrf
     <x-card>
         <label class="block text-sm font-medium text-slate-700">Source</label>
@@ -72,12 +72,22 @@
             <p>The import runs in the background — products appear progressively as it processes.</p>
         </div>
 
+        {{-- Odoo mode --}}
+        <div x-show="source === 'odoo'" x-cloak class="mt-4">
+            <label class="block text-sm font-medium text-slate-700">What to do</label>
+            <select name="mode" x-model="mode" class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm">
+                <option value="create">Create new products only (skip existing)</option>
+                <option value="update">Update price &amp; status of existing products</option>
+            </select>
+        </div>
+
         {{-- Odoo help --}}
         <div x-show="source === 'odoo'" x-cloak class="mt-4 rounded-md bg-slate-50 border border-slate-100 p-3 text-xs text-slate-500 space-y-1">
             <p class="font-semibold text-slate-600">How it works</p>
             <p>In Odoo: <span class="font-medium">Inventory or Sales → Products → select → Export</span>, choose <span class="font-medium">CSV</span> (include Name, Internal Reference, Barcode, Sales Price, Cost, Product Category, Quantity On Hand).</p>
-            <p><span class="font-medium text-slate-600">Only products whose name isn't already here are created</span> — existing ones are skipped, never updated. Name, category, price, cost, barcode and on-hand stock are mapped; tax rate defaults to 0.</p>
-            <p>The import runs in the background — new products appear as it processes.</p>
+            <p x-show="mode === 'create'"><span class="font-medium text-slate-600">Create:</span> only products whose name isn't already here are added — existing ones are skipped. Name, category, price, cost, barcode and on-hand stock are mapped; tax rate defaults to 0.</p>
+            <p x-show="mode === 'update'"><span class="font-medium text-slate-600">Update:</span> for products that already exist here (matched by name), the sale price and active status are updated from the file. Products not found here are skipped; nothing new is created.</p>
+            <p>The import runs in the background — the summary appears here when it finishes.</p>
         </div>
     </x-card>
 
