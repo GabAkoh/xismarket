@@ -26,6 +26,7 @@ class ProductImportController extends Controller
             'file' => ['required', 'file', 'max:20480'], // 20 MB
             'source' => ['nullable', 'in:shopify,odoo'],
             'mode' => ['nullable', 'in:create,update,images'],
+            'replace_images' => ['nullable', 'boolean'],
         ]);
 
         // Persist the upload (the temp file is gone after the request) and import
@@ -40,8 +41,13 @@ class ProductImportController extends Controller
         Cache::forget(ImportShopifyProductsJob::resultKey($this->tenancy->id()));
 
         if ($request->input('source') === 'odoo') {
-            // Odoo: create new products, or update existing ones' price + status.
-            ImportOdooProductsJob::dispatch($this->tenancy->id(), $path, $request->input('mode', 'create'));
+            // Odoo: create new products, update existing ones' price + status, or set images.
+            ImportOdooProductsJob::dispatch(
+                $this->tenancy->id(),
+                $path,
+                $request->input('mode', 'create'),
+                $request->boolean('replace_images'),
+            );
         } else {
             ImportShopifyProductsJob::dispatch(
                 $this->tenancy->id(),

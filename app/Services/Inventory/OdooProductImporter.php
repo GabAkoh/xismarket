@@ -52,13 +52,16 @@ class OdooProductImporter
     public function __construct(protected Tenancy $tenancy) {}
 
     /**
-     * @param  string  $mode  'create' (only add products not already here) or
-     *                        'update' (only update existing products' sale price
-     *                        + on-hand quantity). Matched by Internal Reference
-     *                        (SKU), falling back to name.
-     * @return array{created:int, updated:int, images:int, skipped:int, errors:array<int,string>}
+     * @param  string  $mode  'create' (only add products not already here),
+     *                        'update' (sale price + on-hand quantity of existing
+     *                        products), or 'images' (set images from a base64
+     *                        Image column). Matched by Internal Reference (SKU),
+     *                        falling back to name.
+     * @param  bool  $replaceImages  in 'images' mode, overwrite an existing image
+     *                               instead of only filling products that have none.
+     * @return array{created:int, updated:int, variants:int, images:int, skipped:int, errors:array<int,string>}
      */
-    public function import(string $path, string $mode = 'create'): array
+    public function import(string $path, string $mode = 'create', bool $replaceImages = false): array
     {
         $result = ['created' => 0, 'updated' => 0, 'variants' => 0, 'images' => 0, 'skipped' => 0, 'errors' => []];
 
@@ -120,7 +123,7 @@ class OdooProductImporter
 
         // --- Images mode: set product images from a base64 Image column ---
         if ($mode === 'images') {
-            return $this->runImageUpdate($fh, $col, $idx, $result);
+            return $this->runImageUpdate($fh, $col, $idx, $result, $replaceImages);
         }
 
         $warehouse = class_exists(Warehouse::class) ? Warehouse::default() : null;
@@ -391,7 +394,7 @@ class OdooProductImporter
      *
      * @param  resource  $fh
      */
-    protected function runImageUpdate($fh, callable $col, array $idx, array $result): array
+    protected function runImageUpdate($fh, callable $col, array $idx, array $result, bool $replace = false): array
     {
         if ($idx['image'] === null) {
             fclose($fh);
@@ -422,9 +425,10 @@ class OdooProductImporter
                 continue;
             }
 
-            // Only fill products that have no image yet — never clobber an
-            // existing image (e.g. a higher-res one already set from Shopify).
-            if ($product->image_path) {
+            // By default only fill products that have no image yet, so an existing
+            // (e.g. higher-res Shopify) image is never clobbered. With $replace,
+            // overwrite it and remove the old file.
+            if ($product->image_path && ! $replace) {
                 $result['skipped']++;
 
                 continue;
@@ -438,8 +442,12 @@ class OdooProductImporter
                 continue;
             }
 
+            $old = $product->image_path;
             $product->update(['image_path' => $stored]);
             $variant?->update(['image_path' => $stored]);
+            if ($old && $old !== $stored) {
+                Storage::disk('public')->delete($old);
+            }
             $result['images']++;
         }
         fclose($fh);

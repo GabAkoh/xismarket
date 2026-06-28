@@ -27,15 +27,19 @@ class ImportOdooProductsJob implements ShouldQueue
 
     public int $tries = 1;
 
-    /** Declared with a default so already-queued jobs deserialize safely. */
+    /** Declared with defaults so already-queued jobs deserialize safely. */
     public string $mode = 'create';
+
+    public bool $replaceImages = false;
 
     public function __construct(
         public int $tenantId,
         public string $path,   // path on the 'local' disk
         string $mode = 'create',
+        bool $replaceImages = false,
     ) {
-        $this->mode = $mode === 'update' ? 'update' : 'create';
+        $this->mode = in_array($mode, ['update', 'images'], true) ? $mode : 'create';
+        $this->replaceImages = $replaceImages;
     }
 
     public function handle(OdooProductImporter $importer, Tenancy $tenancy): void
@@ -50,7 +54,7 @@ class ImportOdooProductsJob implements ShouldQueue
         $tenancy->set($tenant);
 
         try {
-            $result = $importer->import(Storage::disk('local')->path($this->path), $this->mode);
+            $result = $importer->import(Storage::disk('local')->path($this->path), $this->mode, $this->replaceImages);
 
             // Same key the import page reads (shared with the Shopify importer).
             Cache::put(

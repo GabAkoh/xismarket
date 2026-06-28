@@ -81,6 +81,11 @@
                 <option value="update">Update price &amp; quantity of existing products</option>
                 <option value="images">Update product images (from base64 Image column)</option>
             </select>
+
+            <label x-show="mode === 'images'" x-cloak class="mt-3 flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="replace_images" value="1">
+                Replace existing images (otherwise only products without an image are filled)
+            </label>
         </div>
 
         {{-- Odoo help --}}

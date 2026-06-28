@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
  */
 class ImportOdooImagesCommand extends Command
 {
-    protected $signature = 'products:import-odoo-images {path : Path to the Odoo CSV with an Image (base64) column} {--tenant= : Tenant id (default: all tenants)}';
+    protected $signature = 'products:import-odoo-images {path : Path to the Odoo CSV with an Image (base64) column} {--tenant= : Tenant id (default: all tenants)} {--replace : Overwrite existing images instead of only filling products with none}';
 
     protected $description = 'Update product images from an Odoo base64 Image export';
 
@@ -34,7 +34,7 @@ class ImportOdooImagesCommand extends Command
         foreach ($tenants as $tenant) {
             $tenancy->set($tenant);
             try {
-                $r = $importer->import($path, 'images');
+                $r = $importer->import($path, 'images', (bool) $this->option('replace'));
                 $this->info("{$tenant->name}: images={$r['images']} skipped={$r['skipped']} errors=".count($r['errors']));
                 foreach (array_slice($r['errors'], 0, 5) as $e) {
                     $this->warn('  '.$e);
