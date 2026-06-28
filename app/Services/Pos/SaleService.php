@@ -134,6 +134,18 @@ class SaleService
             // (subtotal - discount_total) == net revenue.
             $subtotal = round($subtotal + $lineDiscountTotal, 2);
 
+            // Coupon — evaluated server-side against the goods net of line
+            // discounts, then folded into the overall discount.
+            $couponCode = null;
+            if (! empty($data['coupon_code'])) {
+                $base = round($subtotal - $lineDiscountTotal, 2);
+                $eval = app(\App\Services\Marketing\CouponService::class)->evaluate($data['coupon_code'], max(0, $base));
+                if (! $eval['error'] && $eval['coupon']) {
+                    $overallDiscount = round($overallDiscount + $eval['discount'], 2);
+                    $couponCode = $eval['coupon']->code;
+                }
+            }
+
             // Net revenue before loyalty redemption is applied.
             $discountBeforeLoyalty = round($lineDiscountTotal + $overallDiscount, 2);
             $netBeforeLoyalty = max(0.0, round($subtotal - $discountBeforeLoyalty, 2));
@@ -231,6 +243,7 @@ class SaleService
                 'status' => $status,
                 'subtotal' => $subtotal,
                 'discount_total' => $discountTotal,
+                'coupon_code' => $couponCode,
                 'tax_total' => $taxTotal,
                 'total' => $total,
                 'paid_total' => $paidTotal,
@@ -298,6 +311,11 @@ class SaleService
             // --- Cross-module: decrement stock & post the journal ---
             $this->decrementStock($sale, $products, $lines, $warehouse);
             $this->postSaleJournal($sale, $netRevenue, $taxTotal, $total, $cogsTotal, $walletUsed, $balanceDue, $completedAt);
+
+            // Count the coupon redemption now the sale is committed.
+            if ($couponCode) {
+                app(\App\Services\Marketing\CouponService::class)->redeem($couponCode);
+            }
 
             return $sale->load('items', 'payments', 'customer');
         });

@@ -56,6 +56,7 @@
                         ['route' => 'orders.create', 'label' => 'New Order', 'perm' => 'orders.manage'],
                         ['route' => 'storefront.settings', 'label' => 'Storefront', 'perm' => 'orders.manage'],
                         ['route' => 'subscribers.index', 'label' => 'Subscribers', 'perm' => 'orders.view'],
+                        ['route' => 'coupons.index', 'label' => 'Coupons', 'perm' => 'orders.manage'],
                     ]],
                     ['heading' => 'Delivery', 'links' => [
                         ['route' => 'deliveries.index', 'label' => 'Deliveries', 'perm' => 'deliveries.view'],

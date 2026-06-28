@@ -146,6 +146,7 @@ class PosController extends Controller
             'customer_id' => ['nullable', 'integer'],
             'note' => ['nullable', 'string', 'max:1000'],
             'discount' => ['nullable', 'numeric', 'min:0'],
+            'coupon_code' => ['nullable', 'string', 'max:40'],
             'points_redeemed' => ['nullable', 'integer', 'min:0'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer'],
@@ -172,6 +173,23 @@ class PosController extends Controller
             ->route('pos.receipt', $sale)
             ->with('status', 'Sale '.$sale->number.' completed.')
             ->with('autoprint', true);
+    }
+
+    /** Validate a coupon code against a cart subtotal (for the register UI). */
+    public function coupon(Request $request)
+    {
+        $data = $request->validate([
+            'code' => ['required', 'string', 'max:40'],
+            'subtotal' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $eval = app(\App\Services\Marketing\CouponService::class)->evaluate($data['code'], (float) $data['subtotal']);
+
+        if ($eval['error']) {
+            return response()->json(['ok' => false, 'error' => $eval['error']]);
+        }
+
+        return response()->json(['ok' => true, 'code' => $eval['coupon']->code, 'discount' => $eval['discount']]);
     }
 
     /** Printable receipt for a sale. */

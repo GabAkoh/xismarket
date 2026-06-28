@@ -58,4 +58,27 @@ class CartController extends Controller
 
         return back()->with('status', 'Item removed.');
     }
+
+    public function applyCoupon(Request $request)
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:40']]);
+
+        $subtotal = $this->cart->totals(0)['subtotal'];
+        $eval = app(\App\Services\Marketing\CouponService::class)->evaluate($data['code'], $subtotal);
+
+        if ($eval['error']) {
+            return back()->with('error', $eval['error']);
+        }
+
+        $this->cart->setCoupon($eval['coupon']->code);
+
+        return back()->with('status', 'Coupon '.$eval['coupon']->code.' applied.');
+    }
+
+    public function removeCoupon()
+    {
+        $this->cart->clearCoupon();
+
+        return back()->with('status', 'Coupon removed.');
+    }
 }

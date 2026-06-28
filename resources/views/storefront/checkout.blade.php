@@ -10,8 +10,9 @@
       x-data="{
           methods: @js(array_map(fn ($m) => ['label' => $m['label'], 'fee' => $m['fee'], 'pickup' => $m['pickup']], $shippingMethods)),
           m: {{ (int) old('shipping_method', 0) }},
-          subtotal: {{ $totals['subtotal'] }}, tax: {{ $totals['tax'] }},
+          subtotal: {{ $totals['subtotal'] }}, tax: {{ $totals['tax'] }}, discount: {{ $totals['discount'] ?? 0 }},
           get fee() { return Number(this.methods[this.m]?.fee ?? 0); },
+          get grandTotal() { return Math.max(0, this.subtotal - this.discount + this.tax + this.fee); },
           get pickup() { return !! this.methods[this.m]?.pickup; },
       }"
       class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -107,13 +108,16 @@
         </ul>
         <dl class="text-sm space-y-1.5 border-t pt-2">
             <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd x-text="'{{ $symbol }} ' + subtotal.toFixed(2)"></dd></div>
+            @if (($totals['discount'] ?? 0) > 0)
+                <div class="flex justify-between text-green-600"><dt>Discount ({{ $totals['coupon_code'] }})</dt><dd x-text="'− {{ $symbol }} ' + discount.toFixed(2)"></dd></div>
+            @endif
             <div class="flex justify-between"><dt class="text-slate-500">Tax</dt><dd x-text="'{{ $symbol }} ' + tax.toFixed(2)"></dd></div>
             <div class="flex justify-between" x-show="fee > 0"><dt class="text-slate-500">Shipping</dt><dd x-text="'{{ $symbol }} ' + fee.toFixed(2)"></dd></div>
             <div class="flex justify-between font-bold text-slate-800 pt-2 border-t"><dt>Total</dt>
-                <dd x-text="'{{ $symbol }} ' + (subtotal + tax + fee).toFixed(2)"></dd></div>
+                <dd x-text="'{{ $symbol }} ' + grandTotal.toFixed(2)"></dd></div>
         </dl>
         <button class="mt-4 w-full rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
-            Pay <span x-text="'{{ $symbol }} ' + (subtotal + tax + fee).toFixed(2)"></span>
+            Pay <span x-text="'{{ $symbol }} ' + grandTotal.toFixed(2)"></span>
         </button>
         <p class="text-xs text-slate-400 mt-2 text-center">Your card will be charged now.</p>
     </div>

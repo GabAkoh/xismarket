@@ -211,6 +211,24 @@
                     </div>
                 </div>
 
+                {{-- Coupon code --}}
+                <div class="text-sm">
+                    <template x-if="!couponCode">
+                        <div class="flex items-center gap-1">
+                            <input type="text" x-model="couponInput" @keydown.enter.prevent="applyCoupon()" placeholder="Coupon code"
+                                   class="flex-1 text-sm border border-slate-200 rounded p-1 uppercase">
+                            <button type="button" @click="applyCoupon()" class="rounded border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50">Apply</button>
+                        </div>
+                    </template>
+                    <template x-if="couponCode">
+                        <div class="flex items-center justify-between">
+                            <span class="text-green-600">Coupon <span class="font-mono font-semibold" x-text="couponCode"></span> (−<span x-text="money(couponDiscount)"></span>)</span>
+                            <button type="button" @click="removeCoupon()" class="text-xs text-red-500 hover:underline">Remove</button>
+                        </div>
+                    </template>
+                    <p x-show="couponError" x-cloak class="mt-1 text-xs text-red-500" x-text="couponError"></p>
+                </div>
+
                 {{-- Loyalty redemption --}}
                 <template x-if="canRedeem">
                     <div class="flex items-center justify-between text-sm">
@@ -313,6 +331,7 @@
         <input type="hidden" name="shift_id" value="{{ $openShift?->id }}">
         <input type="hidden" name="customer_id" x-bind:value="customerId">
         <input type="hidden" name="discount" x-bind:value="cartDiscount || 0">
+        <input type="hidden" name="coupon_code" x-bind:value="couponCode">
         <input type="hidden" name="points_redeemed" x-bind:value="effectivePoints">
         <template x-for="(line, i) in cart" :key="'f'+line.id">
             <div>
@@ -356,6 +375,7 @@ function posRegister() {
         customerSearch: '',
         customerScanError: '',
         cartDiscount: 0,
+        couponInput: '', couponCode: '', couponDiscount: 0, couponError: '',
         redeemPoints: 0,
         useWallet: 0,
         // Split tender: one or more payment lines, each { method, amount }.
@@ -471,7 +491,27 @@ function posRegister() {
             this.cart = []; this.cartDiscount = 0;
             this.tenders = [{ method: this.payMethods[0] || 'cash', amount: null }];
             this.redeemPoints = 0; this.useWallet = 0;
+            this.removeCoupon();
         },
+
+        // --- Coupon code ---
+        async applyCoupon() {
+            const code = (this.couponInput || '').trim();
+            if (!code) return;
+            const base = Math.round((this.subtotal - this.lineDiscountTotal) * 100) / 100;
+            const url = new URL('{{ route('pos.coupon') }}', window.location.origin);
+            url.searchParams.set('code', code);
+            url.searchParams.set('subtotal', base);
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+                const data = await res.json();
+                if (! data.ok) { this.couponError = data.error || 'Invalid coupon.'; this.couponCode = ''; this.couponDiscount = 0; return; }
+                this.couponCode = data.code; this.couponDiscount = data.discount; this.couponError = '';
+            } catch (e) {
+                this.couponError = 'Could not check the coupon.';
+            }
+        },
+        removeCoupon() { this.couponInput = ''; this.couponCode = ''; this.couponDiscount = 0; this.couponError = ''; },
 
         // --- Split-tender payment lines (each method usable only once) ---
         methodLabel(m) { return this.payMethodLabels[m] || (m.charAt(0).toUpperCase() + m.slice(1)); },
@@ -522,7 +562,7 @@ function posRegister() {
             return this.cart.reduce((s, l) => s + (parseFloat(l.discount) || 0), 0);
         },
         get discountBeforeLoyalty() {
-            return Math.round((this.lineDiscountTotal + (parseFloat(this.cartDiscount) || 0)) * 100) / 100;
+            return Math.round((this.lineDiscountTotal + (parseFloat(this.cartDiscount) || 0) + (this.couponDiscount || 0)) * 100) / 100;
         },
         get netBeforeLoyalty() {
             return Math.max(0, Math.round((this.subtotal - this.discountBeforeLoyalty) * 100) / 100);

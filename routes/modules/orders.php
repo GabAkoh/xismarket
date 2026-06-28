@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Marketing\CouponController;
 use App\Http\Controllers\Orders\OrderController;
 use App\Http\Controllers\Storefront\StorefrontSettingsController;
 use App\Http\Controllers\Storefront\SubscriberController;
@@ -21,6 +22,9 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::middleware('permission:orders.manage')->group(function () {
         Route::post('subscribers/broadcast', [SubscriberController::class, 'broadcast'])->name('subscribers.broadcast');
         Route::delete('subscribers/{subscriber}', [SubscriberController::class, 'destroy'])->name('subscribers.destroy');
+
+        // Discount coupons (used at storefront checkout and the POS).
+        Route::resource('coupons', CouponController::class)->except(['show']);
     });
 
     // --- Order list + detail ---

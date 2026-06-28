@@ -119,6 +119,17 @@ class OrderService
             $discountTotal = round($discountTotal, 2);
             $taxTotal = round($taxTotal, 2);
 
+            // Coupon — evaluated server-side against the net goods subtotal.
+            $couponCode = null;
+            if (! empty($data['coupon_code'])) {
+                $eval = app(\App\Services\Marketing\CouponService::class)
+                    ->evaluate($data['coupon_code'], round($subtotal - $discountTotal, 2));
+                if (! $eval['error'] && $eval['coupon']) {
+                    $discountTotal = round($discountTotal + $eval['discount'], 2);
+                    $couponCode = $eval['coupon']->code;
+                }
+            }
+
             $fulfillmentType = ($data['fulfillment_type'] ?? 'delivery') === 'pickup'
                 ? 'pickup'
                 : 'delivery';
@@ -148,6 +159,7 @@ class OrderService
                 'payment_status' => 'unpaid',
                 'subtotal' => $subtotal,
                 'discount_total' => $discountTotal,
+                'coupon_code' => $couponCode,
                 'tax_total' => $taxTotal,
                 'delivery_fee' => $deliveryFee,
                 'total' => $total,
@@ -164,6 +176,11 @@ class OrderService
             foreach ($lines as $line) {
                 $line['order_id'] = $order->id;
                 OrderItem::create($line);
+            }
+
+            // Count the coupon redemption now the order is committed.
+            if ($couponCode) {
+                app(\App\Services\Marketing\CouponService::class)->redeem($couponCode);
             }
 
             return $order->load('items', 'customer');

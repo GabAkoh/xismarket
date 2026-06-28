@@ -20,7 +20,7 @@ class Order extends Model
     protected $fillable = [
         'tenant_id', 'number', 'customer_id', 'channel', 'fulfillment_type', 'shipping_method',
         'status', 'payment_status', 'payment_method', 'payment_reference', 'paid_at',
-        'subtotal', 'discount_total', 'tax_total',
+        'subtotal', 'discount_total', 'coupon_code', 'tax_total',
         'delivery_fee', 'total', 'paid_total', 'contact_name', 'contact_phone',
         'address', 'city', 'notes', 'user_id', 'placed_at', 'completed_at', 'refunded_at',
     ];

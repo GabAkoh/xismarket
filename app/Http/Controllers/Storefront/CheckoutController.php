@@ -126,6 +126,7 @@ class CheckoutController extends Controller
             'city' => $data['city'] ?? null,
             'notes' => $data['notes'] ?? null,
             'user_id' => null, // placed by the customer, not staff
+            'coupon_code' => $this->cart->couponCode(),
             'items' => $items,
         ]);
 

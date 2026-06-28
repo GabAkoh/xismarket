@@ -69,7 +69,7 @@
 
     <div class="border-t border-dashed border-slate-200 mt-3 pt-3 space-y-1 text-sm">
         <div class="flex justify-between text-slate-500"><span>Subtotal</span><span>{{ $symbol }}{{ number_format($sale->subtotal, 2) }}</span></div>
-        <div class="flex justify-between text-slate-500"><span>Discount</span><span>−{{ $symbol }}{{ number_format($sale->discount_total, 2) }}</span></div>
+        <div class="flex justify-between text-slate-500"><span>Discount{{ $sale->coupon_code ? ' ('.$sale->coupon_code.')' : '' }}</span><span>−{{ $symbol }}{{ number_format($sale->discount_total, 2) }}</span></div>
         <div class="flex justify-between text-slate-500"><span>Tax</span><span>{{ $symbol }}{{ number_format($sale->tax_total, 2) }}</span></div>
         <div class="flex justify-between font-bold text-slate-800 text-base"><span>Total</span><span>{{ $symbol }}{{ number_format($sale->total, 2) }}</span></div>
     </div>

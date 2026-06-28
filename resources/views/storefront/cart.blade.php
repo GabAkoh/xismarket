@@ -45,9 +45,29 @@
             <h2 class="font-semibold text-slate-800 mb-3">Summary</h2>
             <dl class="text-sm space-y-1.5">
                 <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd>{{ $symbol }} {{ number_format($totals['subtotal'], 2) }}</dd></div>
+                @if (($totals['discount'] ?? 0) > 0)
+                    <div class="flex justify-between text-green-600"><dt>Discount ({{ $totals['coupon_code'] }})</dt><dd>− {{ $symbol }} {{ number_format($totals['discount'], 2) }}</dd></div>
+                @endif
                 <div class="flex justify-between"><dt class="text-slate-500">Tax</dt><dd>{{ $symbol }} {{ number_format($totals['tax'], 2) }}</dd></div>
                 <div class="flex justify-between font-bold text-slate-800 pt-2 border-t"><dt>Total</dt><dd>{{ $symbol }} {{ number_format($totals['total'], 2) }}</dd></div>
             </dl>
+
+            {{-- Promo / coupon code --}}
+            <div class="mt-3 pt-3 border-t">
+                @if ($totals['coupon_code'] ?? null)
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-slate-600">Coupon <span class="font-mono font-semibold">{{ $totals['coupon_code'] }}</span> applied</span>
+                        <form method="POST" action="{{ route('shop.coupon.remove') }}">@csrf<button class="text-xs text-red-500 hover:underline">Remove</button></form>
+                    </div>
+                @else
+                    <form method="POST" action="{{ route('shop.coupon.apply') }}" class="flex gap-2">
+                        @csrf
+                        <input name="code" placeholder="Promo code" maxlength="40"
+                               class="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm uppercase">
+                        <button class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Apply</button>
+                    </form>
+                @endif
+            </div>
             <p class="text-xs text-slate-400 mt-1">Delivery fee (if any) added at checkout.</p>
             @if ($hasOutOfStock)
                 <button type="button" disabled class="mt-4 block w-full text-center rounded-md bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">Checkout</button>

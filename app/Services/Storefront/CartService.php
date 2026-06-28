@@ -23,6 +23,38 @@ class CartService
         return 'shop.cart.'.($this->tenancy->id() ?? 'none');
     }
 
+    protected function couponKey(): string
+    {
+        return 'shop.coupon.'.($this->tenancy->id() ?? 'none');
+    }
+
+    /** The coupon code applied to this cart, if any. */
+    public function couponCode(): ?string
+    {
+        return Session::get($this->couponKey());
+    }
+
+    public function setCoupon(string $code): void
+    {
+        Session::put($this->couponKey(), strtoupper(trim($code)));
+    }
+
+    public function clearCoupon(): void
+    {
+        Session::forget($this->couponKey());
+    }
+
+    /** Discount the applied coupon yields against the current subtotal (0 if invalid). */
+    public function couponDiscount(float $subtotal): float
+    {
+        $code = $this->couponCode();
+        if (! $code) {
+            return 0.0;
+        }
+
+        return (float) app(\App\Services\Marketing\CouponService::class)->evaluate($code, $subtotal)['discount'];
+    }
+
     /** @return array<int,int> product_id => qty */
     public function raw(): array
     {
@@ -62,6 +94,7 @@ class CartService
     public function clear(): void
     {
         Session::forget($this->key());
+        Session::forget($this->couponKey());
     }
 
     /** Total number of units in the cart. */
@@ -123,12 +156,15 @@ class CartService
         $subtotal = round(array_sum(array_column($lines, 'line_net')), 2);
         $tax = round(array_sum(array_map(fn ($l) => round($l['line_net'] * $l['tax_rate'], 2), $lines)), 2);
         $shippingFee = round(max(0, $shippingFee), 2);
+        $discount = round($this->couponDiscount($subtotal), 2);
 
         return [
             'subtotal' => $subtotal,
+            'discount' => $discount,
+            'coupon_code' => $discount > 0 ? $this->couponCode() : null,
             'tax' => $tax,
             'delivery_fee' => $shippingFee,
-            'total' => round($subtotal + $tax + $shippingFee, 2),
+            'total' => round($subtotal - $discount + $tax + $shippingFee, 2),
         ];
     }
 }

@@ -14,7 +14,7 @@ class Sale extends Model
 
     protected $fillable = [
         'tenant_id', 'register_id', 'shift_id', 'customer_id', 'user_id',
-        'number', 'status', 'subtotal', 'discount_total', 'tax_total',
+        'number', 'status', 'subtotal', 'discount_total', 'coupon_code', 'tax_total',
         'total', 'paid_total', 'change_due', 'balance_due', 'note', 'completed_at',
         'wallet_used', 'loyalty_discount', 'points_earned', 'points_redeemed',
         'refunded_total', 'wallet_refunded', 'points_earned_reversed', 'points_redeemed_refunded',

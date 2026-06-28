@@ -23,6 +23,8 @@ Route::middleware(['web', ResolveStoreTenant::class])
         Route::post('cart/add', [CartController::class, 'add'])->name('cart.add');
         Route::post('cart/update', [CartController::class, 'update'])->name('cart.update');
         Route::post('cart/remove', [CartController::class, 'remove'])->name('cart.remove');
+        Route::post('cart/coupon', [CartController::class, 'applyCoupon'])->name('coupon.apply');
+        Route::post('cart/coupon/remove', [CartController::class, 'removeCoupon'])->name('coupon.remove');
 
         Route::post('subscribe', [StorefrontController::class, 'subscribe'])->name('subscribe');
         Route::get('unsubscribe/{token}', [StorefrontController::class, 'unsubscribe'])->name('unsubscribe');
