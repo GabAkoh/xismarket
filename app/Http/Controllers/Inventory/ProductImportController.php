@@ -25,7 +25,7 @@ class ProductImportController extends Controller
         $request->validate([
             'file' => ['required', 'file', 'max:20480'], // 20 MB
             'source' => ['nullable', 'in:shopify,odoo'],
-            'mode' => ['nullable', 'in:create,update'],
+            'mode' => ['nullable', 'in:create,update,images'],
         ]);
 
         // Persist the upload (the temp file is gone after the request) and import

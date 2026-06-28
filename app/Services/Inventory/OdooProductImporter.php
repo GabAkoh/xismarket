@@ -7,6 +7,7 @@ use App\Models\Inventory\Product;
 use App\Models\Inventory\ProductVariant;
 use App\Models\Inventory\Warehouse;
 use App\Support\Tenancy;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -41,6 +42,8 @@ class OdooProductImporter
         // the option axes, e.g. "Color: Red, Size: M".
         'template' => ['producttemplate', 'producttmpl', 'producttemplatename', 'template'],
         'variantvalues' => ['variantvalues', 'attributevalues', 'variantvalue', 'attributevalue', 'variantattributes', 'productvariantvalues'],
+        // Base64 image data (Odoo image/binary fields export inline). Larger first.
+        'image' => ['image', 'image1920', 'image1024', 'image512', 'image256', 'image128', 'productimage'],
     ];
 
     /** @var array<string, int> slug => category id */
@@ -98,7 +101,8 @@ class OdooProductImporter
             }
         }
 
-        if ($idx['name'] === null) {
+        // Images mode matches by SKU, so a Name column isn't required there.
+        if ($idx['name'] === null && $mode !== 'images') {
             fclose($fh);
             $result['errors'][] = 'No product name column found (expected "Name"). Re-export from Odoo with the Name column.';
 
@@ -112,6 +116,11 @@ class OdooProductImporter
         // --- Update mode: only touch products already here (matched by name) ---
         if ($mode === 'update') {
             return $this->runUpdate($fh, $col, $idx, $result);
+        }
+
+        // --- Images mode: set product images from a base64 Image column ---
+        if ($mode === 'images') {
+            return $this->runImageUpdate($fh, $col, $idx, $result);
         }
 
         $warehouse = class_exists(Warehouse::class) ? Warehouse::default() : null;
@@ -372,6 +381,96 @@ class OdooProductImporter
         }
 
         return $result;
+    }
+
+    /**
+     * Set product images from a base64 Image column. Each row is matched to an
+     * existing product by SKU (Internal Reference) first, then by name/template;
+     * the decoded image becomes that product's main image (and the variant's).
+     * Used for an export where the URL route only serves placeholders.
+     *
+     * @param  resource  $fh
+     */
+    protected function runImageUpdate($fh, callable $col, array $idx, array $result): array
+    {
+        if ($idx['image'] === null) {
+            fclose($fh);
+            $result['errors'][] = 'No Image column found. Re-export from Odoo including the "Image" field (base64).';
+
+            return $result;
+        }
+
+        while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
+            $raw = isset($row[$idx['image']]) ? trim((string) $row[$idx['image']]) : '';
+            if ($raw === '') {
+                $result['skipped']++;
+
+                continue;
+            }
+
+            // Match an existing product: variant SKU first, then name/template.
+            $sku = $col($row, 'sku');
+            $variant = $sku !== '' ? ProductVariant::where('sku', $sku)->first() : null;
+            $product = $variant?->product;
+            if (! $product) {
+                $name = $col($row, 'template') !== '' ? $col($row, 'template') : $this->stripVariantSuffix($col($row, 'name'));
+                $product = $name !== '' ? Product::whereRaw('LOWER(name) = ?', [strtolower($name)])->first() : null;
+            }
+            if (! $product) {
+                $result['skipped']++;
+
+                continue;
+            }
+
+            $bytes = $this->decodeBase64Image($raw);
+            $stored = $bytes !== null ? $this->storeImageData($bytes) : null;
+            if (! $stored) {
+                $result['skipped']++;
+
+                continue;
+            }
+
+            $old = $product->image_path;
+            $product->update(['image_path' => $stored]);
+            $variant?->update(['image_path' => $stored]);
+            if ($old && $old !== $stored) {
+                Storage::disk('public')->delete($old);
+            }
+            $result['images']++;
+        }
+        fclose($fh);
+
+        return $result;
+    }
+
+    /** Decode a base64 image cell (handles a data: URI prefix and whitespace). */
+    protected function decodeBase64Image(string $raw): ?string
+    {
+        if (str_contains($raw, 'base64,')) {
+            $raw = substr($raw, strpos($raw, 'base64,') + 7);
+        }
+        $raw = preg_replace('/\s+/', '', $raw);
+        $bytes = base64_decode($raw, true);
+
+        // Reject empty/invalid data (a real image is well over a few hundred bytes).
+        return ($bytes !== false && strlen($bytes) > 200) ? $bytes : null;
+    }
+
+    /** Save decoded image bytes to the public disk, returning the stored path. */
+    protected function storeImageData(string $bytes): ?string
+    {
+        $ext = 'jpg';
+        if (str_starts_with($bytes, "\x89PNG")) {
+            $ext = 'png';
+        } elseif (str_starts_with($bytes, "GIF8")) {
+            $ext = 'gif';
+        } elseif (str_starts_with($bytes, 'RIFF') && str_contains(substr($bytes, 0, 16), 'WEBP')) {
+            $ext = 'webp';
+        }
+
+        $name = 'products/odoo-'.Str::random(32).'.'.$ext;
+
+        return Storage::disk('public')->put($name, $bytes) ? $name : null;
     }
 
     /** Parse Odoo "Variant Values" like "Color: Red, Size: M" → ['Color'=>'Red','Size'=>'M']. */

@@ -20,6 +20,7 @@
         </p>
         <div class="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600">
             <span><strong class="text-slate-800">{{ number_format($lastImport['created'] ?? 0) }}</strong> created</span>
+            @if (($lastImport['variants'] ?? 0) > 0)<span><strong class="text-slate-800">{{ number_format($lastImport['variants']) }}</strong> variants</span>@endif
             <span><strong class="text-slate-800">{{ number_format($lastImport['updated'] ?? 0) }}</strong> updated</span>
             <span><strong class="text-slate-800">{{ number_format($lastImport['images'] ?? 0) }}</strong> images</span>
             <span><strong class="text-slate-800">{{ number_format($lastImport['skipped'] ?? 0) }}</strong> skipped</span>
@@ -78,6 +79,7 @@
             <select name="mode" x-model="mode" class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm">
                 <option value="create">Create new products only (skip existing)</option>
                 <option value="update">Update price &amp; quantity of existing products</option>
+                <option value="images">Update product images (from base64 Image column)</option>
             </select>
         </div>
 
@@ -86,7 +88,12 @@
             <p class="font-semibold text-slate-600">How it works</p>
             <p>In Odoo: <span class="font-medium">Inventory or Sales → Products → select → Export</span>, choose <span class="font-medium">CSV</span> (include Name, Internal Reference, Barcode, Sales Price, Cost, Product Category, Quantity On Hand).</p>
             <p x-show="mode === 'create'"><span class="font-medium text-slate-600">Create:</span> only products not already here are added (matched by Internal Reference, then name) — existing ones are skipped. Name, category, price, cost, barcode and on-hand stock are mapped; tax rate defaults to 0.</p>
+            <p x-show="mode === 'create'"><span class="font-medium text-slate-600">Variants:</span> to import grouped variants, export from <span class="font-medium">Products → Product Variants</span> and include the <span class="font-medium">Product Template</span> and <span class="font-medium">Variant Values</span> columns (e.g. "Color: Red, Size: M"). Rows are grouped into one product per template with a variant each.</p>
             <p x-show="mode === 'update'"><span class="font-medium text-slate-600">Update:</span> for products that already exist here (matched by Internal Reference, then name), the sale price and on-hand quantity are updated from the file (quantity is set to the file's value). Products not found here are skipped; nothing new is created. Prices with thousands separators (e.g. 530,000.00) are handled.</p>
+            <div x-show="mode === 'images'" x-cloak class="space-y-1">
+                <p><span class="font-medium text-slate-600">Images:</span> sets the main image of products already here, matched by <span class="font-medium">Internal Reference</span> (then name). Export with the <span class="font-medium">Image</span> field included — Odoo embeds it as base64 in the CSV (the public <code>/web/image</code> URL only returns a placeholder for unpublished products, so the image must travel in the file).</p>
+                <p class="text-amber-700">⚠ Full-res images make a very large CSV that won't upload here. Keep it under 20&nbsp;MB, or for the whole catalogue place the file on the server and run <code>php artisan products:import-odoo-images &lt;path&gt;</code>.</p>
+            </div>
             <p>The import runs in the background — the summary appears here when it finishes.</p>
         </div>
     </x-card>
