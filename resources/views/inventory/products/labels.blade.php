@@ -11,7 +11,7 @@
     $labels = $items->flatMap(fn ($it) => array_fill(0, $qty, $it));
 @endphp
 
-<x-page-header title="Barcode labels" subtitle="{{ $items->count() }} item(s) · {{ $qty }} label(s) each">
+<x-page-header title="{{ $currentTenant->name }}" subtitle="{{ $items->count() }} item(s) · {{ $qty }} label(s) each">
     <button onclick="window.print()" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden">Print</button>
     <a href="{{ route('products.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm print:hidden">Back</a>
 </x-page-header>
