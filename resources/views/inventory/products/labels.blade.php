@@ -7,18 +7,19 @@
     // Label dimensions (mm) per preset.
     $dims = ['50x25' => [50, 25], '40x30' => [40, 30], '38x25' => [38, 25]];
     [$lw, $lh] = $dims[$size] ?? $dims['50x25'];
-    // Flatten products into one entry per printed label (respecting qty).
-    $labels = $products->flatMap(fn ($p) => array_fill(0, $qty, $p));
+    // Flatten the items into one entry per printed label (respecting qty).
+    $labels = $items->flatMap(fn ($it) => array_fill(0, $qty, $it));
 @endphp
 
-<x-page-header title="Barcode labels" subtitle="{{ $products->count() }} product(s) · {{ $qty }} label(s) each">
+<x-page-header title="Barcode labels" subtitle="{{ $items->count() }} item(s) · {{ $qty }} label(s) each">
     <button onclick="window.print()" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 print:hidden">Print</button>
     <a href="{{ route('products.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm print:hidden">Back</a>
 </x-page-header>
 
 {{-- Controls (size / quantity) — re-loads the page with new options. --}}
 <form method="GET" action="{{ route('products.labels') }}" class="mb-4 flex flex-wrap items-end gap-3 print:hidden">
-    <input type="hidden" name="ids" value="{{ $products->pluck('id')->implode(',') }}">
+    <input type="hidden" name="ids" value="{{ $idsParam }}">
+    <input type="hidden" name="variants" value="{{ $variantsParam }}">
     <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">Label size</label>
         <select name="size" class="rounded-md border border-slate-300 p-2 text-sm">
@@ -34,15 +35,15 @@
     <button class="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">Update</button>
 </form>
 
-@if ($products->isEmpty())
-    <x-card><p class="text-center text-slate-400 py-8">No products selected. Pick products in the list and choose “Print labels”.</p></x-card>
+@if ($items->isEmpty())
+    <x-card><p class="text-center text-slate-400 py-8">No items selected. Pick products in the list and choose “Print labels”, or use the 🏷 link on a variant.</p></x-card>
 @else
     <div id="labels" class="label-sheet" style="--lw: {{ $lw }}mm; --lh: {{ $lh }}mm;">
         @foreach ($labels as $p)
             <div class="label">
-                <div class="label-name">{{ \Illuminate\Support\Str::limit($p->name, 40) }}</div>
-                @if ($p->sale_price)<div class="label-price">{{ $symbol }} {{ number_format($p->sale_price, 2) }}</div>@endif
-                @php $code = $p->barcode ?: $p->sku; @endphp
+                <div class="label-name">{{ \Illuminate\Support\Str::limit($p['name'], 40) }}</div>
+                @if ($p['sale_price'])<div class="label-price">{{ $symbol }} {{ number_format($p['sale_price'], 2) }}</div>@endif
+                @php $code = $p['barcode'] ?: $p['sku']; @endphp
                 @if ($code)
                     <svg class="label-barcode" data-value="{{ $code }}"></svg>
                 @else

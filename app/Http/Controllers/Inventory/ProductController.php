@@ -370,18 +370,39 @@ class ProductController extends Controller
      */
     public function labels(Request $request)
     {
-        $ids = collect(explode(',', (string) $request->query('ids', '')))
-            ->map(fn ($i) => (int) trim($i))->filter()->unique()->take(500)->all();
-
         $qty = max(1, min(50, (int) $request->query('qty', 1)));
         $size = in_array($request->query('size'), ['50x25', '40x30', '38x25'], true)
             ? $request->query('size') : '50x25';
 
-        $products = $ids
-            ? Product::whereIn('id', $ids)->orderBy('name')->get()
-            : collect();
+        $parse = fn (string $q) => collect(explode(',', (string) $request->query($q, '')))
+            ->map(fn ($i) => (int) trim($i))->filter()->unique()->take(500)->all();
 
-        return view('inventory.products.labels', compact('products', 'qty', 'size'));
+        $variantIds = $parse('variants');
+        $ids = $parse('ids');
+        $variantsParam = implode(',', $variantIds);
+        $idsParam = implode(',', $ids);
+
+        // Variant labels carry the variant's own barcode + option label; otherwise
+        // fall back to product-level labels (the bulk "Print labels" action).
+        if ($variantIds) {
+            $items = ProductVariant::with('product')->whereIn('id', $variantIds)->get()
+                ->map(fn ($v) => [
+                    'name' => $v->displayName(),
+                    'sale_price' => (float) $v->sale_price,
+                    'barcode' => $v->barcode,
+                    'sku' => $v->sku,
+                ]);
+        } else {
+            $items = ($ids ? Product::whereIn('id', $ids)->orderBy('name')->get() : collect())
+                ->map(fn ($p) => [
+                    'name' => $p->name,
+                    'sale_price' => (float) $p->sale_price,
+                    'barcode' => $p->barcode,
+                    'sku' => $p->sku,
+                ]);
+        }
+
+        return view('inventory.products.labels', compact('items', 'qty', 'size', 'idsParam', 'variantsParam'));
     }
 
     public function create()

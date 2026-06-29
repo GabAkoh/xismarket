@@ -42,6 +42,8 @@
         opt1: @js(old('option1_name', $product->option1_name ?? '')),
         opt2: @js(old('option2_name', $product->option2_name ?? '')),
         opt3: @js(old('option3_name', $product->option3_name ?? '')),
+        barcodeUrl: @js(route('products.barcode.next')),
+        labelsUrl: @js(route('products.labels')),
      })">
     <h2 class="text-sm font-semibold text-slate-700">Variants</h2>
     <p class="text-xs text-slate-400 mb-2">Name up to 3 option axes (e.g. Size, Colour) for a variant product. A simple product just has one row.</p>
@@ -60,6 +62,7 @@
                     <th class="py-1 pr-2" x-show="opt2" x-text="opt2 || 'Option 2'"></th>
                     <th class="py-1 pr-2" x-show="opt3" x-text="opt3 || 'Option 3'"></th>
                     <th class="py-1 pr-2">SKU</th>
+                    <th class="py-1 pr-2">Barcode</th>
                     <th class="py-1 pr-2">Cost</th>
                     <th class="py-1 pr-2">Price</th>
                     <th class="py-1 pr-2">Stock</th>
@@ -71,11 +74,19 @@
                 <template x-for="(r, i) in rows" :key="i">
                     <tr>
                         <input type="hidden" :name="`variants[${i}][id]`" :value="r.id || ''">
-                        <input type="hidden" :name="`variants[${i}][barcode]`" :value="r.barcode || ''">
                         <td class="py-1 pr-2" x-show="opt1"><input :name="`variants[${i}][option1]`" x-model="r.option1" class="w-24 rounded border border-slate-200 p-1"></td>
                         <td class="py-1 pr-2" x-show="opt2"><input :name="`variants[${i}][option2]`" x-model="r.option2" class="w-24 rounded border border-slate-200 p-1"></td>
                         <td class="py-1 pr-2" x-show="opt3"><input :name="`variants[${i}][option3]`" x-model="r.option3" class="w-24 rounded border border-slate-200 p-1"></td>
                         <td class="py-1 pr-2"><input :name="`variants[${i}][sku]`" x-model="r.sku" class="w-32 rounded border border-slate-200 p-1"></td>
+                        <td class="py-1 pr-2">
+                            <div class="flex items-center gap-1">
+                                <input :name="`variants[${i}][barcode]`" x-model="r.barcode" class="w-28 rounded border border-slate-200 p-1">
+                                <button type="button" @click="generate(r)" class="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-50" title="Generate a unique barcode">Gen</button>
+                                <template x-if="r.id && r.barcode">
+                                    <a :href="`${labelsUrl}?variants=${r.id}`" target="_blank" class="text-sm" title="Print label">🏷</a>
+                                </template>
+                            </div>
+                        </td>
                         <td class="py-1 pr-2"><input type="number" step="0.01" min="0" :name="`variants[${i}][cost_price]`" x-model="r.cost" class="w-20 rounded border border-slate-200 p-1 text-right"></td>
                         <td class="py-1 pr-2"><input type="number" step="0.01" min="0" :name="`variants[${i}][sale_price]`" x-model="r.price" class="w-20 rounded border border-slate-200 p-1 text-right"></td>
                         <td class="py-1 pr-2"><input type="number" step="0.001" :name="`variants[${i}][stock]`" x-model="r.stock" class="w-20 rounded border border-slate-200 p-1 text-right"></td>
@@ -107,8 +118,15 @@ function variantEditor(cfg) {
     return {
         rows: (cfg.rows && cfg.rows.length) ? cfg.rows : [blank()],
         opt1: cfg.opt1 || '', opt2: cfg.opt2 || '', opt3: cfg.opt3 || '',
+        barcodeUrl: cfg.barcodeUrl || '', labelsUrl: cfg.labelsUrl || '',
         add() { this.rows.push(blank()); },
         remove(i) { this.rows.splice(i, 1); if (!this.rows.length) this.add(); },
+        async generate(row) {
+            try {
+                const r = await fetch(this.barcodeUrl, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+                if (r.ok) row.barcode = (await r.json()).barcode;
+            } catch (e) { /* ignore */ }
+        },
     };
 }
 </script>
