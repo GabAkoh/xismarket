@@ -44,13 +44,14 @@
         @foreach ($labels as $p)
             <div class="label">
                 <div class="label-name">{{ \Illuminate\Support\Str::limit($p['name'], 22) }}</div>
-                @if ($p['sale_price'])<div class="label-price">{{ $symbol }} {{ number_format($p['sale_price'], 2) }}</div>@endif
                 @php $code = $p['barcode'] ?: $p['sku']; @endphp
                 @if ($code)
-                    <svg class="label-barcode" data-value="{{ $code }}"></svg>
+                    <div class="label-bc-wrap"><svg class="label-barcode" data-value="{{ $code }}"></svg></div>
+                    <div class="label-code">{{ $code }}</div>
                 @else
                     <div class="label-nobc">No barcode / SKU</div>
                 @endif
+                @if ($p['sale_price'])<div class="label-price">{{ $symbol }} {{ number_format($p['sale_price'], 2) }}</div>@endif
             </div>
         @endforeach
     </div>
@@ -66,10 +67,12 @@
         padding: 0.5mm; gap: 0.3mm; overflow: hidden; box-sizing: border-box; text-align: center;
     }
     /* Keep the name to one line so the barcode gets most of the label. */
-    .label-name { font-size: 7px; line-height: 1.1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .label-price { font-size: 9px; font-weight: 700; }
-    /* The barcode dominates: as wide as the label, and as tall as space allows. */
-    .label-barcode { width: 100%; height: auto; max-height: 74%; }
+    .label-name { font-size: 7px; line-height: 1.1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
+    .label-price { font-size: 10px; font-weight: 700; flex: 0 0 auto; }
+    /* Barcode fills the remaining height; horizontal padding = scanner quiet zone. */
+    .label-bc-wrap { width: 100%; flex: 1 1 auto; min-height: 8mm; display: flex; padding: 0 2mm; box-sizing: border-box; }
+    .label-barcode { width: 100%; height: 100%; display: block; }
+    .label-code { font-size: 9px; font-weight: 600; letter-spacing: 0.5px; font-family: 'Courier New', monospace; line-height: 1; flex: 0 0 auto; }
     .label-nobc { font-size: 8px; color: #ef4444; }
 
     @media print {
@@ -90,7 +93,14 @@
             var v = el.getAttribute('data-value');
             if (!v) return;
             try {
-                JsBarcode(el, v, { format: 'CODE128', width: 2, height: 60, fontSize: 14, margin: 4, displayValue: true });
+                // Render bars only (the code is shown separately as text), then make
+                // the SVG stretch to fill the label box so the bars are large.
+                JsBarcode(el, v, { format: 'CODE128', width: 2, height: 100, margin: 0, displayValue: false });
+                var w = el.getAttribute('width'), h = el.getAttribute('height');
+                if (w && h) el.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+                el.setAttribute('preserveAspectRatio', 'none');
+                el.setAttribute('width', '100%');
+                el.setAttribute('height', '100%');
             } catch (e) { /* unrenderable value — leave blank */ }
         });
     }
