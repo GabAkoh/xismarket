@@ -371,7 +371,7 @@ class ProductController extends Controller
     public function labels(Request $request)
     {
         $qty = max(1, min(50, (int) $request->query('qty', 1)));
-        $size = in_array($request->query('size'), ['50x25', '40x30', '38x25'], true)
+        $size = in_array($request->query('size'), ['50x25', '40x30', '38x25', '50x30', '60x40'], true)
             ? $request->query('size') : '50x25';
 
         $parse = fn (string $q) => collect(explode(',', (string) $request->query($q, '')))

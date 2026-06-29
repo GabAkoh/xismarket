@@ -5,7 +5,7 @@
 @php
     $symbol = $currentTenant->currencySymbol() ?? '';
     // Label dimensions (mm) per preset.
-    $dims = ['50x25' => [50, 25], '40x30' => [40, 30], '38x25' => [38, 25]];
+    $dims = ['50x25' => [50, 25], '40x30' => [40, 30], '38x25' => [38, 25], '50x30' => [50, 30], '60x40' => [60, 40]];
     [$lw, $lh] = $dims[$size] ?? $dims['50x25'];
     // Flatten the items into one entry per printed label (respecting qty).
     $labels = $items->flatMap(fn ($it) => array_fill(0, $qty, $it));
@@ -26,6 +26,8 @@
             <option value="50x25" @selected($size === '50x25')>50 × 25 mm</option>
             <option value="40x30" @selected($size === '40x30')>40 × 30 mm</option>
             <option value="38x25" @selected($size === '38x25')>38 × 25 mm</option>
+            <option value="50x30" @selected($size === '50x30')>50 × 30 mm (bigger)</option>
+            <option value="60x40" @selected($size === '60x40')>60 × 40 mm (biggest)</option>
         </select>
     </div>
     <div>
@@ -41,7 +43,7 @@
     <div id="labels" class="label-sheet" style="--lw: {{ $lw }}mm; --lh: {{ $lh }}mm;">
         @foreach ($labels as $p)
             <div class="label">
-                <div class="label-name">{{ \Illuminate\Support\Str::limit($p['name'], 40) }}</div>
+                <div class="label-name">{{ \Illuminate\Support\Str::limit($p['name'], 22) }}</div>
                 @if ($p['sale_price'])<div class="label-price">{{ $symbol }} {{ number_format($p['sale_price'], 2) }}</div>@endif
                 @php $code = $p['barcode'] ?: $p['sku']; @endphp
                 @if ($code)
@@ -61,11 +63,13 @@
         width: var(--lw); height: var(--lh);
         border: 1px dashed #cbd5e1;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        padding: 1mm; overflow: hidden; box-sizing: border-box; text-align: center;
+        padding: 0.5mm; gap: 0.3mm; overflow: hidden; box-sizing: border-box; text-align: center;
     }
-    .label-name { font-size: 8px; line-height: 1.1; font-weight: 600; }
+    /* Keep the name to one line so the barcode gets most of the label. */
+    .label-name { font-size: 7px; line-height: 1.1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .label-price { font-size: 9px; font-weight: 700; }
-    .label-barcode { width: 100%; height: auto; max-height: 55%; }
+    /* The barcode dominates: as wide as the label, and as tall as space allows. */
+    .label-barcode { width: 100%; height: auto; max-height: 74%; }
     .label-nobc { font-size: 8px; color: #ef4444; }
 
     @media print {
@@ -86,7 +90,7 @@
             var v = el.getAttribute('data-value');
             if (!v) return;
             try {
-                JsBarcode(el, v, { format: 'CODE128', width: 1.4, height: 34, fontSize: 11, margin: 0, displayValue: true });
+                JsBarcode(el, v, { format: 'CODE128', width: 2, height: 60, fontSize: 14, margin: 4, displayValue: true });
             } catch (e) { /* unrenderable value — leave blank */ }
         });
     }
