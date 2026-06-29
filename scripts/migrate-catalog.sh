@@ -30,6 +30,10 @@ ODOO_IMAGES_CSV="${ODOO_IMAGES_CSV:-Odoo Products Recent.csv}"
 
 cd "$(dirname "$0")/.."   # repo root
 
+# Same compose invocation deploy.sh uses, so we target the running prod stack
+# (the prod overlay adds Caddy). Override COMPOSE=... for a non-prod stack.
+COMPOSE="${COMPOSE:-docker compose -f docker-compose.yml -f docker-compose.prod.yml}"
+
 # --- guard: this wipes products, so require an explicit go-ahead ---
 if [ "${1:-}" != "--yes" ] && [ "${CONFIRM:-}" != "yes" ]; then
     echo "This DELETES all products and re-imports them from the CSVs."
@@ -45,7 +49,7 @@ done
 # 0. Safety backup of the whole DB (uses the mysql container's own credentials)
 BACKUP="backup-before-variants-$(date +%F-%H%M).sql"
 echo "[0/5] Backing up the database to $BACKUP ..."
-docker compose exec -T mysql sh -c 'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' > "$BACKUP"
+$COMPOSE exec -T mysql sh -c 'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' > "$BACKUP"
 echo "      $(ls -lh "$BACKUP" | awk '{print $5, $9}')"
 
 # 1. Deploy the variant code + run migrations
@@ -55,13 +59,13 @@ git pull
 
 # 2. Stage the CSVs inside the app container (where the importers read from)
 echo "[2/5] Staging CSVs into the container ..."
-docker compose cp "$SHOPIFY_CSV"       app:/var/www/storage/app/_mig_shopify.csv
-docker compose cp "$ODOO_VARIANTS_CSV" app:/var/www/storage/app/_mig_odoo_variants.csv
-docker compose cp "$ODOO_IMAGES_CSV"   app:/var/www/storage/app/_mig_odoo_images.csv
+$COMPOSE cp "$SHOPIFY_CSV"       app:/var/www/storage/app/_mig_shopify.csv
+$COMPOSE cp "$ODOO_VARIANTS_CSV" app:/var/www/storage/app/_mig_odoo_variants.csv
+$COMPOSE cp "$ODOO_IMAGES_CSV"   app:/var/www/storage/app/_mig_odoo_images.csv
 
 # 3. Write the migration script into the container
 echo "[3/5] Writing migration script ..."
-docker compose exec -T app sh -c 'cat > storage/app/_migrate.php' <<'PHP'
+$COMPOSE exec -T app sh -c 'cat > storage/app/_migrate.php' <<'PHP'
 <?php
 app(App\Support\Tenancy::class)->set(App\Models\Tenant::first());
 
@@ -88,11 +92,11 @@ PHP
 
 # 4. Run it (foreground; nohup the whole script to survive a disconnect)
 echo "[4/5] Running import — this takes a while (image downloads) ..."
-docker compose exec -T app php artisan tinker storage/app/_migrate.php
+$COMPOSE exec -T app php artisan tinker storage/app/_migrate.php
 
 # 5. Clean up staged files
 echo "[5/5] Cleaning up staged files ..."
-docker compose exec -T app rm -f \
+$COMPOSE exec -T app rm -f \
     storage/app/_mig_shopify.csv \
     storage/app/_mig_odoo_variants.csv \
     storage/app/_mig_odoo_images.csv \
@@ -108,7 +112,7 @@ Now smoke-test the live site (storefront product page, POS variant picker).
 # The backup includes DROP TABLE statements, so this fully reverts the schema
 # and data. Old image files remain on disk, so the previous images reappear.
 # ─────────────────────────────────────────────────────────────────────────────
-# docker compose exec -T mysql sh -c 'mysql -u root -p"\$MYSQL_ROOT_PASSWORD" "\$MYSQL_DATABASE"' < $BACKUP \\
-#   && docker compose restart app worker nginx \\
+# $COMPOSE exec -T mysql sh -c 'mysql -u root -p"\$MYSQL_ROOT_PASSWORD" "\$MYSQL_DATABASE"' < $BACKUP \\
+#   && $COMPOSE restart app worker nginx \\
 #   && echo "Rolled back to $BACKUP"
 EOF
