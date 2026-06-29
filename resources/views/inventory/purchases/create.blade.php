@@ -4,8 +4,7 @@
 @section('content')
 <x-page-header title="New purchase order" />
 
-<form method="POST" action="{{ route('purchases.store') }}" class="max-w-4xl"
-      x-data="{ items: [{ product_id: '', quantity: 1, unit_cost: 0 }] }">
+<form method="POST" action="{{ route('purchases.store') }}" class="max-w-4xl" x-data="poForm()">
     @csrf
     <x-card title="Details">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -46,13 +45,22 @@
                 <tbody class="divide-y">
                     <template x-for="(item, index) in items" :key="index">
                         <tr>
-                            <td class="py-2 pr-2">
-                                <select :name="`items[${index}][product_id]`" x-model="item.product_id" required class="w-full rounded-md border border-slate-300 p-2">
-                                    <option value="">— Select product —</option>
-                                    @foreach ($products as $product)
-                                        <option value="{{ $product->id }}">{{ $product->name }} ({{ $product->sku }})</option>
-                                    @endforeach
-                                </select>
+                            <td class="py-2 pr-2 relative">
+                                <input type="hidden" :name="`items[${index}][product_id]`" :value="item.product_id">
+                                <input x-model="item.search" @input.debounce.300ms="search(item)" @focus="search(item)"
+                                       placeholder="Search name, SKU, barcode or description…" autocomplete="off"
+                                       class="w-full rounded-md border p-2"
+                                       :class="item.product_id ? 'border-slate-300' : 'border-amber-300'">
+                                <div x-show="item.results.length" x-cloak @click.outside="item.results = []"
+                                     class="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                                    <template x-for="p in item.results" :key="p.id">
+                                        <button type="button" @click="pick(item, p)"
+                                                class="block w-full text-left px-3 py-1.5 text-sm hover:bg-indigo-50">
+                                            <span x-text="p.name"></span>
+                                            <span class="text-slate-400" x-text="'· ' + p.sku + (p.barcode ? ' · ' + p.barcode : '')"></span>
+                                        </button>
+                                    </template>
+                                </div>
                             </td>
                             <td class="py-2 pr-2">
                                 <input :name="`items[${index}][quantity]`" x-model="item.quantity" type="number" step="0.001" min="0.001" required class="w-full rounded-md border border-slate-300 p-2">
@@ -61,15 +69,48 @@
                                 <input :name="`items[${index}][unit_cost]`" x-model="item.unit_cost" type="number" step="0.01" min="0" required class="w-full rounded-md border border-slate-300 p-2">
                             </td>
                             <td class="py-2 text-right">
-                                <button type="button" @click="items.splice(index, 1)" x-show="items.length > 1" class="text-red-600 hover:underline">✕</button>
+                                <button type="button" @click="removeLine(index)" x-show="items.length > 1" class="text-red-600 hover:underline">✕</button>
                             </td>
                         </tr>
                     </template>
                 </tbody>
             </table>
-            <button type="button" @click="items.push({ product_id: '', quantity: 1, unit_cost: 0 })" class="mt-3 text-sm text-indigo-600 hover:underline">+ Add line</button>
+            <button type="button" @click="addLine()" class="mt-3 text-sm text-indigo-600 hover:underline">+ Add line</button>
         </x-card>
     </div>
+
+    @push('scripts')
+    <script>
+    function poForm() {
+        const blank = () => ({ product_id: '', search: '', results: [], quantity: 1, unit_cost: 0 });
+        return {
+            items: [blank()],
+            searchUrl: '{{ route('purchases.product-search') }}',
+            async search(item) {
+                const q = item.search.trim();
+                // If the field no longer matches the picked product, clear the selection.
+                if (item.product_id && q !== item.label) item.product_id = '';
+                if (q.length < 2) { item.results = []; return; }
+                try {
+                    const res = await fetch(this.searchUrl + '?q=' + encodeURIComponent(q), {
+                        headers: { 'Accept': 'application/json' }, credentials: 'same-origin',
+                    });
+                    item.results = res.ok ? await res.json() : [];
+                } catch (e) { item.results = []; }
+            },
+            pick(item, p) {
+                item.product_id = p.id;
+                item.label = p.name + ' (' + p.sku + ')';
+                item.search = item.label;
+                if (!item.unit_cost || Number(item.unit_cost) <= 0) item.unit_cost = p.cost_price || 0;
+                item.results = [];
+            },
+            addLine() { this.items.push(blank()); },
+            removeLine(i) { this.items.splice(i, 1); if (!this.items.length) this.addLine(); },
+        };
+    }
+    </script>
+    @endpush
 
     <div class="mt-4 flex gap-2">
         <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Create purchase order</button>

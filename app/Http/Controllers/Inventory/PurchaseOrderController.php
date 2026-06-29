@@ -195,9 +195,40 @@ class PurchaseOrderController extends Controller
     {
         $suppliers = Supplier::orderBy('name')->get();
         $warehouses = Warehouse::orderByDesc('is_default')->orderBy('name')->get();
-        $products = Product::orderBy('name')->get();
 
-        return view('inventory.purchases.create', compact('suppliers', 'warehouses', 'products'));
+        return view('inventory.purchases.create', compact('suppliers', 'warehouses'));
+    }
+
+    /** Typeahead for the PO line items — matches name, SKU, description and barcode (incl. variants). */
+    public function productSearch(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $like = '%'.$q.'%';
+        $products = Product::query()
+            ->where('is_active', true)
+            ->where(function ($w) use ($like) {
+                $w->where('name', 'like', $like)
+                    ->orWhere('sku', 'like', $like)
+                    ->orWhere('description', 'like', $like)
+                    ->orWhere('barcode', 'like', $like)
+                    ->orWhereHas('variants', fn ($v) => $v
+                        ->where('sku', 'like', $like)->orWhere('barcode', 'like', $like));
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name', 'sku', 'barcode', 'cost_price']);
+
+        return response()->json($products->map(fn ($p) => [
+            'id' => $p->id,
+            'name' => $p->name,
+            'sku' => $p->sku,
+            'barcode' => $p->barcode,
+            'cost_price' => (float) $p->cost_price,
+        ]));
     }
 
     public function store(Request $request)

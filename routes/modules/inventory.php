@@ -94,6 +94,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
     Route::middleware('permission:purchases.manage')->group(function () {
         Route::get('purchases-create', [PurchaseOrderController::class, 'create'])->name('purchases.create');
+        Route::get('purchases-product-search', [PurchaseOrderController::class, 'productSearch'])->name('purchases.product-search');
         Route::post('purchases', [PurchaseOrderController::class, 'store'])->name('purchases.store');
         Route::post('purchases/{purchase}/receive', [PurchaseOrderController::class, 'receive'])->name('purchases.receive');
     });
