@@ -199,6 +199,14 @@ class PurchaseOrderController extends Controller
         return view('inventory.purchases.create', compact('suppliers', 'warehouses'));
     }
 
+    /** Receipt-printer-formatted PO printout that auto-prints to the default printer. */
+    public function receipt(PurchaseOrder $purchase)
+    {
+        $purchase->load(['supplier', 'warehouse', 'items.product']);
+
+        return view('inventory.purchases.receipt', compact('purchase'));
+    }
+
     /** Typeahead for the PO line items — matches name, SKU, description and barcode (incl. variants). */
     public function productSearch(Request $request)
     {

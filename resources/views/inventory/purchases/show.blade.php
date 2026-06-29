@@ -11,6 +11,7 @@
             </form>
         @endunless
     @endpermission
+    <a href="{{ route('purchases.receipt', $purchase) }}" target="_blank" class="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">🖨 Print receipt</a>
     <a href="{{ route('purchases.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back</a>
 </x-page-header>
 
