@@ -30,6 +30,18 @@ class SupplierController extends Controller
         return redirect()->route('suppliers.index')->with('status', 'Supplier added.');
     }
 
+    /** Create (or reuse) a supplier by name and return it as JSON — for inline creation. */
+    public function quickStore(Request $request)
+    {
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $name = trim($data['name']);
+
+        $supplier = Supplier::whereRaw('LOWER(name) = ?', [strtolower($name)])->first()
+            ?? Supplier::create(['name' => $name]);
+
+        return response()->json(['id' => $supplier->id, 'name' => $supplier->name]);
+    }
+
     public function edit(Supplier $supplier)
     {
         $this->authorizeTenant($supplier);

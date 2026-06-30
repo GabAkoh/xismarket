@@ -13,7 +13,8 @@
                 label="Supplier"
                 :options="$suppliers"
                 :selected="old('supplier_id')"
-                placeholder="Search supplier…" />
+                placeholder="Search supplier…"
+                :create-url="auth()->user()?->hasPermission('suppliers.manage') ? route('suppliers.quick') : null" />
             <x-searchable-select
                 name="warehouse_id"
                 label="Warehouse"
