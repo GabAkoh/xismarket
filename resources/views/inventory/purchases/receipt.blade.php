@@ -75,10 +75,13 @@
 <style>
 @media print {
     @page { size: {{ $receiptWidth }}mm auto; margin: 0; }
-    html, body { background: #fff !important; }
-    aside, header, .print\:hidden { display: none !important; }
-    main { padding: 0 !important; margin: 0 !important; }
+    html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    /* Hide the whole app shell, then reveal only the receipt. */
+    body * { visibility: hidden !important; }
+    #receipt, #receipt * { visibility: visible !important; color: #000 !important; }
+    aside, header, nav, .print\:hidden { display: none !important; }
     #receipt {
+        position: absolute !important; left: 0 !important; top: 0 !important;
         width: {{ $receiptWidth }}mm !important;
         max-width: {{ $receiptWidth }}mm !important;
         margin: 0 !important;
@@ -88,7 +91,6 @@
         font-size: {{ $receiptWidth === 58 ? '10' : '11' }}px;
         line-height: 1.3;
     }
-    #receipt * { color: #000 !important; }
 }
 </style>
 @endpush
