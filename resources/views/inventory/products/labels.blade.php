@@ -5,7 +5,7 @@
 @php
     $symbol = $currentTenant->currencySymbol() ?? '';
     // Label dimensions (mm) per preset.
-    $dims = ['50x25' => [50, 25], '40x30' => [40, 30], '38x25' => [38, 25], '50x30' => [50, 30], '60x40' => [60, 40]];
+    $dims = ['50x25' => [50, 25], '40x30' => [40, 30], '38x25' => [38, 25], '50x30' => [50, 30], '60x40' => [60, 40], '30x40' => [30, 40]];
     [$lw, $lh] = $dims[$size] ?? $dims['50x25'];
     // Flatten the items into one entry per printed label (respecting qty).
     $labels = $items->flatMap(fn ($it) => array_fill(0, $qty, $it));
@@ -28,12 +28,18 @@
             <option value="38x25" @selected($size === '38x25')>38 × 25 mm</option>
             <option value="50x30" @selected($size === '50x30')>50 × 30 mm (bigger)</option>
             <option value="60x40" @selected($size === '60x40')>60 × 40 mm (biggest)</option>
+            <option value="30x40" @selected($size === '30x40')>30 × 40 mm</option>
+            <option value="40x30" @selected($size === '40x30')>40 × 30 mm</option>
         </select>
     </div>
     <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">Labels per product</label>
         <input type="number" name="qty" value="{{ $qty }}" min="1" max="50" class="w-24 rounded-md border border-slate-300 p-2 text-sm">
     </div>
+    <label class="flex items-center gap-2 text-sm text-slate-600 pb-2" title="One label per page, sized to the label — for roll/thermal label printers">
+        <input type="checkbox" name="roll" value="1" @checked($roll) class="rounded border-slate-300">
+        Roll printer (one label per page)
+    </label>
     <button class="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">Update</button>
 </form>
 
@@ -76,10 +82,19 @@
     .label-nobc { font-size: 8px; color: #ef4444; }
 
     @media print {
-        @page { margin: 4mm; }
         aside, header, .print\:hidden { display: none !important; }
         main { padding: 0 !important; }
         .label { border: none; }
+        @if ($roll)
+        /* Roll/label printer: each label is its own page, sized exactly to the label. */
+        @page { size: {{ $lw }}mm {{ $lh }}mm; margin: 0; }
+        html, body { margin: 0 !important; padding: 0 !important; }
+        .label-sheet { display: block !important; gap: 0 !important; }
+        .label { width: {{ $lw }}mm !important; height: {{ $lh }}mm !important; page-break-after: always; break-after: page; }
+        .label:last-child { page-break-after: avoid; break-after: avoid; }
+        @else
+        @page { margin: 4mm; }
+        @endif
     }
 </style>
 @endpush

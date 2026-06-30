@@ -371,8 +371,9 @@ class ProductController extends Controller
     public function labels(Request $request)
     {
         $qty = max(1, min(50, (int) $request->query('qty', 1)));
-        $size = in_array($request->query('size'), ['50x25', '40x30', '38x25', '50x30', '60x40'], true)
+        $size = in_array($request->query('size'), ['50x25', '40x30', '38x25', '50x30', '60x40', '30x40'], true)
             ? $request->query('size') : '50x25';
+        $roll = $request->boolean('roll');   // roll printer: one label per page
 
         $parse = fn (string $q) => collect(explode(',', (string) $request->query($q, '')))
             ->map(fn ($i) => (int) trim($i))->filter()->unique()->take(500)->all();
@@ -402,7 +403,7 @@ class ProductController extends Controller
                 ]);
         }
 
-        return view('inventory.products.labels', compact('items', 'qty', 'size', 'idsParam', 'variantsParam'));
+        return view('inventory.products.labels', compact('items', 'qty', 'size', 'idsParam', 'variantsParam', 'roll'));
     }
 
     public function create()
