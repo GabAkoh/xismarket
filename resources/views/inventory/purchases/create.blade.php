@@ -8,23 +8,19 @@
     @csrf
     <x-card title="Details">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-                <label class="block text-sm font-medium text-slate-700">Supplier</label>
-                <select name="supplier_id" class="mt-1 w-full rounded-md border border-slate-300 p-2">
-                    <option value="">— None —</option>
-                    @foreach ($suppliers as $supplier)
-                        <option value="{{ $supplier->id }}" @selected((string) old('supplier_id') === (string) $supplier->id)>{{ $supplier->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700">Warehouse</label>
-                <select name="warehouse_id" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
-                    @foreach ($warehouses as $warehouse)
-                        <option value="{{ $warehouse->id }}" @selected((string) old('warehouse_id') === (string) $warehouse->id || $warehouse->is_default)>{{ $warehouse->name }}</option>
-                    @endforeach
-                </select>
-            </div>
+            <x-searchable-select
+                name="supplier_id"
+                label="Supplier"
+                :options="$suppliers"
+                :selected="old('supplier_id')"
+                placeholder="Search supplier…" />
+            <x-searchable-select
+                name="warehouse_id"
+                label="Warehouse"
+                :options="$warehouses"
+                :selected="old('warehouse_id', $warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id ?? '')"
+                placeholder="Search warehouse…"
+                :allow-none="false" />
             <div>
                 <label class="block text-sm font-medium text-slate-700">Order date</label>
                 <input name="order_date" type="date" value="{{ old('order_date', now()->toDateString()) }}" class="mt-1 w-full rounded-md border border-slate-300 p-2">

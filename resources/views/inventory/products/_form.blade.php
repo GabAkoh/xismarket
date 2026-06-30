@@ -16,25 +16,13 @@
         <label class="block text-sm font-medium text-slate-700">Name</label>
         <input name="name" value="{{ old('name', $product->name ?? '') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
     </div>
-    @php $selCat = (string) old('category_id', $product->category_id ?? ''); @endphp
-    <div x-data="categoryPicker({
-            categories: @js($categories->map(fn ($c) => ['id' => (string) $c->id, 'name' => $c->name])->values()),
-            selectedId: @js($selCat),
-            selectedName: @js($categories->firstWhere('id', (int) $selCat)?->name ?? ''),
-         })" class="relative">
-        <label class="block text-sm font-medium text-slate-700">Category</label>
-        <input type="hidden" name="category_id" :value="selectedId">
-        <input type="text" x-model="query" @focus="open = true" @input="onType()" autocomplete="off"
-               placeholder="Search category…" class="mt-1 w-full rounded-md border border-slate-300 p-2">
-        <div x-show="open" x-cloak @click.outside="open = false"
-             class="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-            <button type="button" @click="pick(null)" class="block w-full text-left px-3 py-1.5 text-sm text-slate-500 hover:bg-indigo-50">— None —</button>
-            <template x-for="c in filtered" :key="c.id">
-                <button type="button" @click="pick(c)" class="block w-full text-left px-3 py-1.5 text-sm hover:bg-indigo-50" x-text="c.name"></button>
-            </template>
-            <div x-show="query && !filtered.length" class="px-3 py-1.5 text-sm text-slate-400">No matching category</div>
-        </div>
-    </div>
+    <x-searchable-select
+        name="category_id"
+        label="Category"
+        :options="$categories"
+        :selected="old('category_id', $product->category_id ?? '')"
+        placeholder="Search category…"
+        :create-url="auth()->user()?->hasPermission('categories.manage') ? route('categories.quick') : null" />
     <div>
         <label class="block text-sm font-medium text-slate-700">Tax rate (%)</label>
         <input name="tax_rate" type="number" step="0.0001" min="0" value="{{ old('tax_rate', $product->tax_rate ?? '0') }}" required class="mt-1 w-full rounded-md border border-slate-300 p-2">
@@ -123,26 +111,6 @@
 
 @push('scripts')
 <script>
-function categoryPicker(cfg) {
-    return {
-        categories: cfg.categories || [],
-        selectedId: cfg.selectedId || '',
-        query: cfg.selectedName || '',
-        open: false,
-        get filtered() {
-            const q = this.query.trim().toLowerCase();
-            const list = q ? this.categories.filter(c => c.name.toLowerCase().includes(q)) : this.categories;
-            return list.slice(0, 50);
-        },
-        onType() { this.open = true; this.selectedId = ''; },   // editing clears the pick
-        pick(c) {
-            this.selectedId = c ? String(c.id) : '';
-            this.query = c ? c.name : '';
-            this.open = false;
-        },
-    };
-}
-
 function variantEditor(cfg) {
     const blank = () => ({ id: '', option1: '', option2: '', option3: '', sku: '', barcode: '', cost: 0, price: 0, stock: '', active: true });
     return {

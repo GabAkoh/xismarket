@@ -71,6 +71,18 @@ class CategoryController extends Controller
         return redirect()->route('categories.index')->with('status', 'Category added.');
     }
 
+    /** Create (or reuse) a category by name and return it as JSON — for inline creation. */
+    public function quickStore(Request $request)
+    {
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $name = trim($data['name']);
+
+        $category = Category::whereRaw('LOWER(name) = ?', [strtolower($name)])->first()
+            ?? Category::create(['name' => $name, 'slug' => $this->uniqueSlug($name)]);
+
+        return response()->json(['id' => $category->id, 'name' => $category->name]);
+    }
+
     public function edit(Category $category)
     {
         $this->authorizeTenant($category);
