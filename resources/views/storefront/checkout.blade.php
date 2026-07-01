@@ -66,33 +66,28 @@
         </div>
 
         {{-- Payment --}}
-        <div class="bg-white rounded-lg border border-slate-200 p-5">
+        <div class="bg-white rounded-lg border border-slate-200 p-5" x-data="{ method: '{{ $onlinePayment ? 'online' : 'offline' }}' }">
             <h2 class="font-semibold text-slate-800 mb-4">Payment</h2>
-            <input type="hidden" name="payment_method" value="card">
-            <p class="text-sm text-slate-600 mb-4">💳 Pay securely by card.</p>
 
-            <div class="space-y-3">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700">Card number</label>
-                    <input name="card_number" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242"
-                           class="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700">Name on card</label>
-                    <input name="card_name" autocomplete="cc-name" value="{{ old('card_name') }}" class="mt-1 w-full rounded-md border border-slate-300 p-2">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700">Expiry (MM/YY)</label>
-                        <input name="card_expiry" autocomplete="cc-exp" placeholder="12/28" class="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700">CVC</label>
-                        <input name="card_cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" class="mt-1 w-full rounded-md border border-slate-300 p-2 font-mono">
-                    </div>
-                </div>
-                <p class="text-xs text-slate-400">🔒 Sandbox gateway — no real charge. Try test card <span class="font-mono">4242 4242 4242 4242</span>, any future expiry &amp; CVC. A number ending in <span class="font-mono">0002</span> is declined.</p>
-            </div>
+            @if ($onlinePayment)
+                <label class="flex items-start gap-3 rounded-md border p-3 cursor-pointer" :class="method === 'online' ? 'border-indigo-400 ring-1 ring-indigo-200' : 'border-slate-200'">
+                    <input type="radio" name="payment_method" value="online" x-model="method" class="mt-1">
+                    <span>
+                        <span class="block text-sm font-medium text-slate-700">💳 Pay now (card)</span>
+                        <span class="block text-xs text-slate-500">Secure payment via Paystack — you'll be redirected to complete it. An email is required for your receipt.</span>
+                    </span>
+                </label>
+                <label class="mt-2 flex items-start gap-3 rounded-md border p-3 cursor-pointer" :class="method === 'offline' ? 'border-indigo-400 ring-1 ring-indigo-200' : 'border-slate-200'">
+                    <input type="radio" name="payment_method" value="offline" x-model="method" class="mt-1">
+                    <span>
+                        <span class="block text-sm font-medium text-slate-700">🚚 Pay on delivery / pickup</span>
+                        <span class="block text-xs text-slate-500">Pay when you receive or collect your order.</span>
+                    </span>
+                </label>
+            @else
+                <input type="hidden" name="payment_method" value="offline">
+                <p class="text-sm text-slate-600">🚚 Pay on delivery or pickup — pay when you receive or collect your order.</p>
+            @endif
         </div>
     </div>
 
@@ -117,9 +112,11 @@
                 <dd x-text="'{{ $symbol }} ' + grandTotal.toFixed(2)"></dd></div>
         </dl>
         <button class="mt-4 w-full rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
-            Pay <span x-text="'{{ $symbol }} ' + grandTotal.toFixed(2)"></span>
+            Place order · <span x-text="'{{ $symbol }} ' + grandTotal.toFixed(2)"></span>
         </button>
-        <p class="text-xs text-slate-400 mt-2 text-center">Your card will be charged now.</p>
+        @if ($onlinePayment)
+            <p class="text-xs text-slate-400 mt-2 text-center">Card payments are completed securely on Paystack.</p>
+        @endif
     </div>
 </form>
 @endsection

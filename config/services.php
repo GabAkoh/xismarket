@@ -52,6 +52,15 @@ return [
         ],
     ],
 
+    // Paystack online payments (storefront card checkout). Set both keys from
+    // your Paystack dashboard to enable online payment; leave blank to fall back
+    // to pay-on-delivery only. Test keys for staging, live keys for production.
+    'paystack' => [
+        'secret' => env('PAYSTACK_SECRET_KEY'),
+        'public' => env('PAYSTACK_PUBLIC_KEY'),
+        'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
+    ],
+
     // AI product-image generation (background removal, recolor, side views,
     // model shots). Set IMAGE_AI_KEY to enable; the 'stub' provider echoes the
     // source image for local testing without an external call.

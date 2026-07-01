@@ -30,6 +30,11 @@ return Application::configure(basePath: dirname(__DIR__))
             IdentifyTenant::class,
         ]);
 
+        // Paystack posts its webhook without a CSRF token (verified by signature).
+        $middleware->validateCsrfTokens(except: [
+            'shop/*/paystack/webhook',
+        ]);
+
         $middleware->alias([
             'permission' => EnsurePermission::class,
         ]);

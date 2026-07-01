@@ -3,6 +3,7 @@
 use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\CheckoutController;
 use App\Http\Controllers\Storefront\CustomerAuthController;
+use App\Http\Controllers\Storefront\PaystackWebhookController;
 use App\Http\Controllers\Storefront\StorefrontController;
 use App\Http\Middleware\ResolveStoreTenant;
 use Illuminate\Support\Facades\Route;
@@ -46,5 +47,10 @@ Route::middleware(['web', ResolveStoreTenant::class])
 
         Route::get('checkout', [CheckoutController::class, 'show'])->name('checkout');
         Route::post('checkout', [CheckoutController::class, 'place'])->name('checkout.place');
+        Route::get('checkout/callback', [CheckoutController::class, 'paymentCallback'])->name('checkout.callback');
         Route::get('order/confirmed', [CheckoutController::class, 'confirmation'])->name('confirmation');
+
+        // Paystack server-to-server confirmation (signature-verified; CSRF-exempt
+        // in bootstrap/app.php via the shop/*/paystack/webhook pattern).
+        Route::post('paystack/webhook', [PaystackWebhookController::class, 'handle'])->name('paystack.webhook');
     });
