@@ -2,6 +2,8 @@
 
 namespace App\Services\Storefront;
 
+use App\Support\Tenancy;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -17,12 +19,37 @@ class PaystackGateway
 {
     public function configured(): bool
     {
-        return filled(config('services.paystack.secret'));
+        if (blank($this->secret())) {
+            return false;
+        }
+
+        // Admin can toggle it off in settings; when unset (env-only mode) a key
+        // present means enabled.
+        $enabled = app(Tenancy::class)->current()?->setting('payments.enabled');
+
+        return $enabled === null ? true : (bool) $enabled;
     }
 
     public function publicKey(): ?string
     {
-        return config('services.paystack.public');
+        $fromSettings = app(Tenancy::class)->current()?->setting('payments.paystack_public');
+
+        return filled($fromSettings) ? $fromSettings : config('services.paystack.public');
+    }
+
+    /** Secret key: tenant settings (encrypted) first, then env/config. */
+    protected function secret(): ?string
+    {
+        $enc = app(Tenancy::class)->current()?->setting('payments.paystack_secret');
+        if (filled($enc)) {
+            try {
+                return Crypt::decryptString($enc);
+            } catch (\Throwable $e) {
+                // Corrupt/rotated app key — fall back to config.
+            }
+        }
+
+        return config('services.paystack.secret');
     }
 
     protected function baseUrl(): string
@@ -39,7 +66,7 @@ class PaystackGateway
      */
     public function initialize(string $email, float $amount, string $reference, string $callbackUrl): array
     {
-        $res = Http::withToken((string) config('services.paystack.secret'))
+        $res = Http::withToken((string) $this->secret())
             ->acceptJson()
             ->post($this->baseUrl().'/transaction/initialize', [
                 'email' => $email,
@@ -67,7 +94,7 @@ class PaystackGateway
      */
     public function verify(string $reference): array
     {
-        $res = Http::withToken((string) config('services.paystack.secret'))
+        $res = Http::withToken((string) $this->secret())
             ->acceptJson()
             ->get($this->baseUrl().'/transaction/verify/'.rawurlencode($reference));
 
@@ -89,7 +116,7 @@ class PaystackGateway
             return false;
         }
 
-        $expected = hash_hmac('sha512', $payload, (string) config('services.paystack.secret'));
+        $expected = hash_hmac('sha512', $payload, (string) $this->secret());
 
         return hash_equals($expected, $signature);
     }
