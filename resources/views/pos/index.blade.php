@@ -138,9 +138,34 @@
 
         {{-- RIGHT: cart + checkout --}}
         <div class="lg:col-span-2 bg-white rounded-lg shadow-sm flex flex-col min-h-0">
-            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
                 <h2 class="font-semibold text-slate-800">Cart</h2>
-                <button type="button" @click="clearCart()" x-show="cart.length" class="text-xs text-red-500 hover:underline">Clear</button>
+                <div class="flex items-center gap-3">
+                    <button type="button" @click="toggleHeld()" x-show="heldSales.length" class="text-xs font-medium text-indigo-600 hover:underline">
+                        Held (<span x-text="heldSales.length"></span>)
+                    </button>
+                    <button type="button" @click="holdSale()" x-show="cart.length" class="text-xs text-amber-600 hover:underline" title="Park this sale and start a new one">Hold</button>
+                    <button type="button" @click="clearCart()" x-show="cart.length" class="text-xs text-red-500 hover:underline">Clear</button>
+                </div>
+            </div>
+
+            {{-- Held (parked) sales — resume or discard --}}
+            <div x-show="showHeld && heldSales.length" x-cloak class="px-4 py-3 border-b border-slate-100 bg-amber-50/60">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-semibold text-slate-600">Held sales</span>
+                    <button type="button" @click="showHeld = false" class="text-xs text-slate-400 hover:text-slate-600">Close</button>
+                </div>
+                <div class="space-y-1 max-h-48 overflow-y-auto">
+                    <template x-for="h in heldSales" :key="h.id">
+                        <div class="flex items-center justify-between gap-2 rounded border border-amber-200 bg-white px-2 py-1.5 text-sm">
+                            <button type="button" @click="resumeHeld(h.id)" class="flex-1 text-left min-w-0">
+                                <span class="font-medium text-slate-700" x-text="h.label"></span>
+                                <span class="text-xs text-slate-400" x-text="' · ' + h.count + ' item' + (h.count === 1 ? '' : 's') + ' · ' + money(h.total)"></span>
+                            </button>
+                            <button type="button" @click="discardHeld(h.id)" class="shrink-0 text-slate-300 hover:text-red-500" title="Discard">✕</button>
+                        </div>
+                    </template>
+                </div>
             </div>
 
             {{-- Scrollable cart body: lines + checkout scroll together so the whole
@@ -412,10 +437,15 @@ function posRegister() {
         creditMethods: @json(array_values($creditMethods)),
         tenders: [{ method: @json($payMethods[0]['key'] ?? 'cash'), amount: null }],
         submitting: false,
+        // Parked sales — hold the current cart and start another; persisted per
+        // register in the browser so they survive a refresh.
+        heldSales: [],
+        showHeld: false,
 
         init() {
             // Keep the scan field focused so a hardware scanner (keyboard wedge) just works.
             this.$nextTick(() => this.$refs.scan?.focus());
+            this.loadHeld();
         },
 
         get customer() {
@@ -533,6 +563,67 @@ function posRegister() {
             this.redeemPoints = 0; this.useWallet = 0;
             this.removeCoupon();
         },
+
+        // --- Hold / park sales ---------------------------------------------
+        heldKey() { return 'pos.held.' + (this.registerId || 'none'); },
+        loadHeld() {
+            try { this.heldSales = JSON.parse(localStorage.getItem(this.heldKey()) || '[]'); }
+            catch (e) { this.heldSales = []; }
+        },
+        persistHeld() {
+            try { localStorage.setItem(this.heldKey(), JSON.stringify(this.heldSales)); } catch (e) {}
+        },
+        saleSnapshot() {
+            return {
+                cart: JSON.parse(JSON.stringify(this.cart)),
+                cartDiscount: this.cartDiscount,
+                customerId: this.customerId,
+                couponInput: this.couponInput, couponCode: this.couponCode, couponDiscount: this.couponDiscount,
+                redeemPoints: this.redeemPoints, useWallet: this.useWallet,
+            };
+        },
+        restoreSale(s) {
+            this.cart = s.cart || [];
+            this.cartDiscount = s.cartDiscount || 0;
+            this.customerId = s.customerId || '';
+            this.couponInput = s.couponInput || ''; this.couponCode = s.couponCode || ''; this.couponDiscount = s.couponDiscount || 0;
+            this.couponError = '';
+            this.redeemPoints = s.redeemPoints || 0; this.useWallet = s.useWallet || 0;
+            this.tenders = [{ method: this.payMethods[0] || 'cash', amount: null }];
+        },
+        holdSale() {
+            if (!this.cart.length) return;
+            const label = (this.customer && this.customer.name)
+                ? this.customer.name
+                : ('Sale ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            this.heldSales.push({
+                id: 'h' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+                label,
+                count: this.cart.reduce((n, l) => n + (parseFloat(l.qty) || 0), 0),
+                total: this.total,
+                ...this.saleSnapshot(),
+            });
+            this.persistHeld();
+            this.clearCart();
+            this.$refs.scan?.focus();
+        },
+        resumeHeld(id) {
+            const idx = this.heldSales.findIndex(h => h.id === id);
+            if (idx === -1) return;
+            if (this.cart.length) this.holdSale();   // park the current sale first, so nothing is lost
+            const h = this.heldSales.splice(idx, 1)[0];
+            this.restoreSale(h);
+            this.persistHeld();
+            this.showHeld = false;
+            this.$refs.scan?.focus();
+        },
+        discardHeld(id) {
+            if (!confirm('Discard this held sale?')) return;
+            this.heldSales = this.heldSales.filter(h => h.id !== id);
+            this.persistHeld();
+            if (!this.heldSales.length) this.showHeld = false;
+        },
+        toggleHeld() { this.showHeld = !this.showHeld; },
 
         // --- Coupon code ---
         async applyCoupon() {
