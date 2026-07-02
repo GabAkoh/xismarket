@@ -1,10 +1,15 @@
+@php
+    $appName = $currentTenant?->setting('branding.app_name') ?: 'xismarket';
+    $appIcon = $currentTenant?->setting('branding.icon');
+@endphp
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-slate-100">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Dashboard') · xismarket</title>
+    <title>@yield('title', 'Dashboard') · {{ $appName }}</title>
+    @if ($appIcon)<link rel="icon" href="{{ asset('storage/'.$appIcon) }}">@endif
     <script src="https://cdn.tailwindcss.com"></script>
     {{-- Alpine is served locally so the app (esp. the POS register, which is fully Alpine-driven)
          keeps working when the CDN is unreachable; the CDN is kept as an automatic fallback. --}}
@@ -17,7 +22,10 @@
     {{-- Sidebar --}}
     <aside class="w-64 shrink-0 bg-slate-900 text-slate-300 flex flex-col" x-show="sidebar" x-cloak>
         <div class="h-16 flex items-center px-6 border-b border-slate-800">
-            <a href="{{ route('dashboard') }}" class="text-xl font-extrabold text-white">xismarket</a>
+            <a href="{{ route('dashboard') }}" class="flex items-center gap-2 text-xl font-extrabold text-white">
+                @if ($appIcon)<img src="{{ asset('storage/'.$appIcon) }}" alt="{{ $appName }}" class="h-8 w-8 rounded object-contain bg-white/10">@endif
+                <span>{{ $appName }}</span>
+            </a>
         </div>
         <nav class="flex-1 overflow-y-auto py-4 text-sm">
             @php
@@ -72,6 +80,7 @@
                     ['heading' => 'Administration', 'links' => [
                         ['route' => 'users.index', 'label' => 'Staff', 'perm' => 'users.view'],
                         ['route' => 'roles.index', 'label' => 'Roles', 'perm' => 'roles.view'],
+                        ['route' => 'branding.settings', 'label' => 'Branding', 'perm' => 'users.manage'],
                     ]],
                 ];
             @endphp
