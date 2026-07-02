@@ -4,7 +4,11 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisteredTenantController;
 use App\Http\Controllers\BrandingSettingsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ManifestController;
 use Illuminate\Support\Facades\Route;
+
+// PWA web app manifest (public; branded per tenant).
+Route::get('manifest.webmanifest', [ManifestController::class, 'show'])->name('manifest');
 
 Route::get('/', function () {
     // Logged-in staff go to the admin dashboard. Everyone else lands on the

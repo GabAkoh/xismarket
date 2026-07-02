@@ -10,6 +10,13 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · {{ $appName }}</title>
     @if ($appIcon)<link rel="icon" href="{{ asset('storage/'.$appIcon) }}">@endif
+    {{-- PWA: installable home-screen app --}}
+    <link rel="manifest" href="{{ route('manifest') }}">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="{{ $appName }}">
+    @if ($appIcon)<link rel="apple-touch-icon" href="{{ asset('storage/'.$appIcon) }}">@endif
+    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }</script>
     <script src="https://cdn.tailwindcss.com"></script>
     {{-- Alpine is served locally so the app (esp. the POS register, which is fully Alpine-driven)
          keeps working when the CDN is unreachable; the CDN is kept as an automatic fallback. --}}
