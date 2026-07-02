@@ -110,10 +110,7 @@ class Permissions
                 'description' => 'Operates the point of sale.',
                 'permissions' => [
                     'pos.use', 'sales.view', 'inventory.view',
-                    'categories.view', 'stock.view', 'stock.valuation',
-                    'customers.view', 'customers.manage', 'wallets.view', 'loyalty.manage',
-                    'orders.view', 'orders.manage',
-                    'coupons.manage', 'subscribers.view', 'storefront.manage', 'payments.manage',
+                    'customers.view', 'customers.manage',
                 ],
             ],
             'accountant' => [
