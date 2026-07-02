@@ -86,20 +86,41 @@ class DeviceService
         ]);
     }
 
-    /** A friendly device label from the user agent, e.g. "Chrome on Windows". */
+    /**
+     * A friendly device label from the user agent, e.g. "Chrome on Windows" or,
+     * where the UA exposes a model, "Chrome on Android (SM-G991B)". Browsers
+     * can't reveal the OS device name/hostname, so admins can rename devices.
+     */
     public function label(Request $request): string
     {
         $ua = (string) $request->userAgent();
+
         $browser = str_contains($ua, 'Edg') ? 'Edge'
             : (str_contains($ua, 'Chrome') ? 'Chrome'
             : (str_contains($ua, 'Firefox') ? 'Firefox'
             : (str_contains($ua, 'Safari') ? 'Safari' : 'Browser')));
+
         $os = str_contains($ua, 'Windows') ? 'Windows'
             : (str_contains($ua, 'Android') ? 'Android'
             : ((str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) ? 'iOS'
             : (str_contains($ua, 'Mac') ? 'Mac'
             : (str_contains($ua, 'Linux') ? 'Linux' : 'device'))));
 
-        return $browser.' on '.$os;
+        // Mobile UAs usually carry a model; desktops don't.
+        $model = null;
+        if (preg_match('/Android [\d.]+; ?([^;)]+?)(?: Build|[;)])/', $ua, $m)) {
+            $model = trim($m[1]);
+        } elseif (str_contains($ua, 'iPhone')) {
+            $model = 'iPhone';
+        } elseif (str_contains($ua, 'iPad')) {
+            $model = 'iPad';
+        }
+
+        $label = $browser.' on '.$os;
+        if ($model && ! str_contains($label, $model)) {
+            $label .= ' ('.$model.')';
+        }
+
+        return $label;
     }
 }
