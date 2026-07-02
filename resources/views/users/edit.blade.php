@@ -43,6 +43,11 @@
                     @endforeach
                 </div>
             </div>
+
+            <div class="mt-6 border-t pt-5">
+                <h3 class="text-sm font-semibold text-slate-700 mb-2">Access hours <span class="font-normal text-slate-400">— overrides the role schedule</span></h3>
+                @include('partials.access-hours', ['schedule' => old('access_hours', $user->access_hours ?? null)])
+            </div>
         @else
             <input type="hidden" name="is_active" value="1">
             <p class="mt-4 text-sm text-slate-500">The store owner has full access and cannot be restricted.</p>

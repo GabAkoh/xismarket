@@ -29,6 +29,11 @@
             </div>
         @endforeach
     </div>
+
+    <div class="mt-6 border-t pt-5">
+        <h3 class="text-sm font-semibold text-slate-700 mb-2">Access hours</h3>
+        @include('partials.access-hours', ['schedule' => old('access_hours', $role->access_hours ?? null)])
+    </div>
 </x-card>
 <div class="mt-4 flex gap-2">
     <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Save role</button>

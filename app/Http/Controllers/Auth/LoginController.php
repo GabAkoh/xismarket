@@ -36,6 +36,14 @@ class LoginController extends Controller
             ]);
         }
 
+        if (! \App\Support\AccessHours::allows($user)) {
+            Auth::logout();
+            $window = \App\Support\AccessHours::label($user);
+            throw ValidationException::withMessages([
+                'email' => 'Access is closed right now.'.($window ? ' Allowed hours: '.$window.'.' : ''),
+            ]);
+        }
+
         $user->forceFill(['last_login_at' => now()])->save();
         $request->session()->regenerate();
 

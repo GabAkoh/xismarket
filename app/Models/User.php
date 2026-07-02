@@ -14,7 +14,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'tenant_id', 'name', 'email', 'password',
-        'is_owner', 'is_super_admin', 'is_active', 'last_login_at',
+        'is_owner', 'is_super_admin', 'is_active', 'last_login_at', 'access_hours',
     ];
 
     protected $hidden = [
@@ -30,6 +30,7 @@ class User extends Authenticatable
             'is_owner' => 'boolean',
             'is_super_admin' => 'boolean',
             'is_active' => 'boolean',
+            'access_hours' => 'array',
         ];
     }
 

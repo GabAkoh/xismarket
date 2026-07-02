@@ -10,10 +10,11 @@ class Role extends Model
 {
     use BelongsToTenant;
 
-    protected $fillable = ['tenant_id', 'name', 'slug', 'description', 'is_system'];
+    protected $fillable = ['tenant_id', 'name', 'slug', 'description', 'is_system', 'access_hours'];
 
     protected $casts = [
         'is_system' => 'boolean',
+        'access_hours' => 'array',
     ];
 
     public function permissions(): BelongsToMany

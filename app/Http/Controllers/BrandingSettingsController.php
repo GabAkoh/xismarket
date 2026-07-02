@@ -26,11 +26,17 @@ class BrandingSettingsController extends Controller
             'app_name' => ['nullable', 'string', 'max:60'],
             'icon' => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:1024'],
             'remove_icon' => ['nullable'],
+            'timezone' => ['nullable', 'timezone'],
         ]);
 
         $store = $this->tenancy->current();
         $settings = $store->settings ?? [];
         $branding = $settings['branding'] ?? [];
+
+        // Timezone drives access-hours + local-time displays.
+        $settings['general'] = array_merge($settings['general'] ?? [], [
+            'timezone' => $data['timezone'] ?: null,
+        ]);
 
         $branding['app_name'] = trim((string) ($data['app_name'] ?? '')) ?: null;
 

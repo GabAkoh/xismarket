@@ -45,6 +45,7 @@ class RoleController extends Controller
             'slug' => $this->uniqueSlug($data['name'], $tenantId),
             'description' => $data['description'] ?? null,
             'is_system' => false,
+            'access_hours' => \App\Support\AccessHours::fromRequest($request),
         ]);
 
         $role->syncPermissionsBySlug($data['permissions'] ?? []);
@@ -75,6 +76,7 @@ class RoleController extends Controller
         $role->update([
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
+            'access_hours' => \App\Support\AccessHours::fromRequest($request),
         ]);
 
         $role->syncPermissionsBySlug($data['permissions'] ?? []);

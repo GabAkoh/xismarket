@@ -41,6 +41,18 @@
             <p class="mt-1 text-xs text-slate-400">Used as the sidebar logo and browser favicon. Square PNG works best (e.g. 128×128). PNG/JPG/WebP, up to 1&nbsp;MB.</p>
             @error('icon')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
         </div>
+
+        <div class="mt-5 border-t pt-4">
+            <label class="block text-sm font-medium text-slate-700">Timezone</label>
+            <input name="timezone" list="tz-list" value="{{ old('timezone', $store->setting('general.timezone', config('app.timezone'))) }}"
+                   placeholder="Africa/Lagos" class="mt-1 w-full rounded-md border border-slate-300 p-2">
+            <datalist id="tz-list">
+                <option value="Africa/Lagos"><option value="Africa/Accra"><option value="Africa/Nairobi">
+                <option value="Africa/Johannesburg"><option value="UTC"><option value="Europe/London"><option value="America/New_York">
+            </datalist>
+            <p class="mt-1 text-xs text-slate-400">Used for staff access-hours and local-time displays. e.g. <span class="font-mono">Africa/Lagos</span>.</p>
+            @error('timezone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
     </x-card>
 
     <div class="mt-4">

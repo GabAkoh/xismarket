@@ -85,6 +85,7 @@ class UserController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'is_active' => $request->boolean('is_active'),
+            'access_hours' => \App\Support\AccessHours::fromRequest($request),
         ]);
 
         if (! empty($data['password'])) {
