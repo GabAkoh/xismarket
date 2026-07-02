@@ -12,6 +12,9 @@ class Permissions
     public static function catalog(): array
     {
         return [
+            'Dashboard' => [
+                'dashboard.view' => 'View dashboard summaries',
+            ],
             'Users & Access' => [
                 'users.view' => 'View staff',
                 'users.manage' => 'Create / edit / deactivate staff',
@@ -92,6 +95,7 @@ class Permissions
                 'name' => 'Manager',
                 'description' => 'Runs day-to-day operations across modules.',
                 'permissions' => [
+                    'dashboard.view',
                     'users.view',
                     'inventory.view', 'products.manage', 'categories.view', 'categories.manage',
                     'stock.view', 'stock.valuation',
@@ -117,6 +121,7 @@ class Permissions
                 'name' => 'Accountant',
                 'description' => 'Manages the books and financial reports.',
                 'permissions' => [
+                    'dashboard.view',
                     'accounting.view', 'accounts.manage', 'journals.manage',
                     'taxes.manage', 'reports.view', 'sales.view', 'purchases.view',
                 ],

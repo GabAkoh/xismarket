@@ -13,6 +13,15 @@ class DashboardController extends Controller
     {
         $tenantId = $tenancy->id();
         $stats = [];
+        $recentSales = [];
+        $salesByDay = [];
+        $salesByMonth = [];
+
+        // Business summaries are only computed/shown for permitted users.
+        $canView = (bool) auth()->user()?->hasPermission('dashboard.view');
+        if (! $canView) {
+            return view('dashboard', compact('stats', 'recentSales', 'salesByDay', 'salesByMonth', 'canView'));
+        }
 
         // Each metric is guarded so the dashboard renders even before a
         // module's tables have been migrated.
@@ -37,7 +46,6 @@ class DashboardController extends Controller
             $stats['staff'] = DB::table('users')->where('tenant_id', $tenantId)->count();
         }
 
-        $recentSales = [];
         if (Schema::hasTable('sales')) {
             $recentSales = DB::table('sales')
                 ->where('tenant_id', $tenantId)
@@ -48,8 +56,6 @@ class DashboardController extends Controller
 
         // Sales-by-period series for the "Sales over time" chart.
         // 'void' sales are excluded from realized revenue.
-        $salesByDay = [];
-        $salesByMonth = [];
         if (Schema::hasTable('sales')) {
             $base = fn () => DB::table('sales')
                 ->where('tenant_id', $tenantId)
@@ -93,6 +99,6 @@ class DashboardController extends Controller
             }
         }
 
-        return view('dashboard', compact('stats', 'recentSales', 'salesByDay', 'salesByMonth'));
+        return view('dashboard', compact('stats', 'recentSales', 'salesByDay', 'salesByMonth', 'canView'));
     }
 }

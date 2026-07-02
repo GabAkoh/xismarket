@@ -4,6 +4,7 @@
 @section('content')
 @php $currency = $currentTenant?->currencySymbol() ?? 'USD'; @endphp
 
+@if ($canView)
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Sales today</p>
@@ -32,8 +33,15 @@
     'salesByMonth' => $salesByMonth ?? [],
     'currency' => $currency,
 ])
+@else
+<div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+    <h1 class="text-lg font-bold text-slate-800">Welcome{{ auth()->user() ? ', '.\Illuminate\Support\Str::of(auth()->user()->name)->before(' ') : '' }} 👋</h1>
+    <p class="text-sm text-slate-500 mt-1">Use the menu on the left to get to work. Business summaries are limited to authorised roles.</p>
+</div>
+@endif
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    @if ($canView)
     <div class="lg:col-span-2 bg-white rounded-lg shadow-sm p-5">
         <h2 class="font-semibold text-slate-800 mb-4">Recent sales</h2>
         @if (count($recentSales))
@@ -56,8 +64,9 @@
             <p class="text-sm text-slate-400">No sales yet. Open the <a href="{{ route('pos.index') }}" class="text-indigo-600">register</a> to make your first sale.</p>
         @endif
     </div>
+    @endif
 
-    <div class="bg-white rounded-lg shadow-sm p-5">
+    <div class="bg-white rounded-lg shadow-sm p-5 {{ $canView ? '' : 'lg:col-span-3' }}">
         <h2 class="font-semibold text-slate-800 mb-4">Quick actions</h2>
         <div class="space-y-2 text-sm">
             @if (Route::has('shop.home') && $currentTenant)<a href="{{ route('shop.home', ['store' => $currentTenant->slug]) }}" target="_blank" class="block rounded-md border border-indigo-200 bg-indigo-50 px-4 py-3 text-indigo-700 hover:bg-indigo-100">🛍️ View storefront ↗</a>@endif
