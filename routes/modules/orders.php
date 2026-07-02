@@ -10,25 +10,27 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['web', 'auth'])->group(function () {
 
     // --- Storefront content (landing-page text shown on the public shop) ---
-    Route::middleware('permission:orders.manage')->group(function () {
+    Route::middleware('permission:storefront.manage')->group(function () {
         Route::get('storefront/settings', [StorefrontSettingsController::class, 'edit'])->name('storefront.settings');
         Route::put('storefront/settings', [StorefrontSettingsController::class, 'update'])->name('storefront.settings.update');
+    });
 
-        // Online payment (Paystack) keys.
+    // --- Online payment (Paystack) keys ---
+    Route::middleware('permission:payments.manage')->group(function () {
         Route::get('payments/settings', [PaymentSettingsController::class, 'edit'])->name('payments.settings');
         Route::put('payments/settings', [PaymentSettingsController::class, 'update'])->name('payments.settings.update');
     });
 
     // --- Community / newsletter subscribers ---
-    Route::middleware('permission:orders.view')->group(function () {
+    Route::middleware('permission:subscribers.view')->group(function () {
         Route::get('subscribers', [SubscriberController::class, 'index'])->name('subscribers.index');
         Route::get('subscribers/export', [SubscriberController::class, 'export'])->name('subscribers.export');
-    });
-    Route::middleware('permission:orders.manage')->group(function () {
         Route::post('subscribers/broadcast', [SubscriberController::class, 'broadcast'])->name('subscribers.broadcast');
         Route::delete('subscribers/{subscriber}', [SubscriberController::class, 'destroy'])->name('subscribers.destroy');
+    });
 
-        // Discount coupons (used at storefront checkout and the POS).
+    // --- Discount coupons (used at storefront checkout and the POS) ---
+    Route::middleware('permission:coupons.manage')->group(function () {
         Route::resource('coupons', CouponController::class)->except(['show']);
     });
 

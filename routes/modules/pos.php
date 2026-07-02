@@ -56,8 +56,10 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
 
     // --- Customers ---
-    Route::middleware('permission:customers.view')->group(function () {
+    Route::middleware('permission:wallets.view')->group(function () {
         Route::get('wallets', [WalletController::class, 'index'])->name('wallets.index');
+    });
+    Route::middleware('permission:customers.view')->group(function () {
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
         // Numeric constraint so it doesn't capture the literal "customers/create".
         Route::get('customers/{customer}', [CustomerController::class, 'show'])
@@ -79,8 +81,10 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('customers/{customer}/wallet', [CustomerController::class, 'topUpWallet'])->name('customers.wallet.topup');
         Route::post('customers/{customer}/wallet/withdraw', [CustomerController::class, 'withdrawWallet'])->name('customers.wallet.withdraw');
         Route::post('customers/{customer}/loyalty', [CustomerController::class, 'adjustLoyalty'])->name('customers.loyalty.adjust');
+    });
 
-        // Loyalty program settings (tenant-wide).
+    // Loyalty program settings (tenant-wide).
+    Route::middleware('permission:loyalty.manage')->group(function () {
         Route::get('loyalty/settings', [LoyaltyController::class, 'edit'])->name('loyalty.settings');
         Route::put('loyalty/settings', [LoyaltyController::class, 'update'])->name('loyalty.update');
     });
@@ -96,16 +100,16 @@ Route::middleware(['web', 'auth'])->group(function () {
 
         Route::post('registers/{register}/shift/open', [RegisterController::class, 'openShift'])->name('registers.shift.open');
         Route::post('registers/{register}/shift/close', [RegisterController::class, 'closeShift'])->name('registers.shift.close');
+    });
 
-        // Register display preferences (e.g. product grid density).
+    // POS configuration screens (register display, tenders, cash reasons).
+    Route::middleware('permission:pos.settings')->group(function () {
         Route::get('pos/settings', [PosSettingsController::class, 'edit'])->name('pos.settings');
         Route::put('pos/settings', [PosSettingsController::class, 'update'])->name('pos.settings.update');
 
-        // Payment method (tender) configuration.
         Route::get('pos/payment-methods', [PaymentMethodController::class, 'edit'])->name('payment-methods.settings');
         Route::put('pos/payment-methods', [PaymentMethodController::class, 'update'])->name('payment-methods.update');
 
-        // Cash-drawer reason (cash in / out) configuration.
         Route::get('pos/cash-reasons', [CashReasonController::class, 'edit'])->name('cash-reasons.settings');
         Route::put('pos/cash-reasons', [CashReasonController::class, 'update'])->name('cash-reasons.update');
     });

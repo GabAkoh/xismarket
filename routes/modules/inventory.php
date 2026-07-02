@@ -20,10 +20,12 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('products/report/export', [ProductController::class, 'reportExport'])->name('products.report.export');
         Route::get('products/movements', [StockMovementController::class, 'report'])->name('products.movements');
         Route::get('products/movements/export', [StockMovementController::class, 'reportExport'])->name('products.movements.export');
-        Route::get('products/valuation', [StockValuationController::class, 'report'])->name('products.valuation');
-        Route::get('products/valuation/export', [StockValuationController::class, 'reportExport'])->name('products.valuation.export');
         // Printable barcode labels (?ids=1,2,3).
         Route::get('products/labels', [ProductController::class, 'labels'])->name('products.labels');
+    });
+    Route::middleware('permission:stock.valuation')->group(function () {
+        Route::get('products/valuation', [StockValuationController::class, 'report'])->name('products.valuation');
+        Route::get('products/valuation/export', [StockValuationController::class, 'reportExport'])->name('products.valuation.export');
     });
     Route::middleware('permission:products.manage')->group(function () {
         // Fresh unique barcode for the "Generate" button (literal — before {product}).
@@ -44,7 +46,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
 
     // Categories
-    Route::middleware('permission:inventory.view')->group(function () {
+    Route::middleware('permission:categories.view')->group(function () {
         Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
         Route::get('categories/export', [CategoryController::class, 'export'])->name('categories.export');
     });
@@ -79,7 +81,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
 
     // Stock levels
-    Route::middleware('permission:inventory.view')->group(function () {
+    Route::middleware('permission:stock.view')->group(function () {
         Route::get('stock', [StockController::class, 'index'])->name('stock.index');
     });
     Route::middleware('permission:stock.adjust')->group(function () {
