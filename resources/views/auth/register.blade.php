@@ -1,4 +1,4 @@
-<x-guest-layout title="Create your store · xismarket">
+<x-guest-layout title="Create your store">
     <h2 class="text-center text-xl font-bold text-slate-800 mb-6">Create your store</h2>
 
     @if ($errors->any())

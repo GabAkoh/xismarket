@@ -1,10 +1,20 @@
-@props(['title' => 'xismarket'])
+@props(['title' => null])
+@php
+    // Guest pages have no signed-in tenant — resolve branding from the configured
+    // default store (or the first tenant on a single-store install).
+    $brandTenant = ($slug = config('storefront.default_store'))
+        ? \App\Models\Tenant::where('slug', $slug)->first()
+        : \App\Models\Tenant::query()->first();
+    $appName = $brandTenant?->setting('branding.app_name') ?: 'xismarket';
+    $appIcon = $brandTenant?->setting('branding.icon');
+@endphp
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-slate-100">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title }}</title>
+    <title>{{ $title ? $title.' · '.$appName : $appName }}</title>
+    @if ($appIcon)<link rel="icon" href="{{ asset('storage/'.$appIcon) }}">@endif
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="{{ asset('js/alpine.min.js') }}"
             onerror="this.onerror=null;var s=document.createElement('script');s.defer=true;s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js';document.head.appendChild(s);"></script>
@@ -12,7 +22,10 @@
 <body class="h-full">
     <div class="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div class="sm:mx-auto sm:w-full sm:max-w-md text-center">
-            <a href="{{ url('/') }}" class="text-3xl font-extrabold tracking-tight text-indigo-600">xismarket</a>
+            <a href="{{ url('/') }}" class="inline-flex items-center gap-2 text-3xl font-extrabold tracking-tight text-indigo-600">
+                @if ($appIcon)<img src="{{ asset('storage/'.$appIcon) }}" alt="{{ $appName }}" class="h-9 w-9 rounded object-contain">@endif
+                <span>{{ $appName }}</span>
+            </a>
             <p class="mt-1 text-sm text-slate-500">Inventory · POS · Accounting · Users</p>
         </div>
         <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

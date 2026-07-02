@@ -1,4 +1,4 @@
-<x-guest-layout title="Sign in · xismarket">
+<x-guest-layout title="Sign in">
     <h2 class="text-center text-xl font-bold text-slate-800 mb-6">Sign in to your account</h2>
 
     @if ($errors->any())
