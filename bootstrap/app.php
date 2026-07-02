@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnforceAccessHours;
+use App\Http\Middleware\EnforceDeviceRestriction;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\IdentifyTenant;
 use Illuminate\Foundation\Application;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             IdentifyTenant::class,
             EnforceAccessHours::class,
+            EnforceDeviceRestriction::class,
         ]);
 
         // Paystack posts its webhook without a CSRF token (verified by signature).

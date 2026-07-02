@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisteredTenantController;
 use App\Http\Controllers\BrandingSettingsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\ManifestController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,10 +36,16 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
-    // White-label app name + icon.
+    // White-label app name + icon, and device allowlist management.
     Route::middleware('permission:users.manage')->group(function () {
         Route::get('settings/branding', [BrandingSettingsController::class, 'edit'])->name('branding.settings');
         Route::put('settings/branding', [BrandingSettingsController::class, 'update'])->name('branding.settings.update');
+
+        Route::get('settings/devices', [DeviceController::class, 'index'])->name('devices.index');
+        Route::post('devices/{device}/approve', [DeviceController::class, 'approve'])->name('devices.approve');
+        Route::post('devices/{device}/revoke', [DeviceController::class, 'revoke'])->name('devices.revoke');
+        Route::put('devices/{device}', [DeviceController::class, 'rename'])->name('devices.rename');
+        Route::delete('devices/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
     });
 });
 

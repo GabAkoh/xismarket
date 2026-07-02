@@ -29,6 +29,10 @@ class LoginController extends Controller
 
         $user = Auth::user();
 
+        // Set the tenant now (middleware ran as guest) so the checks below use
+        // the tenant's timezone / device list.
+        app(\App\Support\Tenancy::class)->set(\App\Models\Tenant::find($user->tenant_id));
+
         if (! $user->is_active) {
             Auth::logout();
             throw ValidationException::withMessages([
@@ -41,6 +45,16 @@ class LoginController extends Controller
             $window = \App\Support\AccessHours::label($user);
             throw ValidationException::withMessages([
                 'email' => 'Access is closed right now.'.($window ? ' Allowed hours: '.$window.'.' : ''),
+            ]);
+        }
+
+        // Device allowlist (owners/super-admins bypass so they can approve devices).
+        $devices = app(\App\Support\DeviceService::class);
+        if ($devices->restrictionEnabled() && ! $user->is_owner && ! $user->is_super_admin && ! $devices->isApproved($request)) {
+            $devices->registerPending($request);
+            Auth::logout();
+            throw ValidationException::withMessages([
+                'email' => 'This device isn’t approved yet. An administrator must approve it before you can sign in.',
             ]);
         }
 

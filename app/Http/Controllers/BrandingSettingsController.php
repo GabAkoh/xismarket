@@ -27,6 +27,7 @@ class BrandingSettingsController extends Controller
             'icon' => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:1024'],
             'remove_icon' => ['nullable'],
             'timezone' => ['nullable', 'timezone'],
+            'device_restriction' => ['nullable'],
         ]);
 
         $store = $this->tenancy->current();
@@ -37,6 +38,16 @@ class BrandingSettingsController extends Controller
         $settings['general'] = array_merge($settings['general'] ?? [], [
             'timezone' => $data['timezone'] ?: null,
         ]);
+
+        // Device allowlist. Approve the current browser when turning it on, so
+        // the admin enabling it isn't immediately locked out.
+        $enableDevices = $request->boolean('device_restriction');
+        $settings['security'] = array_merge($settings['security'] ?? [], [
+            'device_restriction' => $enableDevices,
+        ]);
+        if ($enableDevices) {
+            app(\App\Support\DeviceService::class)->approveCurrent($request, auth()->id());
+        }
 
         $branding['app_name'] = trim((string) ($data['app_name'] ?? '')) ?: null;
 

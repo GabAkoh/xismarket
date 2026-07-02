@@ -53,6 +53,16 @@
             <p class="mt-1 text-xs text-slate-400">Used for staff access-hours and local-time displays. e.g. <span class="font-mono">Africa/Lagos</span>.</p>
             @error('timezone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
         </div>
+
+        <div class="mt-5 border-t pt-4">
+            <label class="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="device_restriction" value="1" @checked($store->setting('security.device_restriction', false)) class="mt-0.5 rounded border-slate-300 text-indigo-600">
+                <span>
+                    <span class="font-medium">Only allow approved devices to sign in</span>
+                    <span class="block text-xs text-slate-500">Staff (except owners/admins) can only sign in from devices you've approved. New devices appear as pending in <a href="{{ route('devices.index') }}" class="text-indigo-600 hover:underline">Devices</a> for approval. Turning this on approves the device you're using now.</span>
+                </span>
+            </label>
+        </div>
     </x-card>
 
     <div class="mt-4">
