@@ -102,20 +102,47 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
+    // True only for a 13-digit string whose last digit is a valid EAN-13 check
+    // digit (matches App\Services\Inventory\BarcodeService::checkDigit).
+    function isEan13(v) {
+        if (!/^\d{13}$/.test(v)) return false;
+        var sum = 0;
+        for (var i = 0; i < 12; i++) {
+            sum += (+v[i]) * (i % 2 === 0 ? 1 : 3);
+        }
+        return (10 - (sum % 10)) % 10 === (+v[12]);
+    }
+
     function renderBarcodes() {
         if (typeof JsBarcode === 'undefined') { setTimeout(renderBarcodes, 100); return; }
         document.querySelectorAll('svg.label-barcode').forEach(function (el) {
             var v = el.getAttribute('data-value');
             if (!v) return;
             try {
-                // Render bars only (the code is shown separately as text), then make
-                // the SVG stretch to fill the label box so the bars are large.
-                JsBarcode(el, v, { format: 'CODE128', width: 2, height: 100, margin: 0, displayValue: false });
+                // Render bars only (the code is shown separately as text). We size the
+                // barcode via a viewBox and let it scale to fit the label WITHOUT
+                // distorting the bar widths — a scanner reads the relative bar/space
+                // widths, so any horizontal stretch (preserveAspectRatio="none") blurs
+                // the edges at print time and makes the code unreadable.
+                //   margin: 10  -> keeps a quiet zone baked into the image
+                //   shape-rendering: crispEdges -> snap bar edges to device pixels (no blur)
+                //
+                // Our in-store codes are valid EAN-13 (13 digits + correct check digit),
+                // so render those as a true EAN-13 symbol — denser and more reliably read
+                // by retail scanners. Anything else (e.g. an alphanumeric SKU fallback)
+                // uses CODE128, which accepts any value.
+                var opts = { width: 3, height: 60, margin: 10, displayValue: false };
+                opts.format = isEan13(v) ? 'EAN13' : 'CODE128';
+                JsBarcode(el, v, opts);
                 var w = el.getAttribute('width'), h = el.getAttribute('height');
                 if (w && h) el.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-                el.setAttribute('preserveAspectRatio', 'none');
-                el.setAttribute('width', '100%');
-                el.setAttribute('height', '100%');
+                el.removeAttribute('width');
+                el.removeAttribute('height');
+                // Fit within the label box, centred, preserving the aspect ratio.
+                el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                el.setAttribute('shape-rendering', 'crispEdges');
+                el.style.width = '100%';
+                el.style.height = '100%';
             } catch (e) { /* unrenderable value — leave blank */ }
         });
     }
