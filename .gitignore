@@ -28,3 +28,13 @@ Thumbs.db
 
 # Shopify product export CSVs (import data, not source)
 /products_export*.csv
+/products_exxport.csv
+
+# Data dumps & exports — NEVER commit these (they bloated .git to 37 GB once).
+# Keep them locally, but they are data/backups, not source code.
+*.sql
+*.xlsx
+/Odoo*.csv
+/*.tmp
+~$*
+$null

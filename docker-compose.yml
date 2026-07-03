@@ -1,3 +1,11 @@
+# Cap every container's log file so runaway logging can never fill the host
+# disk again (10 MB per file, 3 files kept = 30 MB max per container).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   app:
     build:
@@ -5,6 +13,7 @@ services:
       dockerfile: docker/php/Dockerfile
     container_name: xismarket-app
     restart: unless-stopped
+    logging: *default-logging
     working_dir: /var/www
     volumes:
       - ./:/var/www
@@ -22,6 +31,7 @@ services:
       dockerfile: docker/php/Dockerfile
     container_name: xismarket-worker
     restart: unless-stopped
+    logging: *default-logging
     working_dir: /var/www
     command: php artisan queue:work --sleep=3 --tries=1 --timeout=1810
     volumes:
@@ -42,6 +52,7 @@ services:
       dockerfile: docker/php/Dockerfile
     container_name: xismarket-scheduler
     restart: unless-stopped
+    logging: *default-logging
     working_dir: /var/www
     command: php artisan schedule:work
     volumes:
@@ -58,6 +69,7 @@ services:
     image: nginx:1.27-alpine
     container_name: xismarket-nginx
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "8080:80"
     volumes:
@@ -72,6 +84,7 @@ services:
     image: mysql:8.0
     container_name: xismarket-mysql
     restart: unless-stopped
+    logging: *default-logging
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-xismarket}
       MYSQL_USER: ${DB_USERNAME:-xismarket}
@@ -93,6 +106,7 @@ services:
     image: redis:7-alpine
     container_name: xismarket-redis
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "6379:6379"
     networks:
