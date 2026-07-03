@@ -33,10 +33,17 @@ Route::middleware(['web', 'auth'])->group(function () {
         // Before sales/{sale} so the literal segments aren't treated as a sale id.
         Route::get('sales/returns', [SalesController::class, 'returns'])->name('sales.returns');
         Route::get('sales/returns/export', [SalesController::class, 'returnsExport'])->name('sales.returns.export');
-        Route::get('sales/report', [SalesController::class, 'report'])->name('sales.report');
-        Route::get('sales/report/export', [SalesController::class, 'reportExport'])->name('sales.report.export');
-        Route::get('sales/payments-summary', [SalesController::class, 'paymentsSummary'])->name('sales.payments-summary');
-        Route::get('sales/payments-summary/export', [SalesController::class, 'paymentsSummaryExport'])->name('sales.payments-summary.export');
+
+        // Sales reports & payment summaries are gated behind a finer-grained
+        // permission — a plain "view sales history" role (e.g. cashier) can see
+        // individual sales but not the aggregated revenue/payment reports.
+        Route::middleware('permission:sales.reports')->group(function () {
+            Route::get('sales/report', [SalesController::class, 'report'])->name('sales.report');
+            Route::get('sales/report/export', [SalesController::class, 'reportExport'])->name('sales.report.export');
+            Route::get('sales/payments-summary', [SalesController::class, 'paymentsSummary'])->name('sales.payments-summary');
+            Route::get('sales/payments-summary/export', [SalesController::class, 'paymentsSummaryExport'])->name('sales.payments-summary.export');
+        });
+
         Route::get('sales/{sale}', [SalesController::class, 'show'])->name('sales.show');
     });
 

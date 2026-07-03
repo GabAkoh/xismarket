@@ -38,6 +38,7 @@ class Permissions
                 'pos.use' => 'Operate the register',
                 'pos.settings' => 'Manage POS settings (register display, payment methods, cash reasons)',
                 'sales.view' => 'View sales history',
+                'sales.reports' => 'View sales reports & payment summaries',
                 'sales.refund' => 'Process refunds',
                 'registers.manage' => 'Manage registers & shifts',
                 'customers.view' => 'View customers',
@@ -101,7 +102,7 @@ class Permissions
                     'stock.view', 'stock.valuation',
                     'suppliers.manage', 'warehouses.manage', 'stock.adjust',
                     'purchases.view', 'purchases.manage',
-                    'pos.use', 'pos.settings', 'sales.view', 'sales.refund', 'registers.manage',
+                    'pos.use', 'pos.settings', 'sales.view', 'sales.reports', 'sales.refund', 'registers.manage',
                     'customers.view', 'customers.manage', 'wallets.view', 'loyalty.manage',
                     'accounting.view', 'reports.view',
                     'orders.view', 'orders.manage', 'orders.fulfill',
@@ -123,7 +124,7 @@ class Permissions
                 'permissions' => [
                     'dashboard.view',
                     'accounting.view', 'accounts.manage', 'journals.manage',
-                    'taxes.manage', 'reports.view', 'sales.view', 'purchases.view',
+                    'taxes.manage', 'reports.view', 'sales.view', 'sales.reports', 'purchases.view',
                 ],
             ],
         ];
