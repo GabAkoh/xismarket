@@ -4,7 +4,8 @@
 @section('content')
 <x-page-header title="Edit product" />
 
-<form method="POST" action="{{ route('products.update', $product) }}" enctype="multipart/form-data" class="max-w-3xl">
+<form method="POST" action="{{ route('products.update', $product) }}" enctype="multipart/form-data" class="max-w-3xl"
+      data-product-draft data-draft-user="{{ auth()->id() }}" data-draft-key="product:{{ $product->id }}" data-draft-errors="{{ $errors->any() ? '1' : '0' }}">
     @csrf @method('PUT')
     <x-card>
         @include('inventory.products._form')

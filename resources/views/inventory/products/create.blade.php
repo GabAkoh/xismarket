@@ -4,7 +4,8 @@
 @section('content')
 <x-page-header title="Add product" />
 
-<form method="POST" action="{{ route('products.store') }}" enctype="multipart/form-data" class="max-w-3xl">
+<form method="POST" action="{{ route('products.store') }}" enctype="multipart/form-data" class="max-w-3xl"
+      data-product-draft data-draft-user="{{ auth()->id() }}" data-draft-key="product:new" data-draft-errors="{{ $errors->any() ? '1' : '0' }}">
     @csrf
     <x-card>
         @include('inventory.products._form')

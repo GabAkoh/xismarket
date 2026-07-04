@@ -117,6 +117,29 @@ function variantEditor(cfg) {
         rows: (cfg.rows && cfg.rows.length) ? cfg.rows : [blank()],
         opt1: cfg.opt1 || '', opt2: cfg.opt2 || '', opt3: cfg.opt3 || '',
         barcodeUrl: cfg.barcodeUrl || '', labelsUrl: cfg.labelsUrl || '',
+        init() {
+            // The draft auto-save (see the productDraft script) restores variant
+            // rows after a tablet backgrounds and reloads the page. Rows live in
+            // Alpine state, so they can't be restored by writing DOM values —
+            // the draft hands them back to us through this event instead.
+            window.addEventListener('product-draft:restore-variants', (e) => {
+                const d = e.detail || {};
+                if (Array.isArray(d.variants) && d.variants.length) {
+                    this.rows = d.variants.map(v => ({
+                        id: v.id || '',
+                        option1: v.option1 || '', option2: v.option2 || '', option3: v.option3 || '',
+                        sku: v.sku || '', barcode: v.barcode || '',
+                        cost: v.cost_price ?? 0, price: v.sale_price ?? 0, stock: v.stock ?? '',
+                        active: v.is_active === undefined ? true : (v.is_active == 1 || v.is_active === true),
+                    }));
+                }
+                if (d.options) {
+                    this.opt1 = d.options.option1_name || '';
+                    this.opt2 = d.options.option2_name || '';
+                    this.opt3 = d.options.option3_name || '';
+                }
+            });
+        },
         add() { this.rows.push(blank()); },
         remove(i) { this.rows.splice(i, 1); if (!this.rows.length) this.add(); },
         async generate(row) {
@@ -617,5 +640,114 @@ function productImageEditor() {
         },
     };
 }
+</script>
+@endpush
+
+@push('scripts')
+{{-- Draft auto-save: on tablets, minimising / switching apps can make the
+     browser discard the backgrounded tab and reload it, losing an in-progress
+     product edit. This keeps a local draft (typed fields + variant rows) and
+     restores it after such a reload.
+
+     Shared-device safe: the draft is keyed by the logged-in user's id, so one
+     staff member never sees another's in-progress edit on the same tablet.
+     Files (image / camera / gallery) and the category picker are not persisted
+     — files can't live in localStorage, and those are re-selected. --}}
+<script>
+(function () {
+    const form = document.querySelector('form[data-product-draft]');
+    if (!form || !window.localStorage) return;
+
+    const key = 'xis:pdraft:' + (form.dataset.draftUser || '0') + ':' + (form.dataset.draftKey || 'new');
+    const hasServerErrors = form.dataset.draftErrors === '1';
+    const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+    // Plain, user-typed controls that are safe to write straight back into the
+    // DOM on restore (no Alpine x-model / :value binding drives them). Variant
+    // rows and option names are Alpine state and go through the component.
+    const SCALARS = ['name', 'tax_rate', 'reorder_level', 'description', 'track_stock', 'is_active', 'is_featured'];
+    const el = (name) => form.querySelector('[name="' + name + '"]');
+
+    function snapshot() {
+        const scalars = {};
+        SCALARS.forEach((n) => {
+            const c = el(n);
+            if (c) scalars[n] = (c.type === 'checkbox') ? (c.checked ? 1 : 0) : c.value;
+        });
+        const variants = [];
+        form.querySelectorAll('[name^="variants["]').forEach((input) => {
+            const m = input.name.match(/^variants\[(\d+)\]\[([^\]]+)\]$/);
+            if (!m) return;
+            (variants[+m[1]] = variants[+m[1]] || {})[m[2]] = input.value;
+        });
+        const options = {
+            option1_name: el('option1_name') ? el('option1_name').value : '',
+            option2_name: el('option2_name') ? el('option2_name').value : '',
+            option3_name: el('option3_name') ? el('option3_name').value : '',
+        };
+        return { v: 1, savedAt: Date.now(), scalars, variants: variants.filter(Boolean), options };
+    }
+
+    function isBlank(s) {
+        if (s.scalars.name || s.scalars.description) return false;
+        return !s.variants.some((v) => v && (v.sku || v.barcode || v.option1 || (v.sale_price && v.sale_price !== '0')));
+    }
+
+    let timer = null;
+    function save() {
+        try {
+            const s = snapshot();
+            if (isBlank(s)) localStorage.removeItem(key);
+            else localStorage.setItem(key, JSON.stringify(s));
+        } catch (e) { /* quota / private mode — ignore */ }
+    }
+    const scheduleSave = () => { clearTimeout(timer); timer = setTimeout(save, 500); };
+
+    form.addEventListener('input', scheduleSave);
+    form.addEventListener('change', scheduleSave);
+    // Flush immediately the moment the tab may be discarded.
+    window.addEventListener('pagehide', save);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+    // A real submit means the data is on its way to the server — drop the draft.
+    form.addEventListener('submit', () => { try { localStorage.removeItem(key); } catch (e) {} });
+
+    function showBanner(when) {
+        const bar = document.createElement('div');
+        bar.className = 'mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800';
+        const msg = document.createElement('span');
+        msg.textContent = 'Restored your unsaved changes from ' + when + '.';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'shrink-0 rounded-md border border-amber-400 px-2.5 py-1 text-xs font-semibold hover:bg-amber-100';
+        btn.textContent = 'Discard';
+        btn.addEventListener('click', () => { try { localStorage.removeItem(key); } catch (e) {} location.reload(); });
+        bar.append(msg, btn);
+        form.prepend(bar);
+    }
+
+    function restore() {
+        if (hasServerErrors) return;   // server already re-populated old() input
+        let s;
+        try { s = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return; }
+        if (!s || !s.savedAt) return;
+        if (Date.now() - s.savedAt > MAX_AGE_MS) { localStorage.removeItem(key); return; }
+
+        Object.entries(s.scalars || {}).forEach(([n, val]) => {
+            const c = el(n);
+            if (!c) return;
+            if (c.type === 'checkbox') c.checked = !!val;
+            else c.value = val;
+        });
+        window.dispatchEvent(new CustomEvent('product-draft:restore-variants', {
+            detail: { variants: s.variants || [], options: s.options || {} },
+        }));
+        showBanner(new Date(s.savedAt).toLocaleString());
+    }
+
+    // Restore only after Alpine has initialised the variant editor, so the
+    // restore event has a listener. This inline script runs during parsing,
+    // before the deferred Alpine bundle, so the listener is registered in time.
+    document.addEventListener('alpine:initialized', restore, { once: true });
+})();
 </script>
 @endpush
