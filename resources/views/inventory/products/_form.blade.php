@@ -415,7 +415,17 @@ function productImageEditor() {
         wm: { on: false, text: '' },
         preview: null, error: '',
 
-        init() { this.wm.text = this.$el.dataset.store || ''; },
+        init() {
+            this.wm.text = this.$el.dataset.store || '';
+            // Release the camera when the tab is backgrounded (minimising / app
+            // switching on tablets). A live getUserMedia stream left running
+            // while the page is hidden makes iOS/Android force-reload the page
+            // on return, which throws away the product edit in progress.
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) this.stopCamera();
+            });
+            window.addEventListener('pagehide', () => this.stopCamera());
+        },
 
         // --- Source selection ---
         pickFile() { this.$refs.source.click(); },
