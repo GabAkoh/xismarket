@@ -172,25 +172,56 @@ Then log in at `https://yourdomain.com` and your storefront lives at
 ## 9. Nightly backups (DB + images)
 
 `scripts/backup.sh` writes a gzipped SQL dump and a tarball of the uploaded
-images to `/opt/xismarket-backups`, keeping 14 days.
+images to `/opt/xismarket-backups`, and pushes every backup off-box to
+Backblaze B2. Retention is split because the image tarballs are multiple GB
+each: it keeps a small **count** of storage tarballs locally (`KEEP_STORAGE`,
+default 2) and prunes the oldest **before** writing the new one — so a big tar
+can never fill the disk, fail, and leave old backups un-rotated. DB dumps are
+tiny and kept locally by age (`KEEP_DB_DAYS`). B2 keeps a longer history of both
+(`B2_KEEP_STORAGE_DAYS` / `B2_KEEP_DB_DAYS`).
+
+> **Off-box is not optional.** The image tarballs are ~6 GB and the VPS disk is
+> ~48 GB; keeping many local copies fills the disk and takes the site down (500s
+> because Laravel can't write). Off-box upload is what makes aggressive local
+> pruning safe.
+
+**One-time B2 setup:** create a private B2 bucket + an application key (Read/Write,
+restricted to that bucket), then configure the rclone remote on the VPS:
+
+```bash
+curl -fsSL https://rclone.org/install.sh | bash        # if rclone isn't installed
+rclone config create b2 b2 account <keyID> key <applicationKey>
+rclone lsf b2:<bucket>                                  # verify access (empty is fine)
+```
 
 Test it once by hand:
 
 ```bash
 ./scripts/backup.sh
 ls -lh /opt/xismarket-backups
+rclone lsl b2:<bucket>/backups        # confirm the upload landed off-box
 ```
 
 Then schedule it via cron (`crontab -e`) — 02:30 every night:
 
 ```cron
-30 2 * * * cd /opt/xismarket && BACKUP_DIR=/opt/xismarket-backups KEEP_DAYS=14 ./scripts/backup.sh >> /opt/xismarket-backups/backup.log 2>&1
+30 2 * * * cd /opt/xismarket && BACKUP_DIR=/opt/xismarket-backups KEEP_STORAGE=2 KEEP_DB_DAYS=30 RCLONE_REMOTE=b2 B2_BUCKET=<bucket> B2_PREFIX=backups B2_KEEP_STORAGE_DAYS=30 B2_KEEP_DB_DAYS=90 ./scripts/backup.sh >> /opt/xismarket-backups/backup.log 2>&1
 ```
 
-For off-server safety, sync `/opt/xismarket-backups` to object storage (S3,
-Backblaze, etc.) — a backup on the same box is not a backup.
+To run without off-box upload (local only), set `RCLONE_REMOTE=` (empty).
 
 ### Restore from a backup
+
+If the backup isn't on the local disk anymore (older than local retention),
+pull it from B2 first:
+
+```bash
+rclone lsl b2:<bucket>/backups                                   # list what's off-box
+rclone copy b2:<bucket>/backups/db-YYYY-MM-DD-HHMM.sql.gz /opt/xismarket-backups/
+rclone copy b2:<bucket>/backups/storage-YYYY-MM-DD-HHMM.tar.gz /opt/xismarket-backups/
+```
+
+Then restore:
 
 ```bash
 C="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
