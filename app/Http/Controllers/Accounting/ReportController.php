@@ -20,18 +20,77 @@ class ReportController extends Controller
      */
     public function trialBalance()
     {
+        return view('accounting.reports.trial-balance', $this->trialBalanceData());
+    }
+
+    /** Download the trial balance as CSV. */
+    public function trialBalanceExport()
+    {
+        $data = $this->trialBalanceData();
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+
+        return $this->streamCsv('trial-balance.csv', function ($put) use ($data, $num) {
+            $put(['Trial balance']);
+            $put([]);
+            $put(['Code', 'Account', 'Type', 'Debit', 'Credit']);
+            foreach ($data['rows'] as $r) {
+                $put([$r['account']->code, $r['account']->name, $r['type'], $num($r['debit']), $num($r['credit'])]);
+            }
+            $put(['Totals', '', '', $num($data['totalDebit']), $num($data['totalCredit'])]);
+        });
+    }
+
+    /** @return array{rows: \Illuminate\Support\Collection, totalDebit: float, totalCredit: float} */
+    protected function trialBalanceData(): array
+    {
         $rows = $this->accountSums();
 
-        $totalDebit = $rows->sum('debit');
-        $totalCredit = $rows->sum('credit');
-
-        return view('accounting.reports.trial-balance', compact('rows', 'totalDebit', 'totalCredit'));
+        return [
+            'rows' => $rows,
+            'totalDebit' => $rows->sum('debit'),
+            'totalCredit' => $rows->sum('credit'),
+        ];
     }
 
     /**
      * Profit & Loss for a date range: income vs expense.
      */
     public function profitLoss(Request $request)
+    {
+        return view('accounting.reports.profit-loss', $this->profitLossData($request));
+    }
+
+    /** Download the profit & loss (current range) as CSV. */
+    public function profitLossExport(Request $request)
+    {
+        $data = $this->profitLossData($request);
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $filename = 'profit-loss-'.$data['from']->toDateString().'-to-'.$data['to']->toDateString().'.csv';
+
+        return $this->streamCsv($filename, function ($put) use ($data, $num) {
+            $put(['Profit & Loss', $data['from']->toDateString().' to '.$data['to']->toDateString()]);
+            $put([]);
+
+            $section = function (string $title, $rows, float $total, string $totalLabel) use ($put, $num) {
+                $put([$title]);
+                $put(['Code', 'Account', 'Amount']);
+                foreach ($rows as $r) {
+                    $put([$r['account']->code, $r['account']->name, $num($r['amount'])]);
+                }
+                $put([$totalLabel, '', $num($total)]);
+                $put([]);
+            };
+
+            $section('Income', $data['income'], $data['totalIncome'], 'Total income');
+            $section('Expenses', $data['expense'], $data['totalExpense'], 'Total expenses');
+            $put(['Net '.($data['netProfit'] >= 0 ? 'profit' : 'loss'), '', $num($data['netProfit'])]);
+        });
+    }
+
+    /**
+     * @return array{income: \Illuminate\Support\Collection, expense: \Illuminate\Support\Collection, totalIncome: float, totalExpense: float, netProfit: float, from: Carbon, to: Carbon}
+     */
+    protected function profitLossData(Request $request): array
     {
         $from = $request->filled('from')
             ? Carbon::parse($request->input('from'))->startOfDay()
@@ -58,15 +117,54 @@ class ReportController extends Controller
         $totalExpense = $expense->sum('amount');
         $netProfit = round($totalIncome - $totalExpense, 2);
 
-        return view('accounting.reports.profit-loss', compact(
-            'income', 'expense', 'totalIncome', 'totalExpense', 'netProfit', 'from', 'to'
-        ));
+        return compact('income', 'expense', 'totalIncome', 'totalExpense', 'netProfit', 'from', 'to');
     }
 
     /**
      * Balance sheet as of a date: assets = liabilities + equity.
      */
     public function balanceSheet(Request $request)
+    {
+        return view('accounting.reports.balance-sheet', $this->balanceSheetData($request));
+    }
+
+    /** Download the balance sheet (as-of date) as CSV. */
+    public function balanceSheetExport(Request $request)
+    {
+        $data = $this->balanceSheetData($request);
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $filename = 'balance-sheet-as-of-'.$data['asOf']->toDateString().'.csv';
+
+        return $this->streamCsv($filename, function ($put) use ($data, $num) {
+            $put(['Balance Sheet', 'As of '.$data['asOf']->toDateString()]);
+            $put([]);
+
+            $section = function (string $title, $rows) use ($put, $num) {
+                $put([$title]);
+                $put(['Code', 'Account', 'Amount']);
+                foreach ($rows as $r) {
+                    $put([$r['account']->code, $r['account']->name, $num($r['amount'])]);
+                }
+            };
+
+            $section('Assets', $data['assets']);
+            $put(['Total assets', '', $num($data['totalAssets'])]);
+            $put([]);
+            $section('Liabilities', $data['liabilities']);
+            $put(['Total liabilities', '', $num($data['totalLiabilities'])]);
+            $put([]);
+            $section('Equity', $data['equity']);
+            $put(['Net income (current period)', '', $num($data['netIncome'])]);
+            $put(['Total equity', '', $num($data['totalEquity'])]);
+            $put([]);
+            $put(['Total liabilities + equity', '', $num($data['totalLiabilities'] + $data['totalEquity'])]);
+        });
+    }
+
+    /**
+     * @return array{assets: \Illuminate\Support\Collection, liabilities: \Illuminate\Support\Collection, equity: \Illuminate\Support\Collection, netIncome: float, totalAssets: float, totalLiabilities: float, totalEquity: float, asOf: Carbon}
+     */
+    protected function balanceSheetData(Request $request): array
     {
         $asOf = $request->filled('as_of')
             ? Carbon::parse($request->input('as_of'))->endOfDay()
@@ -100,10 +198,10 @@ class ReportController extends Controller
         $totalLiabilities = round($liabilities->sum('amount'), 2);
         $totalEquity = round($equity->sum('amount') + $netIncome, 2);
 
-        return view('accounting.reports.balance-sheet', compact(
+        return compact(
             'assets', 'liabilities', 'equity', 'netIncome',
             'totalAssets', 'totalLiabilities', 'totalEquity', 'asOf'
-        ));
+        );
     }
 
     /**
@@ -112,6 +210,56 @@ class ReportController extends Controller
      * reconciles with the 1200 Accounts Receivable control account.
      */
     public function receivables()
+    {
+        return view('accounting.reports.receivables', $this->receivablesData());
+    }
+
+    /** Download the accounts-receivable aging (with invoice detail) as CSV. */
+    public function receivablesExport()
+    {
+        $data = $this->receivablesData();
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+
+        return $this->streamCsv('accounts-receivable.csv', function ($put) use ($data, $num) {
+            $put(['Accounts Receivable aging']);
+            $put([]);
+            $put(['Customer', 'Current', '31-60', '61-90', '90+', 'Total']);
+            foreach ($data['customers'] as $row) {
+                $put([
+                    $row['customer']?->name ?? 'Unknown customer',
+                    $num($row['buckets']['current']),
+                    $num($row['buckets']['d31_60']),
+                    $num($row['buckets']['d61_90']),
+                    $num($row['buckets']['d90']),
+                    $num($row['total']),
+                ]);
+            }
+            $t = $data['totalsByBucket'];
+            $put(['Totals', $num($t['current']), $num($t['d31_60']), $num($t['d61_90']), $num($t['d90']), $num($data['grandTotal'])]);
+            $put([]);
+
+            $put(['Outstanding invoices']);
+            $put(['Sale', 'Customer', 'Date', 'Age (days)', 'Total', 'Paid', 'Balance']);
+            foreach ($data['customers'] as $row) {
+                foreach ($row['items'] as $it) {
+                    $put([
+                        $it['number'],
+                        $row['customer']?->name ?? '—',
+                        $it['date']->format('Y-m-d'),
+                        $it['days'],
+                        $num($it['total']),
+                        $num($it['paid']),
+                        $num($it['balance']),
+                    ]);
+                }
+            }
+            $put([]);
+            $put(['A/R control account (1200)', '', '', '', '', '', $num($data['arBalance'])]);
+        });
+    }
+
+    /** @return array{customers: \Illuminate\Support\Collection, totalsByBucket: array, grandTotal: float, arBalance: float} */
+    protected function receivablesData(): array
     {
         $today = Carbon::today();
         $bucketKeys = ['current', 'd31_60', 'd61_90', 'd90'];
@@ -190,9 +338,7 @@ class ReportController extends Controller
             );
         }
 
-        return view('accounting.reports.receivables', compact(
-            'customers', 'totalsByBucket', 'grandTotal', 'arBalance'
-        ));
+        return compact('customers', 'totalsByBucket', 'grandTotal', 'arBalance');
     }
 
     /**
@@ -355,6 +501,22 @@ class ReportController extends Controller
             'periodCredit' => round($periodCredit, 2),
             'debitNatural' => $debitNatural,
         ];
+    }
+
+    /**
+     * Stream a CSV download. The builder is handed a `$put(array $row)` writer;
+     * fputcsv args are explicit (incl. $escape) as PHP 8.4 deprecates omitting them.
+     *
+     * @param  callable(callable(array): void): void  $build
+     */
+    protected function streamCsv(string $filename, callable $build)
+    {
+        return response()->streamDownload(function () use ($build) {
+            $out = fopen('php://output', 'w');
+            $put = fn ($row) => fputcsv($out, $row, ',', '"', '');
+            $build($put);
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     /**

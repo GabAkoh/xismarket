@@ -3,6 +3,7 @@
 
 @section('content')
 <x-page-header title="Balance Sheet">
+    <a href="{{ route('reports.balance-sheet.export', ['as_of' => $asOf->toDateString()]) }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Export (CSV)</a>
     <a href="{{ route('reports.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to reports</a>
 </x-page-header>
 

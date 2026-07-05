@@ -9,6 +9,7 @@
 @endphp
 
 <x-page-header title="Accounts Receivable" subtitle="Outstanding customer balances by age">
+    <a href="{{ route('reports.receivables.export') }}" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Export (CSV)</a>
     <button onclick="window.print()" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Print</button>
     <a href="{{ route('reports.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to reports</a>
 </x-page-header>

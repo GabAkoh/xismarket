@@ -45,9 +45,13 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::middleware('permission:reports.view')->group(function () {
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/trial-balance', [ReportController::class, 'trialBalance'])->name('reports.trial-balance');
+        Route::get('reports/trial-balance/export', [ReportController::class, 'trialBalanceExport'])->name('reports.trial-balance.export');
         Route::get('reports/profit-loss', [ReportController::class, 'profitLoss'])->name('reports.profit-loss');
+        Route::get('reports/profit-loss/export', [ReportController::class, 'profitLossExport'])->name('reports.profit-loss.export');
         Route::get('reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+        Route::get('reports/balance-sheet/export', [ReportController::class, 'balanceSheetExport'])->name('reports.balance-sheet.export');
         Route::get('reports/receivables', [ReportController::class, 'receivables'])->name('reports.receivables');
+        Route::get('reports/receivables/export', [ReportController::class, 'receivablesExport'])->name('reports.receivables.export');
         Route::get('reports/account-statement', [ReportController::class, 'accountStatement'])->name('reports.account-statement');
         Route::get('reports/account-statement/export', [ReportController::class, 'accountStatementExport'])->name('reports.account-statement.export');
     });
