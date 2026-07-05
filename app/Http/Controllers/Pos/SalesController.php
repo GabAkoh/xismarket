@@ -448,8 +448,12 @@ class SalesController extends Controller
         $method = $request->filled('method') ? (string) $request->input('method') : null;
         $filtered = $productId !== null || $method !== null;
 
+        // Fully-refunded sales are treated like voids here — the whole sale was
+        // reversed, so it shouldn't count as a sale in any operational table.
+        // (Partial refunds stay: the sale is 'partially_refunded', still real,
+        // and its returned portion is subtracted via the returns figures below.)
         $inRange = function ($q) use ($from, $to, $productId, $method) {
-            $q->where('status', '!=', 'void')->whereBetween('completed_at', [$from, $to]);
+            $q->whereNotIn('status', ['void', 'refunded'])->whereBetween('completed_at', [$from, $to]);
             if ($productId !== null) {
                 $q->whereHas('items', fn ($i) => $i->where('product_id', $productId));
             }
@@ -487,21 +491,42 @@ class SalesController extends Controller
         $accountClass = \App\Models\Accounting\Account::class;
         $lineClass = \App\Models\Accounting\JournalLine::class;
         if (! $filtered && class_exists($accountClass) && class_exists($lineClass)) {
-            $returnSum = function (string $code, string $side) use ($from, $to, $accountClass, $lineClass) {
-                $account = $accountClass::where('code', $code)->first();
-                if (! $account) {
-                    return 0.0;
-                }
+            // Reversal lines (reference "…-R…") posted in the period for the three
+            // accounts we reverse: 4000 revenue (debit), 2100 tax (debit),
+            // 5000 COGS (credit).
+            $accountIds = $accountClass::whereIn('code', ['4000', '2100', '5000'])->pluck('id', 'code');
+            $codeById = $accountIds->flip();
 
-                return (float) $lineClass::where('account_id', $account->id)
-                    ->whereHas('entry', fn ($e) => $e
-                        ->whereBetween('entry_date', [$from, $to])
-                        ->where('reference', 'like', '%-R%'))
-                    ->sum($side);
-            };
-            $returnsNet = round($returnSum('4000', 'debit'), 2);    // revenue reversed
-            $returnsTax = round($returnSum('2100', 'debit'), 2);    // tax reversed
-            $returnsCogs = round($returnSum('5000', 'credit'), 2);  // COGS recovered
+            $lines = $lineClass::whereIn('account_id', $accountIds->values())
+                ->whereHas('entry', fn ($e) => $e
+                    ->whereBetween('entry_date', [$from, $to])
+                    ->where('reference', 'like', '%-R%'))
+                ->with('entry:id,reference')
+                ->get();
+
+            // A fully-refunded sale is already excluded from gross, so its reversal
+            // must not be counted as a return as well (that would subtract it
+            // twice). Strip the "-Rn" suffix to get the originating sale number.
+            $base = fn ($ref) => preg_replace('/-R\d*$/', '', (string) $ref);
+            $washedOut = \App\Models\Pos\Sale::whereIn('number', $lines->map(fn ($l) => $base($l->entry->reference))->unique())
+                ->where('status', 'refunded')->pluck('number')->flip();
+
+            foreach ($lines as $l) {
+                if ($washedOut->has($base($l->entry->reference))) {
+                    continue;
+                }
+                $code = $codeById[$l->account_id] ?? null;
+                if ($code === '4000') {
+                    $returnsNet += (float) $l->debit;
+                } elseif ($code === '2100') {
+                    $returnsTax += (float) $l->debit;
+                } elseif ($code === '5000') {
+                    $returnsCogs += (float) $l->credit;
+                }
+            }
+            $returnsNet = round($returnsNet, 2);
+            $returnsTax = round($returnsTax, 2);
+            $returnsCogs = round($returnsCogs, 2);
         }
         $returnsTotal = round($returnsNet + $returnsTax, 2);
 
@@ -539,10 +564,10 @@ class SalesController extends Controller
         ];
 
         // Payment mix: net receipts by method (a refund is a negative payment,
-        // so it reduces its method's take). Fully-refunded sales are dropped
-        // entirely — their receipts washed out, so they'd only mislead here.
+        // so it reduces its method's take). Fully-refunded sales are already
+        // excluded by $inRange — their receipts washed out.
         $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
-        $methods = Payment::whereHas('sale', fn ($q) => $inRange($q)->where('status', '!=', 'refunded'))
+        $methods = Payment::whereHas('sale', $inRange)
             ->when($method !== null, fn ($q) => $q->where('method', $method))
             ->selectRaw('method, COALESCE(SUM(amount), 0) as amount, COUNT(*) as n')
             ->groupBy('method')
