@@ -233,8 +233,12 @@ class SalesController extends Controller
         ];
 
         // POS payments table: sales (checkout), settlements (later), refunds (negative).
+        // Fully-refunded sales are excluded: their receipts and the offsetting
+        // refund wash out, so they'd only overstate both the received and paid-out
+        // sides (net movement is unchanged). Partial refunds stay — the sale is
+        // still 'partially_refunded', so its receipts and refund both show.
         $pos = Payment::query()
-            ->whereHas('sale', fn ($q) => $q->where('status', '!=', 'void'))
+            ->whereHas('sale', fn ($q) => $q->whereNotIn('status', ['void', 'refunded']))
             ->whereBetween('paid_at', [$from, $to])
             ->selectRaw('kind, method, SUM(amount) as amount, COUNT(*) as n')
             ->groupBy('kind', 'method')
