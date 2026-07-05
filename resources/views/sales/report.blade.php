@@ -8,16 +8,17 @@
     $maxDay = $daily->max('total') ?: 1;
     $exportUrl = fn ($section) => route('sales.report.export', [
         'section' => $section, 'from' => $from->toDateString(), 'to' => $to->toDateString(),
+        'product_id' => $productId, 'method' => $method,
     ]);
 @endphp
 
 <x-page-header title="Sales report" subtitle="Totals, payment mix and trends for the selected period">
-    <a href="{{ route('sales.report.export', ['section' => 'all', 'from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
+    <a href="{{ route('sales.report.export', ['section' => 'all', 'from' => $from->toDateString(), 'to' => $to->toDateString(), 'product_id' => $productId, 'method' => $method]) }}"
        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Export all (CSV)</a>
     <a href="{{ route('sales.index') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm">Back to sales</a>
 </x-page-header>
 
-{{-- Date filter --}}
+{{-- Filters: date range, product and payment method --}}
 <x-card class="mb-4">
     <form method="GET" action="{{ route('sales.report') }}" class="flex flex-wrap items-end gap-3">
         <div>
@@ -28,8 +29,38 @@
             <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
             <input type="date" name="to" value="{{ $to->toDateString() }}" class="rounded-md border border-slate-300 p-2 text-sm">
         </div>
+        <div class="w-56">
+            <label class="block text-xs font-medium text-slate-500 mb-1">Product</label>
+            <x-searchable-select name="product_id" :options="$products" :selected="(string) $productId"
+                placeholder="All products" class="p-2 text-sm" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Payment method</label>
+            <select name="method" class="rounded-md border border-slate-300 p-2 text-sm">
+                <option value="">All methods</option>
+                @foreach ($methodOptions as $key => $label)
+                    <option value="{{ $key }}" @selected($method === (string) $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
         <button class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Apply</button>
+        @if ($filtered)
+            <a href="{{ route('sales.report', ['from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
+               class="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Clear filters</a>
+        @endif
     </form>
+    @if ($filtered)
+        @php
+            $activeProduct = $productId ? optional($products->firstWhere('id', $productId))->name : null;
+            $activeMethod = $method ? ($methodOptions[$method] ?? $method) : null;
+        @endphp
+        <p class="mt-3 text-xs text-slate-500">
+            Showing sales
+            @if ($activeProduct) that include <span class="font-semibold text-slate-700">{{ $activeProduct }}</span>@endif
+            @if ($activeProduct && $activeMethod) and @endif
+            @if ($activeMethod) paid with <span class="font-semibold text-slate-700">{{ $activeMethod }}</span>@endif.
+        </p>
+    @endif
 </x-card>
 
 {{-- Headline KPIs (net of returns) --}}
@@ -70,6 +101,9 @@
     </x-card>
 
     <x-card title="Returns (this period)">
+        @if ($filtered)
+        <p class="text-sm text-slate-400 py-6 text-center">Returns aren’t broken down by product or payment method, so they’re shown only in the unfiltered report.</p>
+        @else
         <dl class="text-sm space-y-1.5">
             <div class="flex justify-between"><dt class="text-slate-500">Revenue reversed</dt><dd class="font-medium text-red-600">−{{ $money($summary['returns_net']) }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Tax reversed</dt><dd class="font-medium text-red-600">−{{ $money($summary['returns_tax']) }}</dd></div>
@@ -78,6 +112,7 @@
             <div class="flex justify-between border-t border-dashed border-slate-200 pt-1.5"><dt class="text-slate-600">Net sales after returns</dt><dd class="font-semibold text-slate-800">{{ $money($summary['net_after_returns']) }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-600">Gross profit after returns <span class="text-xs font-normal text-slate-400">({{ number_format($summary['margin_after_returns'], 1) }}%)</span></dt><dd class="font-semibold text-green-600">{{ $money($summary['profit_after_returns']) }}</dd></div>
         </dl>
+        @endif
     </x-card>
 </div>
 

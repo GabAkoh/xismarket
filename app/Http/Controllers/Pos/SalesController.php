@@ -429,7 +429,24 @@ class SalesController extends Controller
             ? Carbon::parse($request->input('to'))->endOfDay()
             : now()->endOfDay();
 
-        $inRange = fn ($q) => $q->where('status', '!=', 'void')->whereBetween('completed_at', [$from, $to]);
+        // Optional filters: narrow the whole report to sales that include a given
+        // product and/or were paid (at least partly) with a given method. Baking
+        // them into $inRange means every table below inherits them.
+        $productId = $request->filled('product_id') ? (int) $request->input('product_id') : null;
+        $method = $request->filled('method') ? (string) $request->input('method') : null;
+        $filtered = $productId !== null || $method !== null;
+
+        $inRange = function ($q) use ($from, $to, $productId, $method) {
+            $q->where('status', '!=', 'void')->whereBetween('completed_at', [$from, $to]);
+            if ($productId !== null) {
+                $q->whereHas('items', fn ($i) => $i->where('product_id', $productId));
+            }
+            if ($method !== null) {
+                $q->whereHas('payments', fn ($p) => $p->where('method', $method)->where('amount', '>', 0));
+            }
+
+            return $q;
+        };
 
         // Headline totals.
         $t = Sale::query()->tap($inRange)->selectRaw('
@@ -452,10 +469,12 @@ class SalesController extends Controller
         // (both POS returns and online-order refunds debit revenue / credit COGS,
         // reference "…-R"). Sourcing returns here keeps the net-of-returns figures
         // consistent with the P&L. Guarded — the Accounting module is optional.
+        // Returns come from reversing journal entries, which aren't broken down by
+        // product or payment method — so we only show them for the unfiltered view.
         $returnsNet = $returnsTax = $returnsCogs = 0.0;
         $accountClass = \App\Models\Accounting\Account::class;
         $lineClass = \App\Models\Accounting\JournalLine::class;
-        if (class_exists($accountClass) && class_exists($lineClass)) {
+        if (! $filtered && class_exists($accountClass) && class_exists($lineClass)) {
             $returnSum = function (string $code, string $side) use ($from, $to, $accountClass, $lineClass) {
                 $account = $accountClass::where('code', $code)->first();
                 if (! $account) {
@@ -506,6 +525,7 @@ class SalesController extends Controller
         $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
         $methods = Payment::whereHas('sale', $inRange)
             ->where('amount', '>', 0)
+            ->when($method !== null, fn ($q) => $q->where('method', $method))
             ->selectRaw('method, COALESCE(SUM(amount), 0) as amount, COUNT(*) as n')
             ->groupBy('method')
             ->orderByDesc('amount')
@@ -556,7 +576,15 @@ class SalesController extends Controller
         $regNames = \App\Models\Pos\Register::whereIn('id', $registers->pluck('register_id')->filter())->pluck('name', 'id');
         $registers->each(fn ($r) => $r->name = $regNames[$r->register_id] ?? 'No register');
 
-        return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'registers', 'from', 'to');
+        // Filter option lists: only products that have actually sold (keeps the
+        // dropdown relevant and bounded), and the tenant's payment methods.
+        $soldProductIds = SaleItem::whereNotNull('product_id')->distinct()->pluck('product_id');
+        $products = \App\Models\Inventory\Product::whereIn('id', $soldProductIds)
+            ->orderBy('name')->get(['id', 'name']);
+        $methodOptions = $labels;
+
+        return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'registers', 'from', 'to',
+            'products', 'methodOptions', 'productId', 'method', 'filtered');
     }
 
     public function show(Sale $sale)
