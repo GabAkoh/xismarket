@@ -48,5 +48,6 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('reports/profit-loss', [ReportController::class, 'profitLoss'])->name('reports.profit-loss');
         Route::get('reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
         Route::get('reports/receivables', [ReportController::class, 'receivables'])->name('reports.receivables');
+        Route::get('reports/account-statement', [ReportController::class, 'accountStatement'])->name('reports.account-statement');
     });
 });

@@ -196,6 +196,101 @@ class ReportController extends Controller
     }
 
     /**
+     * Account statement (general-ledger detail): every journal line hitting a
+     * chosen account within a date range, with an opening balance carried from
+     * all prior activity and a running balance down the period. Debits and
+     * credits are signed to the account's natural side (asset/expense are
+     * debit-natural; liability/equity/income are credit-natural) so the running
+     * balance matches the account's reported balance elsewhere.
+     */
+    public function accountStatement(Request $request)
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : Carbon::now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : Carbon::now()->endOfDay();
+
+        // Account picker: every account, labelled "code · name".
+        $accountOptions = Account::orderBy('code')->get(['id', 'code', 'name'])
+            ->map(fn ($a) => (object) ['id' => $a->id, 'name' => $a->code.' · '.$a->name]);
+
+        $account = $request->filled('account_id')
+            ? Account::find((int) $request->input('account_id'))
+            : null;
+
+        // No account chosen yet — render the picker with an empty state.
+        if (! $account) {
+            return view('accounting.reports.account-statement', [
+                'accountOptions' => $accountOptions,
+                'account' => null,
+                'from' => $from,
+                'to' => $to,
+            ]);
+        }
+
+        // Sign a (debit, credit) pair to the account's natural side.
+        $debitNatural = in_array($account->type, ['asset', 'expense'], true);
+        $signed = fn ($debit, $credit) => $debitNatural ? $debit - $credit : $credit - $debit;
+
+        // Opening balance: net of everything posted before the window.
+        $priorLines = JournalLine::where('account_id', $account->id)
+            ->whereHas('entry', fn ($e) => $e->where('entry_date', '<', $from));
+        $opening = round($signed(
+            (float) (clone $priorLines)->sum('debit'),
+            (float) $priorLines->sum('credit'),
+        ), 2);
+
+        // Lines in the window, chronological (join keeps ordering in SQL).
+        $lines = JournalLine::query()
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->where('journal_lines.account_id', $account->id)
+            ->whereBetween('journal_entries.entry_date', [$from, $to])
+            ->orderBy('journal_entries.entry_date')
+            ->orderBy('journal_entries.id')
+            ->orderBy('journal_lines.id')
+            ->with('entry')
+            ->select('journal_lines.*')
+            ->get();
+
+        $running = $opening;
+        $periodDebit = 0.0;
+        $periodCredit = 0.0;
+
+        $rows = $lines->map(function (JournalLine $line) use (&$running, &$periodDebit, &$periodCredit, $signed) {
+            $debit = (float) $line->debit;
+            $credit = (float) $line->credit;
+            $running = round($running + $signed($debit, $credit), 2);
+            $periodDebit += $debit;
+            $periodCredit += $credit;
+
+            return (object) [
+                'date' => $line->entry->entry_date,
+                'reference' => $line->entry->reference,
+                'memo' => $line->memo ?: $line->entry->memo,
+                'entry_id' => $line->entry->id,
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => $running,
+            ];
+        });
+
+        return view('accounting.reports.account-statement', [
+            'accountOptions' => $accountOptions,
+            'account' => $account,
+            'from' => $from,
+            'to' => $to,
+            'opening' => $opening,
+            'rows' => $rows,
+            'closing' => $running,
+            'periodDebit' => round($periodDebit, 2),
+            'periodCredit' => round($periodCredit, 2),
+            'debitNatural' => $debitNatural,
+        ]);
+    }
+
+    /**
      * Sum debit/credit per account (optionally constrained), returning a collection
      * of ['account' => Account, 'type' => string, 'debit' => float, 'credit' => float].
      *

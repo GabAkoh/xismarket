@@ -31,5 +31,11 @@
             <p class="mt-1 text-sm text-slate-500">Assets, liabilities and equity as of a date.</p>
         </x-card>
     </a>
+    <a href="{{ route('reports.account-statement') }}" class="block">
+        <x-card>
+            <h3 class="font-semibold text-slate-800">Account Statement</h3>
+            <p class="mt-1 text-sm text-slate-500">Every posting to an account, with a running balance.</p>
+        </x-card>
+    </a>
 </div>
 @endsection
