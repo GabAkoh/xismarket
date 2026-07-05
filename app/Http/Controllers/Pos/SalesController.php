@@ -504,6 +504,11 @@ class SalesController extends Controller
         $netAfterReturns = round($net - $returnsNet, 2);
         $profitAfterReturns = round($profit - ($returnsNet - $returnsCogs), 2);
 
+        // Money actually kept = every payment net of refunds (a refund is a
+        // negative payment row), so a refunded sale nets to zero rather than
+        // showing its receipts as collected.
+        $collected = round((float) Payment::whereHas('sale', $inRange)->sum('amount'), 2);
+
         $summary = [
             'count' => (int) $t->count,
             'gross' => round((float) $t->gross, 2),
@@ -513,8 +518,8 @@ class SalesController extends Controller
             'net' => $net,
             'cogs' => $cogs,
             'profit' => $profit,
-            // Money actually kept = billed minus what's still owed (excludes change).
-            'collected' => round((float) $t->total - (float) $t->outstanding, 2),
+            // Money actually kept, net of refunds (see $collected above).
+            'collected' => $collected,
             'outstanding' => round((float) $t->outstanding, 2),
             'avg' => (int) $t->count > 0 ? round((float) $t->total / (int) $t->count, 2) : 0.0,
             // Returns in the period + net-of-returns bottom lines.
@@ -529,13 +534,15 @@ class SalesController extends Controller
             'margin_after_returns' => $netAfterReturns > 0 ? round($profitAfterReturns / $netAfterReturns * 100, 1) : 0.0,
         ];
 
-        // Payment mix (positive payments only; refunds are negative).
+        // Payment mix: net receipts by method (a refund is a negative payment,
+        // so it reduces its method's take). Fully-refunded sales are dropped
+        // entirely — their receipts washed out, so they'd only mislead here.
         $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
-        $methods = Payment::whereHas('sale', $inRange)
-            ->where('amount', '>', 0)
+        $methods = Payment::whereHas('sale', fn ($q) => $inRange($q)->where('status', '!=', 'refunded'))
             ->when($method !== null, fn ($q) => $q->where('method', $method))
             ->selectRaw('method, COALESCE(SUM(amount), 0) as amount, COUNT(*) as n')
             ->groupBy('method')
+            ->havingRaw('COALESCE(SUM(amount), 0) <> 0')
             ->orderByDesc('amount')
             ->get()
             ->map(fn ($m) => (object) [
