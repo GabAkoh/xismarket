@@ -205,12 +205,7 @@ class ReportController extends Controller
      */
     public function accountStatement(Request $request)
     {
-        $from = $request->filled('from')
-            ? Carbon::parse($request->input('from'))->startOfDay()
-            : Carbon::now()->startOfMonth();
-        $to = $request->filled('to')
-            ? Carbon::parse($request->input('to'))->endOfDay()
-            : Carbon::now()->endOfDay();
+        [$from, $to] = $this->statementRange($request);
 
         // Account picker: every account, labelled "code · name".
         $accountOptions = Account::orderBy('code')->get(['id', 'code', 'name'])
@@ -230,7 +225,80 @@ class ReportController extends Controller
             ]);
         }
 
-        // Sign a (debit, credit) pair to the account's natural side.
+        return view('accounting.reports.account-statement',
+            ['accountOptions' => $accountOptions] + $this->accountStatementData($account, $from, $to));
+    }
+
+    /** Download the current account statement as CSV. */
+    public function accountStatementExport(Request $request)
+    {
+        [$from, $to] = $this->statementRange($request);
+
+        $account = $request->filled('account_id')
+            ? Account::find((int) $request->input('account_id'))
+            : null;
+
+        // Nothing to export without a chosen account — back to the picker.
+        if (! $account) {
+            return redirect()->route('reports.account-statement');
+        }
+
+        $data = $this->accountStatementData($account, $from, $to);
+        $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $filename = 'account-statement-'.$account->code.'-'.$from->toDateString().'-to-'.$to->toDateString().'.csv';
+
+        return response()->streamDownload(function () use ($data, $account, $from, $to, $num) {
+            $out = fopen('php://output', 'w');
+            // Explicit args (incl. $escape) — PHP 8.4 deprecates omitting them.
+            $put = fn ($row) => fputcsv($out, $row, ',', '"', '');
+
+            $put(['Account statement', $account->code.' · '.$account->name]);
+            $put(['Period', $from->toDateString().' to '.$to->toDateString()]);
+            $put([]);
+
+            $put(['Date', 'Reference', 'Description', 'Debit', 'Credit', 'Balance']);
+            $put(['', '', 'Opening balance', '', '', $num($data['opening'])]);
+            foreach ($data['rows'] as $r) {
+                $put([
+                    $r->date->format('Y-m-d'),
+                    $r->reference,
+                    $r->memo,
+                    $r->debit ? $num($r->debit) : '',
+                    $r->credit ? $num($r->credit) : '',
+                    $num($r->balance),
+                ]);
+            }
+            $put(['', '', 'Period movement', $num($data['periodDebit']), $num($data['periodCredit']), '']);
+            $put(['', '', 'Closing balance', '', '', $num($data['closing'])]);
+
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
+    /** Parse the statement's date window (defaults to the current month). */
+    protected function statementRange(Request $request): array
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : Carbon::now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : Carbon::now()->endOfDay();
+
+        return [$from, $to];
+    }
+
+    /**
+     * Build one account's statement for a date window: an opening balance carried
+     * from all prior activity, every line in the window with a running balance,
+     * and the period/closing totals. Debits and credits are signed to the
+     * account's natural side (asset/expense debit-natural; others credit-natural)
+     * so the running balance matches the account's reported balance elsewhere.
+     *
+     * @return array{account: Account, from: Carbon, to: Carbon, opening: float, rows: \Illuminate\Support\Collection, closing: float, periodDebit: float, periodCredit: float, debitNatural: bool}
+     */
+    protected function accountStatementData(Account $account, Carbon $from, Carbon $to): array
+    {
         $debitNatural = in_array($account->type, ['asset', 'expense'], true);
         $signed = fn ($debit, $credit) => $debitNatural ? $debit - $credit : $credit - $debit;
 
@@ -276,8 +344,7 @@ class ReportController extends Controller
             ];
         });
 
-        return view('accounting.reports.account-statement', [
-            'accountOptions' => $accountOptions,
+        return [
             'account' => $account,
             'from' => $from,
             'to' => $to,
@@ -287,7 +354,7 @@ class ReportController extends Controller
             'periodDebit' => round($periodDebit, 2),
             'periodCredit' => round($periodCredit, 2),
             'debitNatural' => $debitNatural,
-        ]);
+        ];
     }
 
     /**
