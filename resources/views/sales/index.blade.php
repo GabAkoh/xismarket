@@ -9,10 +9,15 @@
 </x-page-header>
 
 <x-card class="mb-4">
-    <form method="GET" action="{{ route('sales.index') }}" class="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+    <form method="GET" action="{{ route('sales.index') }}" class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
         <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">Search #</label>
             <input name="q" value="{{ request('q') }}" placeholder="INV-…" class="w-full rounded-md border border-slate-300 p-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Product</label>
+            <x-searchable-select name="product_id" :options="$products" :selected="(string) request('product_id')"
+                placeholder="All products" class="p-2 text-sm" />
         </div>
         <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>

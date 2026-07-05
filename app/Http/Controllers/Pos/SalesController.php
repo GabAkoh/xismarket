@@ -25,6 +25,8 @@ class SalesController extends Controller
             ->when($request->filled('from'), fn ($q) => $q->whereDate('completed_at', '>=', $request->date('from')))
             ->when($request->filled('to'), fn ($q) => $q->whereDate('completed_at', '<=', $request->date('to')))
             ->when($request->filled('q'), fn ($q) => $q->where('number', 'like', '%'.$request->string('q').'%'))
+            ->when($request->filled('product_id'), fn ($q) => $q->whereHas('items',
+                fn ($i) => $i->where('product_id', $request->integer('product_id'))))
             ->orderByDesc('completed_at')
             ->orderByDesc('id')
             ->paginate(20)
@@ -32,7 +34,13 @@ class SalesController extends Controller
 
         $statuses = ['completed', 'partially_paid', 'refunded', 'partially_refunded', 'void'];
 
-        return view('sales.index', compact('sales', 'statuses'));
+        // Product filter options: only products that have actually sold, keeping
+        // the dropdown relevant and bounded (mirrors the sales report).
+        $soldProductIds = SaleItem::whereNotNull('product_id')->distinct()->pluck('product_id');
+        $products = \App\Models\Inventory\Product::whereIn('id', $soldProductIds)
+            ->orderBy('name')->get(['id', 'name']);
+
+        return view('sales.index', compact('sales', 'statuses', 'products'));
     }
 
     /**
