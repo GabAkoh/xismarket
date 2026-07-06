@@ -7,6 +7,18 @@
 {$APP_DOMAIN} {
 	encode zstd gzip
 
+	# Security headers applied to every response at the TLS edge.
+	header {
+		# Force HTTPS for a year; browsers refuse plain-HTTP downgrades.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Defence-in-depth (nginx also sets the first two).
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Don't advertise the server software.
+		-Server
+	}
+
 	# Forward everything to the internal nginx container (php-fpm behind it).
 	reverse_proxy nginx:80
 
