@@ -75,11 +75,17 @@
     /* Keep the name to one line so the barcode gets most of the label. */
     .label-name { font-size: 7px; line-height: 1.1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
     .label-price { font-size: 10px; font-weight: 700; flex: 0 0 auto; }
-    /* Barcode fills the remaining height; horizontal padding = scanner quiet zone. */
-    .label-bc-wrap { width: 100%; flex: 1 1 auto; min-height: 8mm; display: flex; padding: 0 2mm; box-sizing: border-box; }
-    .label-barcode { width: 100%; height: 100%; display: block; }
+    /* Barcode area. The scanner quiet zone is baked INTO the SVG (11 modules each
+       side, via JsBarcode margins), so this wrapper adds no side padding — every
+       mm of label width goes to the code, and the bars stay centred. */
+    .label-bc-wrap { width: 100%; flex: 1 1 auto; min-height: 8mm; display: flex; justify-content: center; align-items: stretch; box-sizing: border-box; }
+    .label-barcode { height: 100%; display: block; }   /* width set in mm by JS to lock the X-dimension */
     .label-code { font-size: 9px; font-weight: 600; letter-spacing: 0.5px; font-family: 'Courier New', monospace; line-height: 1; flex: 0 0 auto; }
     .label-nobc { font-size: 8px; color: #ef4444; }
+    /* A code too dense to scan reliably at this label size — flag it so staff
+       pick a bigger label instead of printing an unscannable sticker. */
+    .label.bc-too-dense { outline: 1px solid #ef4444; }
+    .bc-warn { font-size: 6px; line-height: 1; color: #ef4444; flex: 0 0 auto; }
 
     @media print {
         aside, header, .print\:hidden { display: none !important; }
@@ -102,6 +108,16 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
+    // Physical label width (mm) for this page, from the size preset.
+    var LABEL_W_MM = {{ $lw }};
+    // Quiet zone in modules on each side. EAN-13 requires >= 11 (left); a scanner
+    // will not read a code whose quiet zone is too small even when it looks fine.
+    var QUIET = 11;
+    // X-dimension = width of the narrowest bar, in mm. We aim for X_PREF and never
+    // go below X_FLOOR (~0.25mm is the practical floor for retail scanners); below
+    // that the label is simply too small for the code and we flag it.
+    var X_PREF = 0.40, X_FLOOR = 0.25, MOD = 2 /* internal px per module */;
+
     // True only for a 13-digit string whose last digit is a valid EAN-13 check
     // digit (matches App\Services\Inventory\BarcodeService::checkDigit).
     function isEan13(v) {
@@ -115,35 +131,55 @@
 
     function renderBarcodes() {
         if (typeof JsBarcode === 'undefined') { setTimeout(renderBarcodes, 100); return; }
+        // Usable width for the whole symbol (bars + both quiet zones). Keep 1mm of
+        // safety so the printer's own edge margin can never clip a quiet zone.
+        var usableW = Math.max(10, LABEL_W_MM - 1);
+
         document.querySelectorAll('svg.label-barcode').forEach(function (el) {
             var v = el.getAttribute('data-value');
             if (!v) return;
             try {
-                // Render bars only (the code is shown separately as text). We size the
-                // barcode via a viewBox and let it scale to fit the label WITHOUT
-                // distorting the bar widths — a scanner reads the relative bar/space
-                // widths, so any horizontal stretch (preserveAspectRatio="none") blurs
-                // the edges at print time and makes the code unreadable.
-                //   margin: 10  -> keeps a quiet zone baked into the image
-                //   shape-rendering: crispEdges -> snap bar edges to device pixels (no blur)
-                //
-                // Our in-store codes are valid EAN-13 (13 digits + correct check digit),
-                // so render those as a true EAN-13 symbol — denser and more reliably read
-                // by retail scanners. Anything else (e.g. an alphanumeric SKU fallback)
-                // uses CODE128, which accepts any value.
-                var opts = { width: 3, height: 60, margin: 10, displayValue: false };
-                opts.format = isEan13(v) ? 'EAN13' : 'CODE128';
-                JsBarcode(el, v, opts);
-                var w = el.getAttribute('width'), h = el.getAttribute('height');
-                if (w && h) el.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-                el.removeAttribute('width');
-                el.removeAttribute('height');
-                // Fit within the label box, centred, preserving the aspect ratio.
-                el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-                el.setAttribute('shape-rendering', 'crispEdges');
-                el.style.width = '100%';
-                el.style.height = '100%';
-            } catch (e) { /* unrenderable value — leave blank */ }
+                // In-store codes are valid EAN-13 (13 digits + check digit) -> render a
+                // true EAN-13 symbol. Anything else (alphanumeric SKU fallback) -> CODE128.
+                // The quiet zone is baked into the SVG here; no top/bottom waste.
+                JsBarcode(el, v, {
+                    format: isEan13(v) ? 'EAN13' : 'CODE128',
+                    width: MOD, height: 120, displayValue: false,
+                    marginTop: 0, marginBottom: 0,
+                    marginLeft: QUIET * MOD, marginRight: QUIET * MOD
+                });
+            } catch (e) { return; } // unrenderable value — leave blank
+
+            var wpx = +el.getAttribute('width'), hpx = +el.getAttribute('height');
+            var modules = wpx / MOD;                 // total modules incl. both quiet zones
+            el.setAttribute('viewBox', '0 0 ' + wpx + ' ' + hpx);
+            el.removeAttribute('width');
+            el.removeAttribute('height');
+
+            // Lock a real-world X-dimension instead of stretching to fill the label.
+            // Uniform horizontal scaling preserves the bar/space RATIOS a scanner reads;
+            // the height stretches independently (harmless for 1-D codes). We deliberately
+            // do NOT use shape-rendering:crispEdges — at these sizes it snaps bar edges
+            // unevenly and distorts those ratios, which is what broke scanning before.
+            var X = Math.min(X_PREF, usableW / modules);
+            var symW = modules * X;                  // always <= usableW, so it never clips
+            el.setAttribute('preserveAspectRatio', 'none');
+            el.style.width = symW.toFixed(2) + 'mm';
+            el.style.height = '100%';
+
+            // Too dense to scan reliably at this label size — warn rather than print junk.
+            if (X < X_FLOOR) {
+                var label = el.closest('.label');
+                if (label) {
+                    label.classList.add('bc-too-dense');
+                    label.title = 'Barcode too dense to scan at this label size (bar width '
+                        + X.toFixed(2) + 'mm). Choose a bigger label.';
+                    var warn = document.createElement('div');
+                    warn.className = 'bc-warn';
+                    warn.textContent = '⚠ too small — use bigger label';
+                    label.appendChild(warn);
+                }
+            }
         });
     }
     window.addEventListener('load', renderBarcodes);
