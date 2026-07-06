@@ -116,7 +116,10 @@
     // X-dimension = width of the narrowest bar, in mm. We aim for X_PREF and never
     // go below X_FLOOR (~0.25mm is the practical floor for retail scanners); below
     // that the label is simply too small for the code and we flag it.
-    var X_PREF = 0.40, X_FLOOR = 0.25, MOD = 2 /* internal px per module */;
+    var X_PREF = 0.40, X_FLOOR = 0.25;
+    // Source raster resolution: px per module in the off-screen canvas. High enough
+    // (~10) that the printer gets a crisp bitmap at any DPI up to laser (600+).
+    var SRC = 10;
 
     // True only for a 13-digit string whose last digit is a valid EAN-13 check
     // digit (matches App\Services\Inventory\BarcodeService::checkDigit).
@@ -138,38 +141,41 @@
         document.querySelectorAll('svg.label-barcode').forEach(function (el) {
             var v = el.getAttribute('data-value');
             if (!v) return;
+
+            // Render to an OFF-SCREEN CANVAS, not the SVG. An SVG scaled down to a few
+            // mm rasterises to ~1-3px bars that anti-alias and merge together in both
+            // screen AND print — that is what made every code unscannable. A high-res
+            // canvas raster downsamples cleanly (the browser averages), so the bars
+            // survive. Quiet zone (>=11 modules) is baked in; no top/bottom waste.
+            var canvas = document.createElement('canvas');
             try {
-                // In-store codes are valid EAN-13 (13 digits + check digit) -> render a
-                // true EAN-13 symbol. Anything else (alphanumeric SKU fallback) -> CODE128.
-                // The quiet zone is baked into the SVG here; no top/bottom waste.
-                JsBarcode(el, v, {
+                JsBarcode(canvas, v, {
                     format: isEan13(v) ? 'EAN13' : 'CODE128',
-                    width: MOD, height: 120, displayValue: false,
+                    width: SRC, height: 200, displayValue: false,
                     marginTop: 0, marginBottom: 0,
-                    marginLeft: QUIET * MOD, marginRight: QUIET * MOD
+                    marginLeft: QUIET * SRC, marginRight: QUIET * SRC
                 });
-            } catch (e) { return; } // unrenderable value — leave blank
+            } catch (e) { return; } // unrenderable value — leave the placeholder blank
 
-            var wpx = +el.getAttribute('width'), hpx = +el.getAttribute('height');
-            var modules = wpx / MOD;                 // total modules incl. both quiet zones
-            el.setAttribute('viewBox', '0 0 ' + wpx + ' ' + hpx);
-            el.removeAttribute('width');
-            el.removeAttribute('height');
-
+            var modules = canvas.width / SRC;        // total modules incl. both quiet zones
             // Lock a real-world X-dimension instead of stretching to fill the label.
             // Uniform horizontal scaling preserves the bar/space RATIOS a scanner reads;
-            // the height stretches independently (harmless for 1-D codes). We deliberately
-            // do NOT use shape-rendering:crispEdges — at these sizes it snaps bar edges
-            // unevenly and distorts those ratios, which is what broke scanning before.
+            // the height stretches independently (harmless for 1-D codes).
             var X = Math.min(X_PREF, usableW / modules);
             var symW = modules * X;                  // always <= usableW, so it never clips
-            el.setAttribute('preserveAspectRatio', 'none');
-            el.style.width = symW.toFixed(2) + 'mm';
-            el.style.height = '100%';
+
+            // Swap the placeholder <svg> for the raster.
+            var img = document.createElement('img');
+            img.className = 'label-barcode';
+            img.alt = v;
+            img.src = canvas.toDataURL('image/png');
+            img.style.width = symW.toFixed(2) + 'mm';
+            img.style.height = '100%';
+            el.replaceWith(img);
 
             // Too dense to scan reliably at this label size — warn rather than print junk.
             if (X < X_FLOOR) {
-                var label = el.closest('.label');
+                var label = img.closest('.label');
                 if (label) {
                     label.classList.add('bc-too-dense');
                     label.title = 'Barcode too dense to scan at this label size (bar width '
