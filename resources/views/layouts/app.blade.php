@@ -49,6 +49,8 @@
                         ['route' => 'suppliers.index', 'label' => 'Suppliers', 'perm' => 'suppliers.manage'],
                         ['route' => 'warehouses.index', 'label' => 'Warehouses', 'perm' => 'warehouses.manage'],
                         ['route' => 'stock.index', 'label' => 'Stock Levels', 'perm' => 'stock.view'],
+                        ['route' => 'products.out-of-stock', 'label' => 'Out of Stock', 'perm' => 'inventory.view'],
+                        ['route' => 'products.reorder', 'label' => 'Below Reorder', 'perm' => 'inventory.view'],
                         ['route' => 'purchases.index', 'label' => 'Purchase Orders', 'perm' => 'purchases.view'],
                         ['route' => 'purchases.report', 'label' => 'Purchase Report', 'perm' => 'purchases.view'],
                     ]],

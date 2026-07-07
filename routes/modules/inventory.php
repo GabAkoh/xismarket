@@ -4,6 +4,7 @@ use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\ProductImportController;
 use App\Http\Controllers\Inventory\PurchaseOrderController;
+use App\Http\Controllers\Inventory\StockAlertController;
 use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Inventory\StockMovementController;
 use App\Http\Controllers\Inventory\StockValuationController;
@@ -20,6 +21,11 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('products/report/export', [ProductController::class, 'reportExport'])->name('products.report.export');
         Route::get('products/movements', [StockMovementController::class, 'report'])->name('products.movements');
         Route::get('products/movements/export', [StockMovementController::class, 'reportExport'])->name('products.movements.export');
+        // Purchasing alerts: sold out, and at/below reorder level.
+        Route::get('products/out-of-stock', [StockAlertController::class, 'outOfStock'])->name('products.out-of-stock');
+        Route::get('products/out-of-stock/export', [StockAlertController::class, 'outOfStockExport'])->name('products.out-of-stock.export');
+        Route::get('products/reorder', [StockAlertController::class, 'belowReorder'])->name('products.reorder');
+        Route::get('products/reorder/export', [StockAlertController::class, 'belowReorderExport'])->name('products.reorder.export');
         // Printable barcode labels (?ids=1,2,3).
         Route::get('products/labels', [ProductController::class, 'labels'])->name('products.labels');
     });
