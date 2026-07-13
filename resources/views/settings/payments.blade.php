@@ -28,6 +28,18 @@
             </span>
         </label>
 
+        <div class="mt-4 pl-6">
+            <label class="block text-sm font-medium text-slate-700">Minimum deposit</label>
+            <div class="mt-1 flex items-center gap-2">
+                <input type="number" name="min_deposit_percent" min="0" max="100" step="1"
+                       value="{{ old('min_deposit_percent', $minDepositPercent) }}"
+                       class="w-24 rounded-md border border-slate-300 p-2 text-sm">
+                <span class="text-sm text-slate-500">% of the order total</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Smallest deposit a customer may pay at checkout. 0 = any amount. Only applies when full payment is not required.</p>
+            @error('min_deposit_percent')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
         <div class="mt-5">
             <label class="block text-sm font-medium text-slate-700">Paystack public key</label>
             <input name="paystack_public" value="{{ old('paystack_public', $publicKey) }}" placeholder="pk_live_… or pk_test_…"

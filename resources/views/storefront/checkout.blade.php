@@ -13,8 +13,10 @@
           subtotal: {{ $totals['subtotal'] }}, tax: {{ $totals['tax'] }}, discount: {{ $totals['discount'] ?? 0 }},
           method: '{{ old('payment_method', $onlinePayment ? 'online' : 'offline') }}',
           deposit: {{ (float) old('deposit_amount', 0) }},
+          minDepositPercent: {{ (int) ($minDepositPercent ?? 0) }},
           get fee() { return Number(this.methods[this.m]?.fee ?? 0); },
           get grandTotal() { return Math.max(0, this.subtotal - this.discount + this.tax + this.fee); },
+          get minDeposit() { return this.minDepositPercent > 0 ? Math.max(0.01, Math.round(this.grandTotal * this.minDepositPercent) / 100) : 0.01; },
           get payNow() { return this.method === 'deposit' ? Math.min(Math.max(0, this.deposit || 0), this.grandTotal) : this.grandTotal; },
           get pickup() { return !! this.methods[this.m]?.pickup; },
       }"
@@ -94,10 +96,13 @@
                         <span class="block text-xs text-slate-500">Pay part now by card and settle the balance on delivery.</span>
                         <div x-show="method === 'deposit'" x-cloak class="mt-3">
                             <label class="block text-xs font-medium text-slate-600">Deposit amount</label>
-                            <input type="number" name="deposit_amount" step="0.01" min="0.01" :max="grandTotal"
+                            <input type="number" name="deposit_amount" step="0.01" :min="minDeposit" :max="grandTotal"
                                    x-model.number="deposit"
-                                   x-init="if (! deposit || deposit <= 0) deposit = Math.max(0.01, Math.round(grandTotal / 2))"
+                                   x-init="if (! deposit || deposit < minDeposit) deposit = Math.max(minDeposit, Math.round(grandTotal / 2))"
                                    class="mt-1 w-40 rounded-md border border-slate-300 p-2 text-sm">
+                            <p class="mt-1 text-xs text-slate-400" x-show="minDepositPercent > 0">
+                                Minimum deposit <span x-text="'{{ $symbol }} ' + minDeposit.toFixed(2)"></span> (<span x-text="minDepositPercent"></span>%).
+                            </p>
                             <p class="mt-1 text-xs text-slate-500" x-show="payNow > 0">
                                 Balance <span x-text="'{{ $symbol }} ' + Math.max(0, grandTotal - payNow).toFixed(2)"></span> due on delivery.
                             </p>

@@ -24,6 +24,7 @@ class PaymentSettingsController extends Controller
             'store' => $store,
             'enabled' => (bool) $store->setting('payments.enabled', false),
             'requireFull' => (bool) $store->setting('payments.require_full_payment', false),
+            'minDepositPercent' => (int) $store->setting('payments.min_deposit_percent', 0),
             'publicKey' => (string) $store->setting('payments.paystack_public', ''),
             'hasSecret' => filled($store->setting('payments.paystack_secret')),
         ]);
@@ -34,6 +35,7 @@ class PaymentSettingsController extends Controller
         $data = $request->validate([
             'enabled' => ['nullable'],
             'require_full_payment' => ['nullable'],
+            'min_deposit_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'paystack_public' => ['nullable', 'string', 'max:255'],
             'paystack_secret' => ['nullable', 'string', 'max:255'],
         ]);
@@ -44,6 +46,7 @@ class PaymentSettingsController extends Controller
 
         $payments['enabled'] = $request->boolean('enabled');
         $payments['require_full_payment'] = $request->boolean('require_full_payment');
+        $payments['min_deposit_percent'] = (int) ($data['min_deposit_percent'] ?? 0);
         $payments['paystack_public'] = trim((string) ($data['paystack_public'] ?? '')) ?: null;
 
         // Only replace the secret when a new value is entered (it's masked otherwise).

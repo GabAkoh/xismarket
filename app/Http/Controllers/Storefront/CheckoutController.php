@@ -32,6 +32,7 @@ class CheckoutController extends Controller
             'shippingMethods' => $shipping,
             'onlinePayment' => $gateway->configured(),
             'requireFull' => (bool) $store->setting('payments.require_full_payment', false),
+            'minDepositPercent' => (int) $store->setting('payments.min_deposit_percent', 0),
         ]);
     }
 
@@ -143,6 +144,13 @@ class CheckoutController extends Controller
                 $charge = round(min((float) $data['deposit_amount'], (float) $order->total), 2);
                 if ($charge <= 0) {
                     return redirect()->route('shop.checkout')->with('error', 'Enter a deposit greater than zero.');
+                }
+                // Enforce the store's minimum deposit (a % of the order total).
+                $minPercent = (int) $store->setting('payments.min_deposit_percent', 0);
+                $minCharge = $minPercent > 0 ? round((float) $order->total * $minPercent / 100, 2) : 0.0;
+                if ($minCharge > 0 && $charge + 0.001 < $minCharge) {
+                    return redirect()->route('shop.checkout')->with('error',
+                        'The minimum deposit is '.$minPercent.'% of your order ('.$store->currencySymbol().number_format($minCharge, 2).').');
                 }
             }
 
