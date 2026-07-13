@@ -23,6 +23,7 @@ class PaymentSettingsController extends Controller
         return view('settings.payments', [
             'store' => $store,
             'enabled' => (bool) $store->setting('payments.enabled', false),
+            'requireFull' => (bool) $store->setting('payments.require_full_payment', false),
             'publicKey' => (string) $store->setting('payments.paystack_public', ''),
             'hasSecret' => filled($store->setting('payments.paystack_secret')),
         ]);
@@ -32,6 +33,7 @@ class PaymentSettingsController extends Controller
     {
         $data = $request->validate([
             'enabled' => ['nullable'],
+            'require_full_payment' => ['nullable'],
             'paystack_public' => ['nullable', 'string', 'max:255'],
             'paystack_secret' => ['nullable', 'string', 'max:255'],
         ]);
@@ -41,6 +43,7 @@ class PaymentSettingsController extends Controller
         $payments = $settings['payments'] ?? [];
 
         $payments['enabled'] = $request->boolean('enabled');
+        $payments['require_full_payment'] = $request->boolean('require_full_payment');
         $payments['paystack_public'] = trim((string) ($data['paystack_public'] ?? '')) ?: null;
 
         // Only replace the secret when a new value is entered (it's masked otherwise).

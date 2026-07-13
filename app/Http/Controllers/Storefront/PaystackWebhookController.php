@@ -30,9 +30,16 @@ class PaystackWebhookController extends Controller
             $amount = ((int) ($event['data']['amount'] ?? 0)) / 100;
 
             $order = $reference !== '' ? Order::where('payment_reference', $reference)->first() : null;
-            if ($order && ! $order->isPaid()
-                && round($amount, 2) + 0.01 >= round((float) $order->total, 2)) {
-                $payments->settle($order, $reference);
+            if ($order && ! $order->isPaid()) {
+                // When full payment is required the capture must cover the total;
+                // otherwise any positive capture (a deposit) settles the order.
+                $requireFull = (bool) app(\App\Support\Tenancy::class)->current()->setting('payments.require_full_payment', false);
+                $ok = $requireFull
+                    ? round($amount, 2) + 0.01 >= round((float) $order->total, 2)
+                    : $amount > 0;
+                if ($ok) {
+                    $payments->settle($order, $reference, 'paystack', (float) $amount);
+                }
             }
         }
 

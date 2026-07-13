@@ -10,7 +10,7 @@
         'dispatched' => 'bg-amber-100 text-amber-700', 'delivered' => 'bg-teal-100 text-teal-700',
         'completed' => 'bg-green-100 text-green-700', 'cancelled' => 'bg-red-100 text-red-700',
     ][$order->status] ?? 'bg-slate-100 text-slate-600';
-    $payBadge = ['paid' => 'bg-green-100 text-green-700', 'refunded' => 'bg-red-100 text-red-700'][$order->payment_status] ?? 'bg-amber-100 text-amber-700';
+    $payBadge = ['paid' => 'bg-green-100 text-green-700', 'partial' => 'bg-amber-100 text-amber-700', 'refunded' => 'bg-red-100 text-red-700'][$order->payment_status] ?? 'bg-amber-100 text-amber-700';
 @endphp
 
 <x-page-header title="Order {{ $order->number }}">
@@ -82,9 +82,40 @@
                 <span class="text-xs px-2 py-0.5 rounded-full capitalize {{ $statusBadge }}">{{ str_replace('_', ' ', $order->status) }}</span>
                 <span class="text-xs px-2 py-0.5 rounded-full capitalize {{ $payBadge }}">{{ $order->payment_status }}</span>
             </div>
-            @if ($order->payment_status === 'paid' && $order->payment_method)
-                <p class="text-xs text-slate-500 mb-3">Paid by <span class="font-medium capitalize">{{ $order->payment_method }}</span>@if($order->payment_reference) · {{ $order->payment_reference }}@endif @if($order->paid_at)<span class="text-slate-400">({{ $order->paid_at->format('d M Y H:i') }})</span>@endif</p>
+            @if ($order->paid_total > 0 && $order->payment_method)
+                <p class="text-xs text-slate-500 mb-1">{{ $order->isPaid() ? 'Paid' : 'Part-paid' }} by <span class="font-medium capitalize">{{ $order->payment_method }}</span>@if($order->payment_reference) · {{ $order->payment_reference }}@endif @if($order->paid_at)<span class="text-slate-400">({{ $order->paid_at->format('d M Y H:i') }})</span>@endif</p>
             @endif
+
+            @if ($order->hasBalance())
+                <div class="mb-3 text-sm rounded-md bg-amber-50 border border-amber-200 px-3 py-2">
+                    <div class="flex justify-between text-slate-600"><span>Paid</span><span>{{ $symbol }}{{ number_format($order->paid_total, 2) }}</span></div>
+                    <div class="flex justify-between font-semibold text-amber-700"><span>Balance due</span><span>{{ $symbol }}{{ number_format($order->balanceDue(), 2) }}</span></div>
+                </div>
+            @endif
+
+            {{-- Record a payment (partial or full) — available before or after fulfilment while a balance is owed. --}}
+            @permission('orders.manage')
+                @if ($order->hasBalance() && ! $order->isCancelled() && $order->payment_status !== 'refunded')
+                    <form method="POST" action="{{ route('orders.pay', $order) }}" class="mb-3 space-y-2">
+                        @csrf
+                        @unless ($requireFull)
+                            <div class="flex gap-2">
+                                <input type="number" name="amount" step="0.01" min="0.01" max="{{ number_format($order->balanceDue(), 2, '.', '') }}"
+                                       value="{{ number_format($order->balanceDue(), 2, '.', '') }}"
+                                       class="w-28 rounded-md border border-slate-300 p-2 text-sm">
+                                <select name="method" class="flex-1 rounded-md border border-slate-300 p-2 text-sm">
+                                    <option value="cash">Cash</option>
+                                    <option value="card">Card</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <button class="w-full rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900">Record payment</button>
+                        @else
+                            <button class="w-full rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900">Mark as paid</button>
+                        @endunless
+                    </form>
+                @endif
+            @endpermission
 
             @if (! $order->isCompleted() && ! $order->isCancelled())
                 @permission('orders.manage')
@@ -99,23 +130,20 @@
                     </form>
                 @endpermission
 
-                @permission('orders.manage')
-                    @unless ($order->isPaid())
-                        <form method="POST" action="{{ route('orders.pay', $order) }}" class="mb-2">
-                            @csrf
-                            <button class="w-full rounded-md bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900">Mark as paid</button>
-                        </form>
-                    @endunless
-                @endpermission
-
                 @permission('orders.fulfill')
                     <form method="POST" action="{{ route('orders.fulfill', $order) }}" class="mb-2"
-                          onsubmit="return confirm('Fulfil this order? Stock will be deducted and the sale posted to the books.')">
+                          onsubmit="return confirm('{{ $order->isPaid() ? 'Fulfil this order? Stock will be deducted and the sale posted to the books.' : 'Fulfil this order with a balance still owing? Stock will be deducted and the sale posted to the books, with the unpaid balance recorded as receivable.' }}')">
                         @csrf
                         <button class="w-full rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-40"
-                                @disabled(! $order->isPaid())>Fulfil order</button>
+                                @disabled($requireFull && ! $order->isPaid())>Fulfil order</button>
                     </form>
-                    @unless ($order->isPaid())<p class="text-xs text-amber-600 mb-2">Mark the order paid before fulfilling.</p>@endunless
+                    @unless ($order->isPaid())
+                        @if ($requireFull)
+                            <p class="text-xs text-amber-600 mb-2">Mark the order paid before fulfilling.</p>
+                        @else
+                            <p class="text-xs text-amber-600 mb-2">You can fulfil now — the unpaid balance will be recorded as owing.</p>
+                        @endif
+                    @endunless
 
                     <form method="POST" action="{{ route('orders.cancel', $order) }}"
                           onsubmit="return confirm('{{ $order->isPaid() ? 'This order is PAID — cancelling alone does not return the money. Continue? (Leave the refund box ticked to refund the customer now.)' : 'Cancel this order?' }}')">

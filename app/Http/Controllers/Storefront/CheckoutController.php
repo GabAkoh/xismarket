@@ -22,7 +22,8 @@ class CheckoutController extends Controller
             return redirect()->route('shop.home')->with('status', 'Your cart is empty.');
         }
 
-        $shipping = app(\App\Support\Tenancy::class)->current()->shippingMethods();
+        $store = app(\App\Support\Tenancy::class)->current();
+        $shipping = $store->shippingMethods();
         $firstFee = (float) ($shipping[0]['fee'] ?? 0);
 
         return view('storefront.checkout', [
@@ -30,6 +31,7 @@ class CheckoutController extends Controller
             'totals' => $this->cart->totals($firstFee),
             'shippingMethods' => $shipping,
             'onlinePayment' => $gateway->configured(),
+            'requireFull' => (bool) $store->setting('payments.require_full_payment', false),
         ]);
     }
 
@@ -39,8 +41,24 @@ class CheckoutController extends Controller
             return redirect()->route('shop.home')->with('status', 'Your cart is empty.');
         }
 
-        $shipping = app(\App\Support\Tenancy::class)->current()->shippingMethods();
+        $store = app(\App\Support\Tenancy::class)->current();
+        $shipping = $store->shippingMethods();
         $online = $gateway->configured();
+        $requireFull = (bool) $store->setting('payments.require_full_payment', false);
+
+        // Which payment methods this checkout offers, given the gateway and the
+        // full-payment policy: 'online' (pay in full by card), 'deposit' (pay
+        // part now by card), 'offline' (pay on delivery / pickup).
+        $allowed = [];
+        if ($online) {
+            $allowed[] = 'online';
+            if (! $requireFull) {
+                $allowed[] = 'deposit';
+            }
+        }
+        if (! $online || ! $requireFull) {
+            $allowed[] = 'offline';
+        }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -51,10 +69,12 @@ class CheckoutController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:1000'],
-            'payment_method' => ['required', 'in:online,offline'],
+            'payment_method' => ['required', 'in:'.implode(',', $allowed)],
+            // Only present/validated when the deposit option is chosen.
+            'deposit_amount' => ['exclude_unless:payment_method,deposit', 'required', 'numeric', 'min:0.01'],
         ]);
 
-        $payOnline = $data['payment_method'] === 'online';
+        $payOnline = in_array($data['payment_method'], ['online', 'deposit'], true);
         if ($payOnline && ! $online) {
             return back()->withInput()->with('error', 'Online payment is not available right now — please choose pay on delivery.');
         }
@@ -116,11 +136,21 @@ class CheckoutController extends Controller
 
         // --- Online: hand off to Paystack, settle on the callback/webhook ---
         if ($payOnline) {
+            // A deposit charges only the chosen part now; the balance is owed on
+            // delivery. The order total is authoritative, so cap the deposit to it.
+            $charge = (float) $order->total;
+            if ($data['payment_method'] === 'deposit') {
+                $charge = round(min((float) $data['deposit_amount'], (float) $order->total), 2);
+                if ($charge <= 0) {
+                    return redirect()->route('shop.checkout')->with('error', 'Enter a deposit greater than zero.');
+                }
+            }
+
             $reference = 'PSK-'.$order->number.'-'.strtoupper(Str::random(6));
             $order->update(['payment_reference' => $reference]);
 
             try {
-                $init = $gateway->initialize((string) $customer->email, (float) $order->total, $reference, route('shop.checkout.callback'));
+                $init = $gateway->initialize((string) $customer->email, $charge, $reference, route('shop.checkout.callback'));
             } catch (\Throwable $e) {
                 report($e);
 
@@ -158,11 +188,16 @@ class CheckoutController extends Controller
         // Settle unless the webhook already did.
         if (! $order->isPaid()) {
             $result = $gateway->verify($reference);
-            $paid = $result['success'] && round($result['amount'], 2) + 0.01 >= round((float) $order->total, 2);
-            if (! $paid) {
+            // When full payment is required the capture must cover the total;
+            // otherwise any positive capture (a deposit) is accepted.
+            $requireFull = (bool) app(\App\Support\Tenancy::class)->current()->setting('payments.require_full_payment', false);
+            $ok = $result['success'] && ($requireFull
+                ? round($result['amount'], 2) + 0.01 >= round((float) $order->total, 2)
+                : $result['amount'] > 0);
+            if (! $ok) {
                 return redirect()->route('shop.checkout')->with('error', 'Your payment was not completed — you can try again.');
             }
-            $payments->settle($order, $reference);
+            $payments->settle($order, $reference, 'paystack', (float) $result['amount']);
         }
 
         $this->rememberOrder($request, $order);

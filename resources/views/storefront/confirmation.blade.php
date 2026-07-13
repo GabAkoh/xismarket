@@ -12,6 +12,9 @@
         @if ($order->payment_status === 'paid')
             <p class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-green-700 bg-green-50 rounded-full px-3 py-1">✓ Paid{{ $order->payment_reference ? ' · '.\Illuminate\Support\Str::before($order->payment_reference, ' · ') : '' }}</p>
             <p class="mt-2 text-sm text-slate-400">We'll confirm and prepare your order shortly.</p>
+        @elseif ($order->payment_status === 'partial')
+            <p class="mt-2 inline-flex items-center gap-1 text-sm font-medium text-amber-700 bg-amber-50 rounded-full px-3 py-1">Deposit paid · {{ $symbol }} {{ number_format($order->paid_total, 2) }}</p>
+            <p class="mt-2 text-sm text-slate-400">Balance {{ $symbol }} {{ number_format($order->balanceDue(), 2) }} is due on {{ $order->fulfillment_type === 'delivery' ? 'delivery' : 'pickup' }}.</p>
         @else
             <p class="mt-1 text-sm text-slate-400">We'll confirm it shortly. Payment is collected on {{ $order->fulfillment_type === 'delivery' ? 'delivery' : 'pickup' }}.</p>
         @endif
@@ -34,6 +37,10 @@
                 <div class="flex justify-between"><dt class="text-slate-500">{{ $order->shipping_method ?: 'Delivery' }}</dt><dd>{{ $symbol }} {{ number_format($order->delivery_fee, 2) }}</dd></div>
             @endif
             <div class="flex justify-between font-bold text-slate-800 pt-2 border-t"><dt>Total</dt><dd>{{ $symbol }} {{ number_format($order->total, 2) }}</dd></div>
+            @if ($order->hasBalance() && $order->paid_total > 0)
+                <div class="flex justify-between text-slate-500"><dt>Paid</dt><dd>{{ $symbol }} {{ number_format($order->paid_total, 2) }}</dd></div>
+                <div class="flex justify-between font-semibold text-amber-700"><dt>Balance due</dt><dd>{{ $symbol }} {{ number_format($order->balanceDue(), 2) }}</dd></div>
+            @endif
         </dl>
         <div class="mt-3 text-sm text-slate-500">
             <span class="capitalize">{{ $order->fulfillment_type }}</span>@if ($order->shipping_method) · {{ $order->shipping_method }}@endif

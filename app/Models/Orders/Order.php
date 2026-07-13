@@ -67,6 +67,18 @@ class Order extends Model
         return $this->payment_status === 'paid';
     }
 
+    /** Amount still owed on the order (total minus what has been paid). */
+    public function balanceDue(): float
+    {
+        return round((float) $this->total - (float) $this->paid_total, 2);
+    }
+
+    /** Whether any money is still owed (a partially-paid / credit order). */
+    public function hasBalance(): bool
+    {
+        return $this->balanceDue() > 0.001;
+    }
+
     public function isCancelled(): bool
     {
         return $this->status === 'cancelled';

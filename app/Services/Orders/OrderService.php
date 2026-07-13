@@ -218,21 +218,74 @@ class OrderService
     }
 
     /**
-     * Mark the order paid in full. No journal is posted here — revenue is
-     * recognised at fulfilment. $reference holds a non-sensitive payment note
-     * (e.g. "Visa ····4242 · CARD-XYZ" for an online card charge).
+     * Record a payment (partial or full) against an order.
+     *
+     * The amount is capped to the outstanding balance, so an over-tender never
+     * pushes paid_total past the total. The order flips to 'paid' once the
+     * balance clears, otherwise it is 'partial'. $reference holds a
+     * non-sensitive payment note (e.g. "PSK-ORD-0007-ABC123" for an online
+     * charge).
+     *
+     * No journal is posted for a payment taken *before* fulfilment — revenue
+     * (and the cash/receivable split) is recognised at fulfilment. Settling the
+     * balance on an already-fulfilled order posts a settlement entry
+     * (Dr Cash, Cr Accounts Receivable) so the books track the receivable down.
+     */
+    public function recordPayment(Order $order, float $amount, string $method = 'cash', ?string $reference = null): Order
+    {
+        return DB::transaction(function () use ($order, $amount, $method, $reference) {
+            // Compute the balance against the latest persisted state. The online
+            // path additionally locks the row in OnlinePaymentService::settle so a
+            // concurrent callback + webhook can't both apply the same charge.
+            $order->refresh();
+
+            $applied = round(min(round($amount, 2), $order->balanceDue()), 2);
+            if ($applied <= 0) {
+                throw new \RuntimeException('Enter a payment amount greater than zero.');
+            }
+
+            $newPaid = round((float) $order->paid_total + $applied, 2);
+            $fullyPaid = $newPaid + 0.001 >= (float) $order->total;
+
+            $order->update([
+                'payment_status' => $fullyPaid ? 'paid' : 'partial',
+                'payment_method' => $method,
+                'payment_reference' => $reference,
+                'paid_at' => now(),
+                'paid_total' => $newPaid,
+            ]);
+
+            // Settling a balance after the order was fulfilled draws down the
+            // receivable posted at fulfilment.
+            if ($order->isCompleted()) {
+                $this->postSettlementJournal($order, $applied, $method);
+            }
+
+            return $order;
+        });
+    }
+
+    /**
+     * Mark the order paid in full — a thin wrapper over recordPayment used by
+     * the online/full-payment paths. No journal is posted pre-fulfilment;
+     * revenue is recognised at fulfilment.
      */
     public function markPaid(Order $order, string $method = 'cash', ?string $reference = null): Order
     {
-        $order->update([
-            'payment_status' => 'paid',
-            'payment_method' => $method,
-            'payment_reference' => $reference,
-            'paid_at' => now(),
-            'paid_total' => (float) $order->total,
-        ]);
+        $outstanding = $order->balanceDue();
 
-        return $order;
+        return $this->recordPayment(
+            $order,
+            $outstanding > 0 ? $outstanding : (float) $order->total,
+            $method,
+            $reference,
+        );
+    }
+
+    /** Whether this store requires full payment before an order can be placed/fulfilled. */
+    protected function requireFullPayment(): bool
+    {
+        return (bool) $this->tenancy->current()?->setting('payments.require_full_payment', false);
     }
 
     /**
@@ -250,7 +303,12 @@ class OrderService
                 throw new \RuntimeException('A cancelled order cannot be fulfilled.');
             }
             if (! $order->isPaid()) {
-                throw new \RuntimeException('The order must be paid in full before it can be fulfilled.');
+                if ($order->payment_status === 'refunded') {
+                    throw new \RuntimeException('A refunded order cannot be fulfilled.');
+                }
+                if ($this->requireFullPayment()) {
+                    throw new \RuntimeException('The order must be paid in full before it can be fulfilled. (Turn off "require full payment" in Online-payment settings to fulfil with a balance owing.)');
+                }
             }
 
             $order->loadMissing('items');
@@ -492,8 +550,18 @@ class OrderService
             fn ($i) => round((float) $i->unit_cost * (float) $i->quantity, 2)
         ), 2);
 
+        // Split the debit between cash actually received and the receivable for
+        // any balance still owing (a credit order fulfilled before full payment).
+        $paid = round(min((float) $order->paid_total, $total), 2);
+        $ar = round($total - $paid, 2);
+
         $lines = [];
-        $lines[] = ['account' => '1000', 'debit' => $total, 'credit' => 0, 'memo' => 'Order payment received'];
+        if ($paid > 0) {
+            $lines[] = ['account' => '1000', 'debit' => $paid, 'credit' => 0, 'memo' => 'Order payment received'];
+        }
+        if ($ar > 0) {
+            $lines[] = ['account' => '1200', 'debit' => $ar, 'credit' => 0, 'memo' => 'Amount receivable'];
+        }
         $lines[] = ['account' => '4000', 'debit' => 0, 'credit' => $net, 'memo' => 'Sales revenue'];
 
         if ($tax > 0) {
@@ -554,6 +622,33 @@ class OrderService
             'reference' => $order->number.'-R',
             'source' => $order,
             'lines' => $lines,
+        ]);
+    }
+
+    /**
+     * Post a credit-order settlement: money received against an already-fulfilled
+     * order draws down the receivable posted at fulfilment (Dr Cash, Cr A/R).
+     */
+    protected function postSettlementJournal(Order $order, float $amount, string $method = 'cash'): void
+    {
+        if (! class_exists(\App\Services\Accounting\PostingService::class)) {
+            return;
+        }
+
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            return;
+        }
+
+        app(\App\Services\Accounting\PostingService::class)->post([
+            'date' => now(),
+            'memo' => 'Payment for order '.$order->number,
+            'reference' => $order->number.'-P',
+            'source' => $order,
+            'lines' => [
+                ['account' => '1000', 'debit' => $amount, 'credit' => 0, 'memo' => 'Cash received'],
+                ['account' => '1200', 'debit' => 0, 'credit' => $amount, 'memo' => 'Receivable settled'],
+            ],
         ]);
     }
 

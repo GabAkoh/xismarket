@@ -20,6 +20,14 @@
             </span>
         </label>
 
+        <label class="mt-5 flex items-start gap-2 text-sm text-slate-700 border-t border-slate-100 pt-5">
+            <input type="checkbox" name="require_full_payment" value="1" @checked($requireFull) class="mt-0.5 rounded border-slate-300 text-indigo-600">
+            <span>
+                <span class="font-medium">Require full payment before an order is placed</span>
+                <span class="block text-xs text-slate-500">When on, customers must pay the full amount online to check out — no deposit or pay-on-delivery — and staff cannot fulfil an order until it is fully paid. When off, customers may pay a deposit or on delivery and staff can fulfil with a balance owing. Requires online card payments (above) to be enabled.</span>
+            </span>
+        </label>
+
         <div class="mt-5">
             <label class="block text-sm font-medium text-slate-700">Paystack public key</label>
             <input name="paystack_public" value="{{ old('paystack_public', $publicKey) }}" placeholder="pk_live_… or pk_test_…"
