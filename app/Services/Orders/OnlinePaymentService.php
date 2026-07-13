@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Mail\OrderReceiptMail;
 use App\Models\Orders\Order;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -16,20 +17,39 @@ class OnlinePaymentService
     public function __construct(protected OrderService $orders) {}
 
     /**
-     * Idempotently mark an order paid via an online gateway reference and notify.
+     * Idempotently record an online payment against an order and notify.
      * Returns true only if this call settled it (so callback + webhook don't
-     * double-send).
+     * double-send / double-record).
+     *
+     * $amount is the amount actually captured by the gateway (a deposit may be
+     * less than the total); null records the full total. Because a single
+     * gateway transaction owns one reference — pre-set on the order at
+     * checkout — a second call for the same reference (paid_total already moved)
+     * is a no-op.
      */
-    public function settle(Order $order, string $reference, string $method = 'paystack'): bool
+    public function settle(Order $order, string $reference, string $method = 'paystack', ?float $amount = null): bool
     {
-        if ($order->isPaid()) {
-            return false;
+        // Lock the row so a concurrent callback + webhook for the same charge
+        // can't both apply it — recordPayment increments paid_total, so the
+        // idempotency check and the increment must be atomic.
+        $settled = DB::transaction(function () use ($order, $reference, $method, $amount) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+            if (! $locked
+                || $locked->isPaid()
+                || ((float) $locked->paid_total > 0 && $locked->payment_reference === $reference)) {
+                return false;
+            }
+
+            $this->orders->recordPayment($locked, $amount ?? (float) $locked->total, $method, $reference);
+
+            return true;
+        });
+
+        if ($settled) {
+            $this->notify($order);
         }
 
-        $this->orders->markPaid($order, $method, $reference);
-        $this->notify($order);
-
-        return true;
+        return $settled;
     }
 
     /** Email the customer their receipt and alert the store — best-effort. */

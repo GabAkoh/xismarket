@@ -11,8 +11,11 @@
           methods: @js(array_map(fn ($m) => ['label' => $m['label'], 'fee' => $m['fee'], 'pickup' => $m['pickup']], $shippingMethods)),
           m: {{ (int) old('shipping_method', 0) }},
           subtotal: {{ $totals['subtotal'] }}, tax: {{ $totals['tax'] }}, discount: {{ $totals['discount'] ?? 0 }},
+          method: '{{ old('payment_method', $onlinePayment ? 'online' : 'offline') }}',
+          deposit: {{ (float) old('deposit_amount', 0) }},
           get fee() { return Number(this.methods[this.m]?.fee ?? 0); },
           get grandTotal() { return Math.max(0, this.subtotal - this.discount + this.tax + this.fee); },
+          get payNow() { return this.method === 'deposit' ? Math.min(Math.max(0, this.deposit || 0), this.grandTotal) : this.grandTotal; },
           get pickup() { return !! this.methods[this.m]?.pickup; },
       }"
       class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -66,15 +69,40 @@
         </div>
 
         {{-- Payment --}}
-        <div class="bg-white rounded-lg border border-slate-200 p-5" x-data="{ method: '{{ $onlinePayment ? 'online' : 'offline' }}' }">
+        <div class="bg-white rounded-lg border border-slate-200 p-5">
             <h2 class="font-semibold text-slate-800 mb-4">Payment</h2>
 
-            @if ($onlinePayment)
+            @if ($onlinePayment && $requireFull)
+                {{-- Strict: the full amount must be paid online to place the order. --}}
+                <input type="hidden" name="payment_method" value="online">
+                <div class="rounded-md border border-indigo-400 ring-1 ring-indigo-200 p-3">
+                    <span class="block text-sm font-medium text-slate-700">💳 Pay now (card)</span>
+                    <span class="block text-xs text-slate-500">Secure payment via Paystack — you'll pay the full amount and be redirected to complete it. An email is required for your receipt.</span>
+                </div>
+            @elseif ($onlinePayment)
                 <label class="flex items-start gap-3 rounded-md border p-3 cursor-pointer" :class="method === 'online' ? 'border-indigo-400 ring-1 ring-indigo-200' : 'border-slate-200'">
                     <input type="radio" name="payment_method" value="online" x-model="method" class="mt-1">
                     <span>
                         <span class="block text-sm font-medium text-slate-700">💳 Pay now (card)</span>
                         <span class="block text-xs text-slate-500">Secure payment via Paystack — you'll be redirected to complete it. An email is required for your receipt.</span>
+                    </span>
+                </label>
+                <label class="mt-2 flex items-start gap-3 rounded-md border p-3 cursor-pointer" :class="method === 'deposit' ? 'border-indigo-400 ring-1 ring-indigo-200' : 'border-slate-200'">
+                    <input type="radio" name="payment_method" value="deposit" x-model="method" class="mt-1">
+                    <span class="flex-1">
+                        <span class="block text-sm font-medium text-slate-700">💳 Pay a deposit now (card)</span>
+                        <span class="block text-xs text-slate-500">Pay part now by card and settle the balance on delivery.</span>
+                        <div x-show="method === 'deposit'" x-cloak class="mt-3">
+                            <label class="block text-xs font-medium text-slate-600">Deposit amount</label>
+                            <input type="number" name="deposit_amount" step="0.01" min="0.01" :max="grandTotal"
+                                   x-model.number="deposit"
+                                   x-init="if (! deposit || deposit <= 0) deposit = Math.max(0.01, Math.round(grandTotal / 2))"
+                                   class="mt-1 w-40 rounded-md border border-slate-300 p-2 text-sm">
+                            <p class="mt-1 text-xs text-slate-500" x-show="payNow > 0">
+                                Balance <span x-text="'{{ $symbol }} ' + Math.max(0, grandTotal - payNow).toFixed(2)"></span> due on delivery.
+                            </p>
+                            @error('deposit_amount')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                        </div>
                     </span>
                 </label>
                 <label class="mt-2 flex items-start gap-3 rounded-md border p-3 cursor-pointer" :class="method === 'offline' ? 'border-indigo-400 ring-1 ring-indigo-200' : 'border-slate-200'">
@@ -111,8 +139,10 @@
             <div class="flex justify-between font-bold text-slate-800 pt-2 border-t"><dt>Total</dt>
                 <dd x-text="'{{ $symbol }} ' + grandTotal.toFixed(2)"></dd></div>
         </dl>
-        <button class="mt-4 w-full rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
-            Place order · <span x-text="'{{ $symbol }} ' + grandTotal.toFixed(2)"></span>
+        <button class="mt-4 w-full rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                x-text="method === 'deposit'
+                    ? 'Pay deposit · {{ $symbol }} ' + payNow.toFixed(2)
+                    : (method === 'online' ? 'Pay · {{ $symbol }} ' : 'Place order · {{ $symbol }} ') + grandTotal.toFixed(2)">
         </button>
         @if ($onlinePayment)
             <p class="text-xs text-slate-400 mt-2 text-center">Card payments are completed securely on Paystack.</p>

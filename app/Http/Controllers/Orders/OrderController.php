@@ -31,7 +31,7 @@ class OrderController extends Controller
             ->withQueryString();
 
         $statuses = OrderService::STATUSES;
-        $paymentStatuses = ['unpaid', 'paid', 'refunded'];
+        $paymentStatuses = ['unpaid', 'partial', 'paid', 'refunded'];
 
         return view('orders.index', compact('orders', 'statuses', 'paymentStatuses'));
     }
@@ -335,8 +335,9 @@ class OrderController extends Controller
         $order->load('items', 'customer', 'user', 'delivery');
 
         $statuses = OrderService::STATUSES;
+        $requireFull = (bool) $this->tenancy->current()->setting('payments.require_full_payment', false);
 
-        return view('orders.show', compact('order', 'statuses'));
+        return view('orders.show', compact('order', 'statuses', 'requireFull'));
     }
 
     public function updateStatus(Request $request, Order $order, OrderService $orders)
@@ -363,19 +364,36 @@ class OrderController extends Controller
 
         $data = $request->validate([
             'method' => ['nullable', 'string', 'in:cash,card,other'],
+            'amount' => ['nullable', 'numeric', 'min:0.01'],
         ]);
 
         if ($order->isPaid()) {
             return back()->with('error', 'This order is already paid.');
         }
+        if ($order->payment_status === 'refunded') {
+            return back()->with('error', 'A refunded order cannot be paid.');
+        }
         if ($order->isCancelled()) {
             return back()->with('error', 'A cancelled order cannot be paid.');
         }
 
-        $orders->markPaid($order, $data['method'] ?? 'cash');
+        // A partial amount is only honoured when the store allows incomplete
+        // payment; otherwise the whole outstanding balance is settled.
+        $requireFull = (bool) $this->tenancy->current()->setting('payments.require_full_payment', false);
+        $amount = (! $requireFull && filled($data['amount']))
+            ? (float) $data['amount']
+            : $order->balanceDue();
+
+        try {
+            $orders->recordPayment($order, $amount, $data['method'] ?? 'cash');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return redirect()->route('orders.show', $order)
-            ->with('status', 'Order '.$order->number.' marked as paid.');
+            ->with('status', $order->isPaid()
+                ? 'Order '.$order->number.' marked as paid.'
+                : 'Payment recorded on order '.$order->number.'. Balance '.number_format($order->balanceDue(), 2).' remaining.');
     }
 
     public function fulfill(Order $order, OrderService $orders)
