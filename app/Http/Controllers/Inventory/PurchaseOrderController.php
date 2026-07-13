@@ -325,6 +325,9 @@ class PurchaseOrderController extends Controller
                 'status' => 'received',
                 'received_at' => now()->toDateString(),
             ]);
+
+            // Raise the vendor's payable in the books: Dr Inventory / Cr vendor A/P.
+            app(\App\Services\Inventory\VendorAccountService::class)->postPurchaseReceipt($purchase);
         });
 
         return redirect()->route('purchases.show', $purchase)->with('status', 'Purchase order received and stock updated.');

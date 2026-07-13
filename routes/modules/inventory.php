@@ -72,6 +72,8 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('suppliers/quick', [SupplierController::class, 'quickStore'])->name('suppliers.quick');
         Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
         Route::get('suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
+        Route::get('suppliers/{supplier}/pay', [SupplierController::class, 'payForm'])->name('suppliers.pay');
+        Route::post('suppliers/{supplier}/pay', [SupplierController::class, 'pay'])->name('suppliers.pay.store');
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
     });

@@ -33,17 +33,19 @@ Operating Expenses in *Accounting → Accounts* (e.g. `6100 Rent`,
 
 ## Paying a supplier
 
-- If you raised a **Purchase Order**, receiving it already created a payable
-  (*Cr 2000 Accounts Payable*). When you pay, post a journal:
-
-  ```
-  Dr 2000 Accounts Payable   <amount>
-  Cr 1000 Cash (or 1010 Bank) <amount>
-  ```
-
+- Every supplier has its **own Accounts-Payable account** in the chart of
+  accounts (`2000-<id>`, listed as *Accounts Payable — <name>*).
+- **Receiving a Purchase Order automatically raises the payable** — it posts
+  *Dr 1300 Inventory / Cr <the vendor's A/P account>* for the PO total. No manual
+  journal is needed to create the debt.
+- **To pay a supplier**, open *Inventory → Suppliers*, click **Pay** next to the
+  vendor, enter the amount and the account you're paying from. This posts
+  *Dr <vendor A/P> / Cr Cash (or Bank)* automatically. (Payments are capped to
+  what's owed.)
 - A one-off purchase with no PO → book it directly as an expense/inventory
-  journal as above.
-- Manage supplier records in *Accounting → Suppliers*.
+  journal via *Accounting → Journals*.
+- Each vendor's running balance and history is visible on the Suppliers list and
+  in *Accounting → Reports → Account statement* (pick the vendor's account).
 
 ---
 
