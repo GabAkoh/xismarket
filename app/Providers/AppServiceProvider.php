@@ -28,10 +28,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // @permission('inventory.view') ... @endpermission
-        Blade::if('permission', function (string $slug) {
+        // Accepts multiple slugs as an OR: @permission('a', 'b') passes if the user has either.
+        Blade::if('permission', function (string ...$slugs) {
             $user = Auth::user();
 
-            return $user && $user->hasPermission($slug);
+            return $user && $user->hasAnyPermission(...$slugs);
         });
     }
 }

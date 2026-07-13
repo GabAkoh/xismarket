@@ -46,4 +46,22 @@ trait HasRoles
 
         return $this->permissionSlugs()->contains($slug);
     }
+
+    /** True if the user holds ANY of the given permission slugs. */
+    public function hasAnyPermission(string ...$slugs): bool
+    {
+        if ($this->is_super_admin || $this->is_owner) {
+            return true;
+        }
+
+        $mine = $this->permissionSlugs();
+
+        foreach ($slugs as $slug) {
+            if ($mine->contains($slug)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

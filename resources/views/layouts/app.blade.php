@@ -46,7 +46,7 @@
                         ['route' => 'products.movements', 'label' => 'Product Movements', 'perm' => 'inventory.view'],
                         ['route' => 'products.valuation', 'label' => 'Stock Valuation', 'perm' => 'stock.valuation'],
                         ['route' => 'categories.index', 'label' => 'Categories', 'perm' => 'categories.view'],
-                        ['route' => 'suppliers.index', 'label' => 'Suppliers', 'perm' => 'suppliers.manage'],
+                        ['route' => 'suppliers.index', 'label' => 'Suppliers', 'perm' => ['suppliers.manage', 'purchases.pay']],
                         ['route' => 'warehouses.index', 'label' => 'Warehouses', 'perm' => 'warehouses.manage'],
                         ['route' => 'stock.index', 'label' => 'Stock Levels', 'perm' => 'stock.view'],
                         ['route' => 'products.out-of-stock', 'label' => 'Out of Stock', 'perm' => 'inventory.view'],
@@ -99,7 +99,7 @@
                 @php
                     $visible = collect($section['links'])->filter(fn ($l) =>
                         \Illuminate\Support\Facades\Route::has($l['route'])
-                        && (is_null($l['perm']) || (auth()->user() && auth()->user()->hasPermission($l['perm'])))
+                        && (is_null($l['perm']) || (auth()->user() && auth()->user()->hasAnyPermission(...(array) $l['perm'])))
                     );
                 @endphp
                 @if ($visible->isNotEmpty())

@@ -65,15 +65,18 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
     });
 
-    // Suppliers
-    Route::middleware('permission:suppliers.manage')->group(function () {
+    // Suppliers — viewing the list and paying vendors is open to suppliers.manage
+    // OR purchases.pay (e.g. the accountant); editing supplier records stays manage-only.
+    Route::middleware('permission:suppliers.manage,purchases.pay')->group(function () {
         Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::get('suppliers/{supplier}/pay', [SupplierController::class, 'payForm'])->name('suppliers.pay');
+        Route::post('suppliers/{supplier}/pay', [SupplierController::class, 'pay'])->name('suppliers.pay.store');
+    });
+    Route::middleware('permission:suppliers.manage')->group(function () {
         Route::get('suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
         Route::post('suppliers/quick', [SupplierController::class, 'quickStore'])->name('suppliers.quick');
         Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
         Route::get('suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
-        Route::get('suppliers/{supplier}/pay', [SupplierController::class, 'payForm'])->name('suppliers.pay');
-        Route::post('suppliers/{supplier}/pay', [SupplierController::class, 'pay'])->name('suppliers.pay.store');
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
     });

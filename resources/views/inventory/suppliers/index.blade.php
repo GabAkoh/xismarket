@@ -24,10 +24,12 @@
                     <td class="text-slate-500">{{ $supplier->address ?? '—' }}</td>
                     <td class="text-right {{ $owed > 0 ? 'font-medium text-rose-600' : 'text-slate-400' }}">{{ $symbol }}{{ number_format($owed, 2) }}</td>
                     <td class="text-right whitespace-nowrap">
-                        @permission('suppliers.manage')
+                        @permission('suppliers.manage', 'purchases.pay')
                             @if ($owed > 0)
                                 <a href="{{ route('suppliers.pay', $supplier) }}" class="text-emerald-600 hover:underline">Pay</a>
                             @endif
+                        @endpermission
+                        @permission('suppliers.manage')
                             <a href="{{ route('suppliers.edit', $supplier) }}" class="ml-3 text-indigo-600 hover:underline">Edit</a>
                             <form method="POST" action="{{ route('suppliers.destroy', $supplier) }}" class="inline" onsubmit="return confirm('Remove this supplier?')">
                                 @csrf @method('DELETE')

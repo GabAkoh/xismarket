@@ -33,6 +33,7 @@ class Permissions
                 'stock.adjust' => 'Adjust stock levels',
                 'purchases.view' => 'View purchase orders',
                 'purchases.manage' => 'Create / receive purchase orders',
+                'purchases.pay' => 'Pay suppliers / settle vendor bills',
             ],
             'Point of Sale' => [
                 'pos.use' => 'Operate the register',
@@ -101,7 +102,7 @@ class Permissions
                     'inventory.view', 'products.manage', 'categories.view', 'categories.manage',
                     'stock.view', 'stock.valuation',
                     'suppliers.manage', 'warehouses.manage', 'stock.adjust',
-                    'purchases.view', 'purchases.manage',
+                    'purchases.view', 'purchases.manage', 'purchases.pay',
                     'pos.use', 'pos.settings', 'sales.view', 'sales.reports', 'sales.refund', 'registers.manage',
                     'customers.view', 'customers.manage', 'wallets.view', 'loyalty.manage',
                     'accounting.view', 'reports.view',
@@ -124,7 +125,7 @@ class Permissions
                 'permissions' => [
                     'dashboard.view',
                     'accounting.view', 'accounts.manage', 'journals.manage',
-                    'taxes.manage', 'reports.view', 'sales.view', 'sales.reports', 'purchases.view',
+                    'taxes.manage', 'reports.view', 'sales.view', 'sales.reports', 'purchases.view', 'purchases.pay',
                 ],
             ],
         ];
