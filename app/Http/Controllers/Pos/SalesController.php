@@ -27,6 +27,11 @@ class SalesController extends Controller
             ->when($request->filled('q'), fn ($q) => $q->where('number', 'like', '%'.$request->string('q').'%'))
             ->when($request->filled('product_id'), fn ($q) => $q->whereHas('items',
                 fn ($i) => $i->where('product_id', $request->integer('product_id'))))
+            // A sale can have several payments in different methods (split pay,
+            // later credit settlements), so match any positive payment with the
+            // chosen method — mirrors the sales report's method filter.
+            ->when($request->filled('method'), fn ($q) => $q->whereHas('payments',
+                fn ($p) => $p->where('method', $request->string('method'))->where('amount', '>', 0)))
             ->orderByDesc('completed_at')
             ->orderByDesc('id')
             ->paginate(20)
@@ -40,7 +45,10 @@ class SalesController extends Controller
         $products = \App\Models\Inventory\Product::whereIn('id', $soldProductIds)
             ->orderBy('name')->get(['id', 'name']);
 
-        return view('sales.index', compact('sales', 'statuses', 'products'));
+        // Payment method options: the tenant's configured methods plus wallet.
+        $methodOptions = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
+
+        return view('sales.index', compact('sales', 'statuses', 'products', 'methodOptions'));
     }
 
     /**

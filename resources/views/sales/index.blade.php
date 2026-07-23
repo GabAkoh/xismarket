@@ -9,7 +9,7 @@
 </x-page-header>
 
 <x-card class="mb-4">
-    <form method="GET" action="{{ route('sales.index') }}" class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
+    <form method="GET" action="{{ route('sales.index') }}" class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-7 gap-3 items-end">
         <div>
             <label class="block text-xs font-medium text-slate-500 mb-1">Search #</label>
             <input name="q" value="{{ request('q') }}" placeholder="INV-…" class="w-full rounded-md border border-slate-300 p-2 text-sm">
@@ -25,6 +25,15 @@
                 <option value="">All</option>
                 @foreach ($statuses as $status)
                     <option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst(str_replace('_', ' ', $status)) }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Payment method</label>
+            <select name="method" class="w-full rounded-md border border-slate-300 p-2 text-sm">
+                <option value="">All methods</option>
+                @foreach ($methodOptions as $key => $label)
+                    <option value="{{ $key }}" @selected(request('method') === (string) $key)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>
