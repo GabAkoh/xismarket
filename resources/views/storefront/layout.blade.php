@@ -139,7 +139,7 @@
 
             <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap justify-between gap-2 text-sm text-slate-500">
                 <span>© {{ date('Y') }} {{ $store->name }}. All rights reserved.</span>
-                <span>Powered by xismarket</span>
+                <span>Powered by XISSuite v1.0</span>
             </div>
         </div>
     </footer>

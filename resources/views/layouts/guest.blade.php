@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title ?? 'xismarket' }}</title>
+    <title>{{ $title ?? 'XISSuite v1.0' }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="{{ asset('js/alpine.min.js') }}"
             onerror="this.onerror=null;var s=document.createElement('script');s.defer=true;s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js';document.head.appendChild(s);"></script>
@@ -11,7 +11,7 @@
 <body class="h-full">
     <div class="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div class="sm:mx-auto sm:w-full sm:max-w-md text-center">
-            <a href="{{ url('/') }}" class="text-3xl font-extrabold tracking-tight text-indigo-600">xismarket</a>
+            <a href="{{ url('/') }}" class="text-3xl font-extrabold tracking-tight text-indigo-600">XISSuite v1.0</a>
             <p class="mt-1 text-sm text-slate-500">Inventory · POS · Accounting · Users</p>
         </div>
 

@@ -41,6 +41,6 @@ class RegisteredTenantController extends Controller
         $request->session()->regenerate();
 
         return redirect()->route('dashboard')
-            ->with('status', 'Welcome to xismarket! Your store is ready.');
+            ->with('status', 'Welcome to XISSuite v1.0! Your store is ready.');
     }
 }

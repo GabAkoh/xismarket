@@ -17,7 +17,7 @@ class ManifestController extends Controller
         $slug = config('storefront.default_store');
         $tenant = $slug ? Tenant::where('slug', $slug)->first() : Tenant::query()->first();
 
-        $name = $tenant?->setting('branding.app_name') ?: 'xismarket';
+        $name = $tenant?->setting('branding.app_name') ?: 'XISSuite v1.0';
         $icon = $tenant?->setting('branding.icon');
         $iconUrl = $icon ? asset('storage/'.$icon) : null;
         $type = 'image/'.str_replace('jpg', 'jpeg', strtolower(pathinfo((string) $icon, PATHINFO_EXTENSION) ?: 'png'));

@@ -19,7 +19,7 @@
     <x-card>
         <div>
             <label class="block text-sm font-medium text-slate-700">App name</label>
-            <input name="app_name" value="{{ old('app_name', $name) }}" maxlength="60" placeholder="xismarket"
+            <input name="app_name" value="{{ old('app_name', $name) }}" maxlength="60" placeholder="XISSuite v1.0"
                    class="mt-1 w-full rounded-md border border-slate-300 p-2">
             <p class="mt-1 text-xs text-slate-400">Shown in the sidebar and the browser tab. Leave blank to use the default.</p>
             @error('app_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror

@@ -1,5 +1,5 @@
 @php
-    $appName = $currentTenant?->setting('branding.app_name') ?: 'xismarket';
+    $appName = $currentTenant?->setting('branding.app_name') ?: 'XISSuite v1.0';
     $appIcon = $currentTenant?->setting('branding.icon');
 @endphp
 <!DOCTYPE html>

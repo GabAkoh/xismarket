@@ -5,7 +5,7 @@
     $brandTenant = ($slug = config('storefront.default_store'))
         ? \App\Models\Tenant::where('slug', $slug)->first()
         : \App\Models\Tenant::query()->first();
-    $appName = $brandTenant?->setting('branding.app_name') ?: 'xismarket';
+    $appName = $brandTenant?->setting('branding.app_name') ?: 'XISSuite v1.0';
     $appIcon = $brandTenant?->setting('branding.icon');
 @endphp
 <!DOCTYPE html>
