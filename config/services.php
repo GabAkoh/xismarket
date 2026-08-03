@@ -71,4 +71,16 @@ return [
         'endpoint' => env('IMAGE_AI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
     ],
 
+    // Text embeddings that power semantic product search. Defaults to Google
+    // Gemini and reuses the same key as the AI image tools. Set EMBEDDINGS_KEY
+    // to override, leave blank to disable semantic search (fuzzy still works),
+    // or use EMBEDDINGS_PROVIDER=stub for deterministic offline vectors in tests.
+    'embeddings' => [
+        'provider' => env('EMBEDDINGS_PROVIDER', 'gemini'),
+        'key' => env('EMBEDDINGS_KEY', env('IMAGE_AI_KEY')),
+        'model' => env('EMBEDDINGS_MODEL', 'text-embedding-004'),
+        'endpoint' => env('EMBEDDINGS_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
+        'dims' => (int) env('EMBEDDINGS_DIMS', 768),
+    ],
+
 ];

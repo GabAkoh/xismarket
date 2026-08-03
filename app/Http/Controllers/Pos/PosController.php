@@ -3,14 +3,20 @@
 namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
+use App\Mail\SaleReceiptMail;
 use App\Models\Inventory\Product;
 use App\Models\Inventory\Warehouse;
 use App\Models\Pos\Customer;
+use App\Models\Pos\LoyaltySetting;
 use App\Models\Pos\Register;
 use App\Models\Pos\Sale;
+use App\Services\Marketing\CouponService;
 use App\Services\Pos\SaleService;
+use App\Services\Search\ProductSearch;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 
 class PosController extends Controller
 {
@@ -59,7 +65,7 @@ class PosController extends Controller
             ])
             ->values();
 
-        $loyalty = \App\Models\Pos\LoyaltySetting::current();
+        $loyalty = LoyaltySetting::current();
 
         // How many product columns the register grid shows (configurable).
         $gridColumns = max(2, min(8, (int) $this->tenancy->current()->setting('pos.grid_columns', 4)));
@@ -86,24 +92,28 @@ class PosController extends Controller
         $term = trim((string) $request->input('q', ''));
         $query = $this->productQuery($warehouse);
 
-        if ($term !== '') {
-            $like = '%'.addcslashes($term, '%_\\').'%';
-            $query->where(fn ($w) => $w
-                ->where('name', 'like', $like)
-                ->orWhere('sku', 'like', $like)
-                ->orWhere('barcode', 'like', $like));
+        if ($term === '') {
+            $total = (clone $query)->count();
+            $products = $query->orderBy('name')->limit(self::PRODUCT_LIMIT)->get()
+                ->map(fn (Product $p) => $this->productRow($p, $warehouse))
+                ->values();
+
+            return response()->json(['products' => $products, 'total' => $total]);
         }
 
-        // Count the full match set before ordering, then surface exact
-        // barcode/SKU hits (a scan) first within the returned page.
-        $total = (clone $query)->count();
-        if ($term !== '') {
-            $query->orderByRaw('CASE WHEN barcode = ? OR sku = ? THEN 0 ELSE 1 END', [$term, $term]);
-        }
+        // Fuzzy (typo-tolerant) + semantic ranking. Exact barcode/SKU scans stay
+        // first; semantic only kicks in when fuzzy matches are thin ('augment')
+        // so as-you-type keystrokes rarely trigger an embedding call.
+        $ids = app(ProductSearch::class)->search($term, self::PRODUCT_LIMIT, ['semantic' => 'augment']);
+        $total = $ids->count();
 
-        $products = $query->orderBy('name')->limit(self::PRODUCT_LIMIT)->get()
-            ->map(fn (Product $p) => $this->productRow($p, $warehouse))
-            ->values();
+        $products = $ids->isEmpty()
+            ? collect()
+            : $query->whereIn('id', $ids->all())
+                ->orderByRaw(ProductSearch::orderByIds($ids->all()))
+                ->limit(self::PRODUCT_LIMIT)->get()
+                ->map(fn (Product $p) => $this->productRow($p, $warehouse))
+                ->values();
 
         return response()->json(['products' => $products, 'total' => $total]);
     }
@@ -171,7 +181,7 @@ class PosController extends Controller
             'items.*.discount' => ['nullable', 'numeric', 'min:0'],
             'payments' => ['required', 'array', 'min:1'],
             // 'distinct' guards against the same method being submitted twice.
-            'payments.*.method' => ['required', 'string', \Illuminate\Validation\Rule::in($this->allowedPaymentMethods()), 'distinct'],
+            'payments.*.method' => ['required', 'string', Rule::in($this->allowedPaymentMethods()), 'distinct'],
             'payments.*.amount' => ['required', 'numeric', 'min:0'],
             'payments.*.reference' => ['nullable', 'string', 'max:255'],
         ], [
@@ -199,7 +209,7 @@ class PosController extends Controller
             'subtotal' => ['required', 'numeric', 'min:0'],
         ]);
 
-        $eval = app(\App\Services\Marketing\CouponService::class)->evaluate($data['code'], (float) $data['subtotal']);
+        $eval = app(CouponService::class)->evaluate($data['code'], (float) $data['subtotal']);
 
         if ($eval['error']) {
             return response()->json(['ok' => false, 'error' => $eval['error']]);
@@ -232,8 +242,8 @@ class PosController extends Controller
         }
 
         try {
-            \Illuminate\Support\Facades\Mail::to($email)->send(
-                new \App\Mail\SaleReceiptMail($sale->load('items', 'customer'))
+            Mail::to($email)->send(
+                new SaleReceiptMail($sale->load('items', 'customer'))
             );
         } catch (\Throwable $e) {
             report($e);

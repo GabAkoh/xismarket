@@ -2,8 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Models\Inventory\Product;
 use App\Models\Tenant;
 use App\Services\Inventory\OdooProductImporter;
+use App\Services\Search\ProductSearch;
 use App\Support\Tenancy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -68,6 +70,20 @@ class ImportOdooProductsJob implements ShouldQueue
                 'created' => $result['created'], 'skipped' => $result['skipped'],
                 'errors' => array_slice($result['errors'], 0, 10),
             ]);
+
+            // Importers create/update via the query builder and run on the queue
+            // worker (console), so the Product observer doesn't re-embed. Refresh
+            // the search index and queue embeddings for any product still missing one.
+            ProductSearch::bumpVersion($this->tenantId);
+            Product::query()
+                ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('product_embeddings')
+                    ->whereColumn('product_embeddings.product_id', 'products.id'))
+                ->select('id')
+                ->chunkById(500, function ($chunk) {
+                    foreach ($chunk as $product) {
+                        EmbedProductJob::dispatch($this->tenantId, $product->id);
+                    }
+                });
         } finally {
             Storage::disk('local')->delete($this->path);
             $tenancy->forget();

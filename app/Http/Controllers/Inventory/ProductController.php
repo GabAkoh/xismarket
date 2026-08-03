@@ -8,9 +8,13 @@ use App\Models\Inventory\Product;
 use App\Models\Inventory\ProductStock;
 use App\Models\Inventory\ProductVariant;
 use App\Models\Inventory\Warehouse;
+use App\Services\Inventory\BarcodeService;
 use App\Services\Inventory\StockService;
+use App\Services\Search\ProductSearch;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -97,7 +101,7 @@ class ProductController extends Controller
                     rtrim(rtrim(number_format((float) $p->reorder_level, 3), '0'), '.'),
                     $this->stockState($p),
                     rtrim(rtrim(number_format((float) $p->units_sold, 3), '0'), '.'),
-                    $this->lastSold($p) ? \Illuminate\Support\Carbon::parse($this->lastSold($p))->toDateString() : '',
+                    $this->lastSold($p) ? Carbon::parse($this->lastSold($p))->toDateString() : '',
                     number_format((float) $p->total_stock * (float) $p->cost_price, 2, '.', ''),
                 ], ',', '"', '');
             }
@@ -132,10 +136,10 @@ class ProductController extends Controller
     protected function reportQuery(Request $request, bool $paginate = true): array
     {
         $from = $request->filled('from')
-            ? \Illuminate\Support\Carbon::parse($request->input('from'))->startOfDay()
+            ? Carbon::parse($request->input('from'))->startOfDay()
             : now()->subDays(90)->startOfDay();
         $to = $request->filled('to')
-            ? \Illuminate\Support\Carbon::parse($request->input('to'))->endOfDay()
+            ? Carbon::parse($request->input('to'))->endOfDay()
             : now()->endOfDay();
 
         $stockSub = DB::table('product_stocks')
@@ -207,8 +211,8 @@ class ProductController extends Controller
     /**
      * Units sold (POS + online) per product over the last $lookback days.
      *
-     * @param  \Illuminate\Support\Collection<int, int>  $ids
-     * @return array<int, float>  product_id => units sold
+     * @param  Collection<int, int>  $ids
+     * @return array<int, float> product_id => units sold
      */
     protected function unitsSoldByProduct($ids, int $lookback): array
     {
@@ -338,7 +342,7 @@ class ProductController extends Controller
                 break;
 
             case 'generate_barcode':
-                $barcode = app(\App\Services\Inventory\BarcodeService::class);
+                $barcode = app(BarcodeService::class);
                 $assigned = 0;
                 foreach ($products as $product) {
                     if (trim((string) $product->barcode) === '') {
@@ -352,6 +356,10 @@ class ProductController extends Controller
                 break;
         }
 
+        // Bulk actions mass-update via the query builder (bypassing model events),
+        // so refresh the search index explicitly for activate/deactivate/barcode.
+        ProductSearch::bumpVersion($products->first()->tenant_id);
+
         return back()->with('status', $msg);
     }
 
@@ -359,7 +367,7 @@ class ProductController extends Controller
     public function nextBarcode()
     {
         return response()->json([
-            'barcode' => app(\App\Services\Inventory\BarcodeService::class)->generate(),
+            'barcode' => app(BarcodeService::class)->generate(),
         ]);
     }
 

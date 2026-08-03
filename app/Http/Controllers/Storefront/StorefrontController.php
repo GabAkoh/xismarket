@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Mail\WelcomeSubscriberMail;
 use App\Models\Inventory\Category;
 use App\Models\Inventory\Product;
 use App\Models\Storefront\Subscriber;
+use App\Services\Search\ProductSearch;
 use App\Services\Storefront\BestsellerService;
 use App\Services\Storefront\CategoryNavService;
+use App\Support\Tenancy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class StorefrontController extends Controller
 {
@@ -35,14 +39,23 @@ class StorefrontController extends Controller
         // Filtering by a category includes everything in its sub-tree.
         $descendantIds = $selectedCategory ? $this->nav->descendants($selectedCategory->id, $childrenOf) : [];
 
+        // Fuzzy (typo-tolerant) + semantic search: rank matching product IDs,
+        // then keep that order via FIELD(). Semantic runs on every storefront
+        // query so intent phrases ("baby feeding bottle") find related products.
+        $term = trim((string) $request->input('q', ''));
+        $searchIds = $term !== ''
+            ? app(ProductSearch::class)->search($term, 300, ['semantic' => 'always'])
+            : null;
+
         $products = Product::query()
             ->where('is_active', true)
             ->when($selectedCategory, fn ($q) => $q->whereIn('category_id', $descendantIds))
-            ->when($request->filled('q'), function ($q) use ($request) {
-                $term = '%'.$request->string('q').'%';
-                $q->where(fn ($w) => $w->where('name', 'like', $term)->orWhere('description', 'like', $term));
-            })
-            ->orderBy('name')
+            ->when($searchIds !== null, function ($q) use ($searchIds) {
+                $searchIds->isEmpty()
+                    ? $q->whereRaw('1 = 0')
+                    : $q->whereIn('id', $searchIds->all())
+                        ->orderByRaw(ProductSearch::orderByIds($searchIds->all()));
+            }, fn ($q) => $q->orderBy('name'))
             ->paginate(12)
             ->withQueryString();
 
@@ -99,7 +112,7 @@ class StorefrontController extends Controller
             return collect();
         }
 
-        $store = app(\App\Support\Tenancy::class)->current();
+        $store = app(Tenancy::class)->current();
         $rows = $store?->setting('storefront.featured_collections', []);
         if (! is_array($rows) || $rows === []) {
             return collect();
@@ -211,11 +224,11 @@ class StorefrontController extends Controller
 
         // Welcome email on first signup only (best-effort — never block the signup).
         if ($subscriber->wasRecentlyCreated) {
-            $tenant = app(\App\Support\Tenancy::class)->current();
+            $tenant = app(Tenancy::class)->current();
             if ($tenant) {
                 try {
-                    \Illuminate\Support\Facades\Mail::to($subscriber->email)
-                        ->send(new \App\Mail\WelcomeSubscriberMail($subscriber, $tenant));
+                    Mail::to($subscriber->email)
+                        ->send(new WelcomeSubscriberMail($subscriber, $tenant));
                 } catch (\Throwable $e) {
                     report($e);
                 }
@@ -234,7 +247,7 @@ class StorefrontController extends Controller
         }
 
         return view('storefront.unsubscribed', [
-            'store' => app(\App\Support\Tenancy::class)->current(),
+            'store' => app(Tenancy::class)->current(),
             'email' => $subscriber?->email,
         ]);
     }
@@ -242,7 +255,7 @@ class StorefrontController extends Controller
     /** Current store name (tenancy is resolved by the storefront middleware). */
     protected function storeName(): string
     {
-        return optional(app(\App\Support\Tenancy::class)->current())->name ?? 'our';
+        return optional(app(Tenancy::class)->current())->name ?? 'our';
     }
 
     /**
