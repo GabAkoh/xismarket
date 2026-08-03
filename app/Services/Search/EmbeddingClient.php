@@ -36,13 +36,15 @@ class EmbeddingClient
     }
 
     /**
-     * Embed a single string.
+     * Embed a single string. $timeout (seconds) overrides the default request
+     * timeout — pass a short one for interactive/search queries so a slow or
+     * unreachable provider fast-fails instead of hanging the caller.
      *
      * @return array<int, float>
      */
-    public function embed(string $text): array
+    public function embed(string $text, ?float $timeout = null): array
     {
-        return $this->embedMany([$text])[0];
+        return $this->embedMany([$text], $timeout)[0];
     }
 
     /**
@@ -51,7 +53,7 @@ class EmbeddingClient
      * @param  array<int, string>  $texts
      * @return array<int, array<int, float>> one vector per input, in order
      */
-    public function embedMany(array $texts): array
+    public function embedMany(array $texts, ?float $timeout = null): array
     {
         if ($texts === []) {
             return [];
@@ -63,7 +65,7 @@ class EmbeddingClient
 
         return match ($this->provider()) {
             'stub' => array_map(fn ($t) => $this->stubVector((string) $t), array_values($texts)),
-            'gemini' => $this->embedWithGemini(array_values($texts)),
+            'gemini' => $this->embedWithGemini(array_values($texts), $timeout),
             default => throw new RuntimeException('Unsupported embeddings provider: '.$this->provider()),
         };
     }
@@ -78,7 +80,7 @@ class EmbeddingClient
      * @param  array<int, string>  $texts
      * @return array<int, array<int, float>>
      */
-    protected function embedWithGemini(array $texts): array
+    protected function embedWithGemini(array $texts, ?float $timeout = null): array
     {
         $key = config('services.embeddings.key');
         $model = (string) config('services.embeddings.model');
@@ -86,8 +88,11 @@ class EmbeddingClient
         $endpoint = rtrim((string) config('services.embeddings.endpoint'), '/');
         $url = "{$endpoint}/{$modelPath}:embedContent";
 
-        return array_map(function ($text) use ($url, $key, $modelPath) {
-            $response = Http::timeout(60)
+        $timeout = $timeout ?? (float) config('services.embeddings.timeout', 60);
+
+        return array_map(function ($text) use ($url, $key, $modelPath, $timeout) {
+            $response = Http::timeout($timeout)
+                ->connectTimeout(min($timeout, 5.0))
                 ->withHeaders(['x-goog-api-key' => $key])
                 ->post($url, [
                     'model' => $modelPath,

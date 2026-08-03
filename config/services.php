@@ -81,6 +81,11 @@ return [
         'model' => env('EMBEDDINGS_MODEL', 'gemini-embedding-001'),
         'endpoint' => env('EMBEDDINGS_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
         'dims' => (int) env('EMBEDDINGS_DIMS', 768),
+        // Request timeout (seconds) for background embedding (backfill/observer).
+        'timeout' => (float) env('EMBEDDINGS_TIMEOUT', 60),
+        // Much shorter cap for live search queries so a slow/unreachable provider
+        // fast-fails to fuzzy results instead of hanging the POS/storefront.
+        'query_timeout' => (float) env('EMBEDDINGS_QUERY_TIMEOUT', 2),
     ],
 
 ];

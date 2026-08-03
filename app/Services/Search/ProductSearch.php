@@ -7,6 +7,7 @@ use App\Models\Inventory\ProductEmbedding;
 use App\Support\Tenancy;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Tiered product search shared by the storefront and POS surfaces.
@@ -38,6 +39,9 @@ class ProductSearch
 
     /** Fewer than this many strong lexical hits triggers semantic in 'augment' mode. */
     protected const AUGMENT_THRESHOLD = 5;
+
+    /** Skip the semantic tier for search terms shorter than this (avoids per-keystroke calls). */
+    protected const MIN_SEMANTIC_LEN = 3;
 
     protected const INDEX_TTL = 1800;      // lightweight text index cache (30 min)
 
@@ -95,7 +99,7 @@ class ProductSearch
             }
         }
 
-        if ($this->shouldRunSemantic($opts['semantic'] ?? 'augment', $strongLexical)) {
+        if ($this->shouldRunSemantic($opts['semantic'] ?? 'augment', $strongLexical, mb_strlen($ql))) {
             foreach ($this->semanticScores($term) as $id => $cosine) {
                 // Weighted so a strong lexical (near-exact) hit still edges a
                 // merely-related semantic one, but meaning matches surface.
@@ -235,9 +239,11 @@ class ProductSearch
 
     // ---- Tier 3: semantic -----------------------------------------------------
 
-    protected function shouldRunSemantic(string $mode, int $strongLexical): bool
+    protected function shouldRunSemantic(string $mode, int $strongLexical, int $termLen): bool
     {
-        if ($mode === 'off' || ! $this->semanticEnabled()) {
+        // Don't embed tiny as-you-type fragments — low value, and it avoids a
+        // network call on every keystroke at the POS.
+        if ($mode === 'off' || $termLen < self::MIN_SEMANTIC_LEN || ! $this->semanticEnabled()) {
             return false;
         }
         if ($mode === 'always') {
@@ -282,9 +288,13 @@ class ProductSearch
             $signature = $this->embeddings->provider().'|'.$model.'|'.$this->embeddings->dims().'|'.mb_strtolower(trim($term));
             $key = 'product_search:q:'.hash('sha256', $signature);
 
-            return Cache::remember($key, self::QUERY_TTL, fn () => $this->embeddings->embed($term));
+            $timeout = (float) config('services.embeddings.query_timeout', 2);
+
+            return Cache::remember($key, self::QUERY_TTL, fn () => $this->embeddings->embed($term, $timeout));
         } catch (\Throwable $e) {
-            report($e);
+            // Benign, expected degradation (slow/offline/misconfigured provider):
+            // fall back to fuzzy results. Debug-level so it doesn't spam the log.
+            Log::debug('Query embedding skipped: '.$e->getMessage());
 
             return null;
         }

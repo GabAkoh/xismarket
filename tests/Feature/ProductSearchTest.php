@@ -9,8 +9,10 @@ use App\Support\Tenancy;
 use Database\Factories\ProductFactory;
 use Database\Factories\TenantFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ProductSearchTest extends TestCase
@@ -101,5 +103,20 @@ class ProductSearchTest extends TestCase
         $this->setTenant();
 
         $this->assertDatabaseCount('product_embeddings', 1);
+    }
+
+    public function test_search_degrades_to_fuzzy_when_embeddings_provider_fails(): void
+    {
+        // A real provider is configured, but the network call fails/times out.
+        config(['services.embeddings.provider' => 'gemini', 'services.embeddings.key' => 'test-key']);
+        Http::fake(fn () => throw new ConnectionException('timed out'));
+
+        $pampers = ProductFactory::new()->create(['name' => 'Pampers Baby Diapers']);
+
+        // 'augment' would trigger a semantic call (thin lexical for the typo);
+        // the failed embedding must not bubble up — fuzzy results still serve.
+        $ids = $this->search('pamprs', 'augment');
+
+        $this->assertTrue($ids->contains($pampers->id));
     }
 }
