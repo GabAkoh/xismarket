@@ -2,6 +2,7 @@
 
 namespace App\Services\Images;
 
+use App\Support\Tenancy;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -26,7 +27,19 @@ class ImageGenerator
 
     public function configured(): bool
     {
-        return $this->provider() === 'stub' || ! empty(config('services.image_ai.key'));
+        return $this->provider() === 'stub' || $this->apiKey() !== '';
+    }
+
+    /**
+     * The Gemini API key to use: the current tenant's own key (set from the AI
+     * Tools sidebar preference) takes precedence over the server-wide env
+     * fallback, so each store can bring its own key.
+     */
+    public function apiKey(): string
+    {
+        $tenantKey = app(Tenancy::class)->current()?->setting('ai.gemini_key');
+
+        return trim((string) ($tenantKey ?: config('services.image_ai.key')));
     }
 
     public function provider(): string
@@ -76,7 +89,7 @@ class ImageGenerator
      */
     protected function editWithGemini(string $bytes, string $mime, string $instruction): array
     {
-        $key = config('services.image_ai.key');
+        $key = $this->apiKey();
         $model = config('services.image_ai.model');
         $endpoint = rtrim((string) config('services.image_ai.endpoint'), '/');
         $url = "{$endpoint}/models/{$model}:generateContent";

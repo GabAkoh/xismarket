@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AiSettingsController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisteredTenantController;
 use App\Http\Controllers\BrandingSettingsController;
@@ -40,6 +41,9 @@ Route::middleware('auth')->group(function () {
     Route::middleware('permission:users.manage')->group(function () {
         Route::get('settings/branding', [BrandingSettingsController::class, 'edit'])->name('branding.settings');
         Route::put('settings/branding', [BrandingSettingsController::class, 'update'])->name('branding.settings.update');
+
+        Route::get('settings/ai', [AiSettingsController::class, 'edit'])->name('ai.settings');
+        Route::put('settings/ai', [AiSettingsController::class, 'update'])->name('ai.settings.update');
 
         Route::get('settings/devices', [DeviceController::class, 'index'])->name('devices.index');
         Route::post('devices/{device}/approve', [DeviceController::class, 'approve'])->name('devices.approve');

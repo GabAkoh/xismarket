@@ -26,20 +26,22 @@ class BackfillEmbeddingsCommand extends Command
 
     public function handle(Tenancy $tenancy, EmbeddingClient $client): int
     {
-        if (! $client->configured()) {
-            $this->error('Semantic search is not configured. Set EMBEDDINGS_KEY (or EMBEDDINGS_PROVIDER=stub) first.');
-
-            return self::FAILURE;
-        }
-
         $tenant = $this->resolveTenant();
         if (! $tenant) {
             return self::FAILURE;
         }
 
+        // Set the tenant before the configured() check: the Gemini key can come
+        // from the tenant's own AI Tools preference, not just the env fallback.
         $tenancy->set($tenant);
 
         try {
+            if (! $client->configured()) {
+                $this->error('Semantic search is not configured. Add a Gemini key in Settings → AI Tools, set EMBEDDINGS_KEY, or use EMBEDDINGS_PROVIDER=stub.');
+
+                return self::FAILURE;
+            }
+
             $query = Product::query()->select('id');
             if ($this->option('missing')) {
                 $query->whereNotExists(fn ($q) => $q

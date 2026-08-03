@@ -35,19 +35,21 @@ class EmbedProductJob implements ShouldQueue
 
     public function handle(EmbeddingClient $client, Tenancy $tenancy): void
     {
-        // No provider configured → semantic search is off; nothing to do.
-        if (! $client->configured()) {
-            return;
-        }
-
         $tenant = Tenant::find($this->tenantId);
         if (! $tenant) {
             return;
         }
 
+        // Set the tenant first: whether a provider is configured can depend on
+        // the tenant's own Gemini key (AI Tools preference), not just the env.
         $tenancy->set($tenant);
 
         try {
+            // No provider configured → semantic search is off; nothing to do.
+            if (! $client->configured()) {
+                return;
+            }
+
             $product = Product::with('category')->find($this->productId);
             if (! $product) {
                 return;

@@ -2,6 +2,7 @@
 
 namespace App\Services\Search;
 
+use App\Support\Tenancy;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -32,7 +33,19 @@ class EmbeddingClient
     /** Whether a real (or stub) provider is usable — false means "no semantic search". */
     public function configured(): bool
     {
-        return $this->provider() === 'stub' || ! empty(config('services.embeddings.key'));
+        return $this->provider() === 'stub' || $this->apiKey() !== '';
+    }
+
+    /**
+     * The Gemini API key to use, reusing the AI image tools' key: the current
+     * tenant's own key (set from the AI Tools sidebar preference) takes
+     * precedence over the server-wide env fallback.
+     */
+    public function apiKey(): string
+    {
+        $tenantKey = app(Tenancy::class)->current()?->setting('ai.gemini_key');
+
+        return trim((string) ($tenantKey ?: config('services.embeddings.key')));
     }
 
     /**
@@ -82,7 +95,7 @@ class EmbeddingClient
      */
     protected function embedWithGemini(array $texts, ?float $timeout = null): array
     {
-        $key = config('services.embeddings.key');
+        $key = $this->apiKey();
         $model = (string) config('services.embeddings.model');
         $modelPath = str_starts_with($model, 'models/') ? $model : "models/{$model}";
         $endpoint = rtrim((string) config('services.embeddings.endpoint'), '/');

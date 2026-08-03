@@ -32,7 +32,7 @@ class ProductImageAiController extends Controller
 
         if (! $this->generator->configured()) {
             return response()->json([
-                'message' => 'AI image generation is not configured. Add an image-API key (IMAGE_AI_KEY) to enable it.',
+                'message' => 'AI image generation is not configured. Add a Gemini API key in Settings → AI Tools to enable it.',
             ], 422);
         }
 
