@@ -101,12 +101,13 @@ class PosController extends Controller
             return response()->json(['products' => $products, 'total' => $total]);
         }
 
-        // Fuzzy (typo-tolerant) + semantic ranking. Exact barcode/SKU scans stay
-        // first. POS uses "smart search" = semantic 'always' (gated by the tenant's
-        // search.semantic_enabled toggle), so meaning-based matches surface even
-        // when there are some lexical hits. The query-embedding cache + short
-        // query timeout keep as-you-type keystrokes from hanging the register.
-        $ids = app(ProductSearch::class)->search($term, self::PRODUCT_LIMIT, ['semantic' => 'always']);
+        // Fuzzy (typo-tolerant) + smart (semantic) ranking. Exact barcode/SKU
+        // scans stay first. 'augment' runs the semantic tier only when lexical
+        // hits are thin — so direct name/SKU lookups stay instant, while
+        // meaning-based queries ("kids juice") still surface related products.
+        // Gated by the tenant's search.semantic_enabled toggle; the cached vector
+        // matrix + query-embedding cache + short query timeout keep it snappy.
+        $ids = app(ProductSearch::class)->search($term, self::PRODUCT_LIMIT, ['semantic' => 'augment']);
         $total = $ids->count();
 
         $products = $ids->isEmpty()

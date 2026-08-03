@@ -31,7 +31,7 @@
                 <input type="checkbox" name="semantic_enabled" value="1" @checked($semantic) class="mt-0.5 rounded border-slate-300 text-indigo-600">
                 <span>
                     <span class="font-medium">Smart search <span class="text-xs font-normal text-slate-400">(AI, meaning-based)</span></span>
-                    <span class="block text-xs text-slate-500">Matches by meaning, not just spelling — "kids juice" surfaces Ribena and Chivita even when those words aren't in the name. On the register this runs on every search. Uses the Gemini key from <a href="{{ route('ai.settings') }}" class="text-indigo-600 hover:underline">AI Tools</a> and per-product embeddings (below).</span>
+                    <span class="block text-xs text-slate-500">Matches by meaning, not just spelling — "kids juice" surfaces Ribena and Chivita even when those words aren't in the name. Kicks in when direct name/SKU matches are thin, so exact lookups stay instant. Uses the Gemini key from <a href="{{ route('ai.settings') }}" class="text-indigo-600 hover:underline">AI Tools</a> and per-product embeddings (below).</span>
                 </span>
             </label>
 
