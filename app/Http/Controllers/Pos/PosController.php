@@ -102,9 +102,11 @@ class PosController extends Controller
         }
 
         // Fuzzy (typo-tolerant) + semantic ranking. Exact barcode/SKU scans stay
-        // first; semantic only kicks in when fuzzy matches are thin ('augment')
-        // so as-you-type keystrokes rarely trigger an embedding call.
-        $ids = app(ProductSearch::class)->search($term, self::PRODUCT_LIMIT, ['semantic' => 'augment']);
+        // first. POS uses "smart search" = semantic 'always' (gated by the tenant's
+        // search.semantic_enabled toggle), so meaning-based matches surface even
+        // when there are some lexical hits. The query-embedding cache + short
+        // query timeout keep as-you-type keystrokes from hanging the register.
+        $ids = app(ProductSearch::class)->search($term, self::PRODUCT_LIMIT, ['semantic' => 'always']);
         $total = $ids->count();
 
         $products = $ids->isEmpty()

@@ -7,6 +7,7 @@ use App\Http\Controllers\BrandingSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\ManifestController;
+use App\Http\Controllers\SearchSettingsController;
 use Illuminate\Support\Facades\Route;
 
 // PWA web app manifest (public; branded per tenant).
@@ -44,6 +45,10 @@ Route::middleware('auth')->group(function () {
 
         Route::get('settings/ai', [AiSettingsController::class, 'edit'])->name('ai.settings');
         Route::put('settings/ai', [AiSettingsController::class, 'update'])->name('ai.settings.update');
+
+        Route::get('settings/search', [SearchSettingsController::class, 'edit'])->name('search.settings');
+        Route::put('settings/search', [SearchSettingsController::class, 'update'])->name('search.settings.update');
+        Route::post('settings/search/reembed', [SearchSettingsController::class, 'reembed'])->name('search.reembed');
 
         Route::get('settings/devices', [DeviceController::class, 'index'])->name('devices.index');
         Route::post('devices/{device}/approve', [DeviceController::class, 'approve'])->name('devices.approve');

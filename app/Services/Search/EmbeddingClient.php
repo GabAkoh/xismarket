@@ -2,6 +2,7 @@
 
 namespace App\Services\Search;
 
+use App\Services\Concerns\RetriesGeminiRequests;
 use App\Support\Tenancy;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -20,6 +21,8 @@ use RuntimeException;
  */
 class EmbeddingClient
 {
+    use RetriesGeminiRequests;
+
     public function provider(): string
     {
         return (string) config('services.embeddings.provider', 'gemini');
@@ -103,15 +106,20 @@ class EmbeddingClient
 
         $timeout = $timeout ?? (float) config('services.embeddings.timeout', 60);
 
-        return array_map(function ($text) use ($url, $key, $modelPath, $timeout) {
-            $response = Http::timeout($timeout)
+        // Retry transient failures on the background path (backfill/observer),
+        // but single-shot on the short-timeout live-search path so a flaky
+        // provider still fast-fails to fuzzy results instead of stacking retries.
+        $attempts = $timeout <= 5.0 ? 1 : 3;
+
+        return array_map(function ($text) use ($url, $key, $modelPath, $timeout, $attempts) {
+            $response = $this->sendWithRetry(fn () => Http::timeout($timeout)
                 ->connectTimeout(min($timeout, 5.0))
                 ->withHeaders(['x-goog-api-key' => $key])
                 ->post($url, [
                     'model' => $modelPath,
                     'content' => ['parts' => [['text' => $text]]],
                     'outputDimensionality' => $this->dims(),
-                ]);
+                ]), $attempts);
 
             if ($response->failed()) {
                 $msg = $response->json('error.message') ?? $response->body();

@@ -2,6 +2,7 @@
 
 namespace App\Services\Images;
 
+use App\Services\Concerns\RetriesGeminiRequests;
 use App\Support\Tenancy;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -17,6 +18,8 @@ use RuntimeException;
  */
 class ImageGenerator
 {
+    use RetriesGeminiRequests;
+
     /** Human-readable instruction per operation. {extra} is filled from caller params. */
     public const OPERATIONS = [
         'background' => 'Remove the existing background and place the product on a clean, plain {extra} studio background. Keep the product itself unchanged, sharply lit and centered.',
@@ -94,7 +97,9 @@ class ImageGenerator
         $endpoint = rtrim((string) config('services.image_ai.endpoint'), '/');
         $url = "{$endpoint}/models/{$model}:generateContent";
 
-        $response = Http::timeout(120)
+        // Retry transient rate-limit / 5xx / connection failures with backoff;
+        // hard errors (bad key, depleted quota 4xx) surface on the first try.
+        $response = $this->sendWithRetry(fn () => Http::timeout(120)
             ->withHeaders(['x-goog-api-key' => $key])
             ->post($url, [
                 'contents' => [[
@@ -103,7 +108,7 @@ class ImageGenerator
                         ['inline_data' => ['mime_type' => $mime, 'data' => base64_encode($bytes)]],
                     ],
                 ]],
-            ]);
+            ]), attempts: 3);
 
         if ($response->failed()) {
             $msg = $response->json('error.message') ?? $response->body();

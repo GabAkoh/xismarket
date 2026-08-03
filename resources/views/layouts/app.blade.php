@@ -91,6 +91,7 @@
                         ['route' => 'roles.index', 'label' => 'Roles', 'perm' => 'roles.view'],
                         ['route' => 'branding.settings', 'label' => 'Branding', 'perm' => 'users.manage'],
                         ['route' => 'ai.settings', 'label' => 'AI Tools', 'perm' => 'users.manage'],
+                        ['route' => 'search.settings', 'label' => 'Search', 'perm' => 'users.manage'],
                         ['route' => 'devices.index', 'label' => 'Devices', 'perm' => 'users.manage'],
                     ]],
                 ];
