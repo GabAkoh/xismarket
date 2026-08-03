@@ -78,7 +78,7 @@ return [
     'embeddings' => [
         'provider' => env('EMBEDDINGS_PROVIDER', 'gemini'),
         'key' => env('EMBEDDINGS_KEY', env('IMAGE_AI_KEY')),
-        'model' => env('EMBEDDINGS_MODEL', 'text-embedding-004'),
+        'model' => env('EMBEDDINGS_MODEL', 'gemini-embedding-001'),
         'endpoint' => env('EMBEDDINGS_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
         'dims' => (int) env('EMBEDDINGS_DIMS', 768),
     ],

@@ -69,7 +69,11 @@ class EmbeddingClient
     }
 
     /**
-     * Call Gemini's batchEmbedContents endpoint and return the vectors in order.
+     * Embed each text via Gemini's embedContent endpoint. embedContent (singular)
+     * is supported by every current embedding model (gemini-embedding-001, the
+     * text-embedding series); the synchronous batch endpoint is not, so we call
+     * once per text. outputDimensionality pins the vector length to the configured
+     * dims so stored product vectors and query vectors always match.
      *
      * @param  array<int, string>  $texts
      * @return array<int, array<int, float>>
@@ -80,32 +84,26 @@ class EmbeddingClient
         $model = (string) config('services.embeddings.model');
         $modelPath = str_starts_with($model, 'models/') ? $model : "models/{$model}";
         $endpoint = rtrim((string) config('services.embeddings.endpoint'), '/');
-        $url = "{$endpoint}/{$modelPath}:batchEmbedContents";
+        $url = "{$endpoint}/{$modelPath}:embedContent";
 
-        $response = Http::timeout(60)
-            ->withHeaders(['x-goog-api-key' => $key])
-            ->post($url, [
-                'requests' => array_map(fn ($text) => [
+        return array_map(function ($text) use ($url, $key, $modelPath) {
+            $response = Http::timeout(60)
+                ->withHeaders(['x-goog-api-key' => $key])
+                ->post($url, [
                     'model' => $modelPath,
                     'content' => ['parts' => [['text' => $text]]],
-                ], $texts),
-            ]);
+                    'outputDimensionality' => $this->dims(),
+                ]);
 
-        if ($response->failed()) {
-            $msg = $response->json('error.message') ?? $response->body();
-            throw new RuntimeException('Embedding request failed: '.Str::limit((string) $msg, 300));
-        }
+            if ($response->failed()) {
+                $msg = $response->json('error.message') ?? $response->body();
+                throw new RuntimeException('Embedding request failed: '.Str::limit((string) $msg, 300));
+            }
 
-        $embeddings = $response->json('embeddings', []);
-        if (count($embeddings) !== count($texts)) {
-            throw new RuntimeException('Embedding provider returned '.count($embeddings).' vectors for '.count($texts).' inputs.');
-        }
-
-        return array_map(function ($e) {
-            $values = $e['values'] ?? $e['value'] ?? [];
+            $values = $response->json('embedding.values', $response->json('embedding.value', []));
 
             return array_map('floatval', $values);
-        }, $embeddings);
+        }, $texts);
     }
 
     /**
