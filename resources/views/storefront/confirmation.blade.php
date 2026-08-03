@@ -24,9 +24,18 @@
         <h2 class="font-semibold text-slate-800 mb-3">Order summary</h2>
         <ul class="text-sm divide-y mb-3">
             @foreach ($order->items as $item)
-                <li class="py-2 flex justify-between gap-2">
-                    <span class="text-slate-600">{{ rtrim(rtrim(number_format($item->quantity, 3), '0'), '.') }} × {{ $item->name }}</span>
-                    <span class="text-slate-700">{{ $symbol }} {{ number_format($item->line_total, 2) }}</span>
+                <li class="py-2 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="h-10 w-10 flex-shrink-0 rounded-md bg-slate-100 overflow-hidden flex items-center justify-center text-sm font-semibold text-slate-400">
+                            @if ($item->product?->image_path)
+                                <img src="{{ asset('storage/'.$item->product->image_path) }}" alt="{{ $item->name }}" class="h-full w-full object-cover">
+                            @else
+                                {{ strtoupper(substr($item->name, 0, 1)) }}
+                            @endif
+                        </div>
+                        <span class="text-slate-600 truncate">{{ rtrim(rtrim(number_format($item->quantity, 3), '0'), '.') }} × {{ $item->name }}</span>
+                    </div>
+                    <span class="text-slate-700 whitespace-nowrap">{{ $symbol }} {{ number_format($item->line_total, 2) }}</span>
                 </li>
             @endforeach
         </ul>

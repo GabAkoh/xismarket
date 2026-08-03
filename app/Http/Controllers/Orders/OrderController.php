@@ -332,7 +332,7 @@ class OrderController extends Controller
     public function show(Order $order)
     {
         $this->authorizeTenant($order);
-        $order->load('items', 'customer', 'user', 'delivery');
+        $order->load('items.product', 'customer', 'user', 'delivery');
 
         $statuses = OrderService::STATUSES;
         $requireFull = (bool) $this->tenancy->current()->setting('payments.require_full_payment', false);

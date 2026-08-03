@@ -33,7 +33,21 @@
                 <tbody class="divide-y">
                     @foreach ($order->items as $item)
                         <tr>
-                            <td class="py-2"><div class="text-slate-700">{{ $item->name }}</div><div class="text-xs text-slate-400">{{ $item->sku }}</div></td>
+                            <td class="py-2">
+                                <div class="flex items-center gap-3">
+                                    <div class="h-10 w-10 flex-shrink-0 rounded-md bg-slate-100 overflow-hidden flex items-center justify-center text-sm font-semibold text-slate-400">
+                                        @if ($item->product?->image_path)
+                                            <img src="{{ asset('storage/'.$item->product->image_path) }}" alt="{{ $item->name }}" class="h-full w-full object-cover">
+                                        @else
+                                            {{ strtoupper(substr($item->name, 0, 1)) }}
+                                        @endif
+                                    </div>
+                                    <div>
+                                        <div class="text-slate-700">{{ $item->name }}</div>
+                                        <div class="text-xs text-slate-400">{{ $item->sku }}</div>
+                                    </div>
+                                </div>
+                            </td>
                             <td class="text-right text-slate-600">{{ rtrim(rtrim(number_format($item->quantity, 3), '0'), '.') }}</td>
                             <td class="text-right text-slate-600">{{ $symbol }}{{ number_format($item->unit_price, 2) }}</td>
                             <td class="text-right text-slate-600">{{ $symbol }}{{ number_format($item->discount, 2) }}</td>

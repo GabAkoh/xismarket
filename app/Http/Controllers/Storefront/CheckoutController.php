@@ -223,7 +223,7 @@ class CheckoutController extends Controller
             return redirect()->route('shop.home');
         }
 
-        $order = Order::with('items')->find($lastId);
+        $order = Order::with('items.product')->find($lastId);
         if (! $order) {
             return redirect()->route('shop.home');
         }
