@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Shop') · {{ $store->name }}</title>
+    @php $appIcon = $store->setting('branding.icon'); @endphp
+    @if ($appIcon)<link rel="icon" href="{{ asset('storage/'.$appIcon) }}">@endif
+    {{-- PWA: installable home-screen app --}}
+    <link rel="manifest" href="{{ route('manifest') }}">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="{{ $store->setting('branding.app_name') ?: $store->name }}">
+    @if ($appIcon)<link rel="apple-touch-icon" href="{{ asset('storage/'.$appIcon) }}">@endif
+    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="{{ asset('js/alpine.min.js') }}"
             onerror="this.onerror=null;var s=document.createElement('script');s.defer=true;s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js';document.head.appendChild(s);"></script>
