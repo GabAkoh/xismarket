@@ -350,7 +350,7 @@ class ShopifyProductImporter
             $responses = Http::pool(fn (Pool $pool) => array_map(
                 fn (string $url) => $pool->as($url)
                     ->timeout(15)
-                    ->withUserAgent('xismarket-importer')
+                    ->withUserAgent('nimikiddies-importer')
                     ->get($url),
                 $batch,
             ));
