@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Delivery\DeliveryController;
 use App\Http\Controllers\Delivery\DriverController;
+use App\Http\Controllers\Delivery\ShippingMethodController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth'])->group(function () {
@@ -27,6 +28,12 @@ Route::middleware(['web', 'auth'])->group(function () {
             ->whereNumber('delivery')->name('deliveries.deliver');
         Route::post('deliveries/{delivery}/fail', [DeliveryController::class, 'fail'])
             ->whereNumber('delivery')->name('deliveries.fail');
+    });
+
+    // --- Shipping methods (checkout delivery/pickup options) ---
+    Route::middleware('permission:storefront.manage')->group(function () {
+        Route::get('shipping-methods', [ShippingMethodController::class, 'edit'])->name('shipping-methods.settings');
+        Route::put('shipping-methods', [ShippingMethodController::class, 'update'])->name('shipping-methods.update');
     });
 
     // --- Drivers (CRUD) ---

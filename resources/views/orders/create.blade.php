@@ -80,7 +80,7 @@
                 <div>
                     <div class="flex items-center justify-between mb-1">
                         <label class="block text-xs font-medium text-slate-500">Shipping method</label>
-                        <a href="{{ route('storefront.settings') }}#shipping-methods" class="text-xs text-indigo-600 hover:underline">Manage</a>
+                        <a href="{{ route('shipping-methods.settings') }}" class="text-xs text-indigo-600 hover:underline">Manage</a>
                     </div>
                     <select x-model.number="methodIndex" @change="applyMethod()" class="w-full rounded-md border border-slate-300 p-2 text-sm">
                         <template x-for="(m, i) in shippingMethods" :key="i">

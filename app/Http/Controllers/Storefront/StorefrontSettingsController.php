@@ -46,10 +46,6 @@ class StorefrontSettingsController extends Controller
             'testimonials.*.text' => ['nullable', 'string', 'max:500'],
             'social' => ['nullable', 'array'],
             'social.*' => ['nullable', 'string', 'max:255'],
-            'shipping_methods' => ['nullable', 'array'],
-            'shipping_methods.*.label' => ['nullable', 'string', 'max:100'],
-            'shipping_methods.*.fee' => ['nullable', 'numeric', 'min:0'],
-            'shipping_methods.*.pickup' => ['nullable'],
             'featured_collections' => ['nullable', 'array', 'max:6'],
             'featured_collections.*.category_id' => ['nullable', 'integer'],
             'featured_collections.*.subtitle' => ['nullable', 'string', 'max:120'],
@@ -157,17 +153,11 @@ class StorefrontSettingsController extends Controller
             $storefront['order_alert_phones'] = $alertPhones;
         }
 
-        // Shipping methods — keep rows that have a label.
-        $shipping = collect($data['shipping_methods'] ?? [])
-            ->map(fn ($m) => [
-                'label' => trim((string) ($m['label'] ?? '')),
-                'fee' => round((float) ($m['fee'] ?? 0), 2),
-                'pickup' => filter_var($m['pickup'] ?? false, FILTER_VALIDATE_BOOLEAN),
-            ])
-            ->filter(fn ($m) => $m['label'] !== '')
-            ->values()->all();
-        if (! empty($shipping)) {
-            $storefront['shipping_methods'] = $shipping;
+        // Shipping methods are managed on their own page (Delivery → Shipping
+        // methods) under this same key — carry the existing value through so
+        // saving storefront content here never wipes them.
+        if (! empty($existing['shipping_methods'])) {
+            $storefront['shipping_methods'] = $existing['shipping_methods'];
         }
 
         // Featured collections — keep rows that point at a category, with a
