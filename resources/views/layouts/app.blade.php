@@ -111,7 +111,7 @@
                     ['heading' => 'Delivery', 'links' => [
                         ['route' => 'deliveries.index', 'label' => 'Deliveries', 'perm' => 'deliveries.view'],
                         ['route' => 'drivers.index', 'label' => 'Drivers', 'perm' => 'drivers.manage'],
-                        ['route' => 'shipping-methods.settings', 'label' => 'Shipping Methods', 'perm' => 'storefront.manage'],
+                        ['route' => 'shipping-methods.settings', 'label' => 'Shipping Methods', 'perm' => 'shipping.manage'],
                     ]],
                     ['heading' => 'Accounting', 'links' => [
                         ['route' => 'accounts.index', 'label' => 'Chart of Accounts', 'perm' => 'accounting.view'],

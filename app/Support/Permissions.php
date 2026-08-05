@@ -67,6 +67,7 @@ class Permissions
                 'deliveries.view' => 'View deliveries',
                 'deliveries.manage' => 'Assign, dispatch & complete deliveries',
                 'drivers.manage' => 'Manage drivers',
+                'shipping.manage' => 'Manage shipping methods',
             ],
         ];
     }
@@ -108,7 +109,7 @@ class Permissions
                     'accounting.view', 'reports.view',
                     'orders.view', 'orders.manage', 'orders.fulfill',
                     'coupons.manage', 'subscribers.view', 'storefront.manage', 'payments.manage',
-                    'deliveries.view', 'deliveries.manage', 'drivers.manage',
+                    'deliveries.view', 'deliveries.manage', 'drivers.manage', 'shipping.manage',
                 ],
             ],
             'cashier' => [

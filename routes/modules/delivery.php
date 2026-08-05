@@ -31,7 +31,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
 
     // --- Shipping methods (checkout delivery/pickup options) ---
-    Route::middleware('permission:storefront.manage')->group(function () {
+    Route::middleware('permission:shipping.manage')->group(function () {
         Route::get('shipping-methods', [ShippingMethodController::class, 'edit'])->name('shipping-methods.settings');
         Route::put('shipping-methods', [ShippingMethodController::class, 'update'])->name('shipping-methods.update');
     });
