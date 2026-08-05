@@ -18,10 +18,42 @@
     @if ($appIcon)<link rel="apple-touch-icon" href="{{ asset('storage/'.$appIcon) }}">@endif
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }</script>
     <script src="https://cdn.tailwindcss.com"></script>
-    {{-- Alpine is served locally so the app (esp. the POS register, which is fully Alpine-driven)
-         keeps working when the CDN is unreachable; the CDN is kept as an automatic fallback. --}}
-    <script defer src="{{ asset('js/alpine.min.js') }}"
-            onerror="this.onerror=null;var s=document.createElement('script');s.defer=true;s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js';document.head.appendChild(s);"></script>
+    {{-- Alpine powers every interactive control in the admin (POS, forms, menus,
+         galleries). It's served locally so the app keeps working when the CDN is
+         unreachable, with a layered fallback so it never silently dies:
+           1. onerror — the local request failed outright (offline / blocked);
+           2. a post-load check — the local copy loaded but did NOT define Alpine
+              (e.g. a truncated or corrupt *cached* file; onerror never fires for
+              an HTTP 200), which otherwise leaves every button on the page inert;
+           3. if the CDN copy also fails, a small notice asks the user to refresh
+              instead of leaving the page mysteriously unresponsive.
+         Bump the ?v= number to force-evict a bad cached copy for everyone. --}}
+    <script>
+        window.__alpineNotice = function () {
+            if (window.Alpine || document.getElementById('alpine-load-warning')) return;
+            var d = document.createElement('div');
+            d.id = 'alpine-load-warning';
+            d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#b91c1c;color:#fff;padding:10px 16px;font:14px system-ui,sans-serif;text-align:center';
+            d.textContent = 'Some page controls could not load. Please check your connection and refresh the page (Ctrl+Shift+R).';
+            (document.body || document.documentElement).appendChild(d);
+        };
+        window.__alpineFallback = function () {
+            if (window.Alpine || window.__alpineCDNRequested) return;
+            window.__alpineCDNRequested = true;
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js';
+            s.defer = true;
+            s.onerror = window.__alpineNotice;
+            document.head.appendChild(s);
+        };
+    </script>
+    <script defer src="{{ asset('js/alpine.min.js') }}?v=1" onerror="window.__alpineFallback()"></script>
+    <script>
+        window.addEventListener('load', function () {
+            if (!window.Alpine) window.__alpineFallback();
+            setTimeout(function () { if (!window.Alpine) window.__alpineNotice(); }, 5000);
+        });
+    </script>
     @stack('head')
 </head>
 <body class="h-full" x-data="{ sidebar: true }">
