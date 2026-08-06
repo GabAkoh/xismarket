@@ -32,6 +32,11 @@
         <input name="reorder_level" type="number" step="0.001" min="0" value="{{ old('reorder_level', $reorderLevel ?? '') }}" placeholder="0" class="mt-1 w-full rounded-md border border-slate-300 p-2">
         <p class="mt-1 text-xs text-slate-400">Flag for reorder when stock drops to this level. Leave blank for none.</p>
     </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700">Expiry date</label>
+        <input name="expiry_date" type="date" value="{{ old('expiry_date', isset($product->expiry_date) ? $product->expiry_date->format('Y-m-d') : '') }}" class="mt-1 w-full rounded-md border border-slate-300 p-2">
+        <p class="mt-1 text-xs text-slate-400">Leave blank for products that don't expire. Surfaces on the Expiring Soon report.</p>
+    </div>
 </div>
 
 {{-- ===== Variants ===== --}}
@@ -665,7 +670,7 @@ function productImageEditor() {
     // Plain, user-typed controls that are safe to write straight back into the
     // DOM on restore (no Alpine x-model / :value binding drives them). Variant
     // rows and option names are Alpine state and go through the component.
-    const SCALARS = ['name', 'tax_rate', 'reorder_level', 'description', 'track_stock', 'is_active', 'is_featured'];
+    const SCALARS = ['name', 'tax_rate', 'reorder_level', 'expiry_date', 'description', 'track_stock', 'is_active', 'is_featured'];
     const el = (name) => form.querySelector('[name="' + name + '"]');
 
     function snapshot() {
