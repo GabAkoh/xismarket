@@ -359,7 +359,7 @@ function productGallery(cfg) {
         cover: '',
         aiUrl: cfg.aiUrl || null,
         aiConfigured: !!cfg.aiConfigured,
-        aiBusy: '', aiError: '',
+        aiBusy: false, aiError: '',
         ai: { background: 'white', color: '', angle: 'side' },
         init() {
             // The image editor can push an edited image straight into the gallery.
@@ -382,7 +382,7 @@ function productGallery(cfg) {
             } catch (e) {
                 this.aiError = 'Generation failed: ' + (e && e.message ? e.message : e);
             } finally {
-                this.aiBusy = '';
+                this.aiBusy = false;
             }
         },
         addFile(file) {
