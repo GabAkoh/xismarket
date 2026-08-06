@@ -34,6 +34,17 @@ class DashboardController extends Controller
                 ->whereColumn('quantity', '<=', 'reorder_level')
                 ->count();
         }
+        // Active products expiring within two weeks (incl. already expired) —
+        // drives the dashboard "expiring stock" alert. Guarded so the dashboard
+        // still renders if the expiry_date column hasn't been migrated yet.
+        if (Schema::hasColumn('products', 'expiry_date')) {
+            $expiringBase = fn () => DB::table('products')
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', 1)
+                ->whereNotNull('expiry_date');
+            $stats['expiring'] = $expiringBase()->whereDate('expiry_date', '<=', today()->addDays(14))->count();
+            $stats['expired'] = $expiringBase()->whereDate('expiry_date', '<', today())->count();
+        }
         if (Schema::hasTable('sales')) {
             $today = DB::table('sales')
                 ->where('tenant_id', $tenantId)
