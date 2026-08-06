@@ -18,6 +18,7 @@ class Product extends Model
         'tenant_id', 'category_id', 'name', 'option1_name', 'option2_name', 'option3_name',
         'sku', 'barcode', 'description',
         'cost_price', 'sale_price', 'tax_rate', 'track_stock', 'is_active', 'is_featured', 'image_path',
+        'expiry_date',
     ];
 
     protected function casts(): array
@@ -29,7 +30,21 @@ class Product extends Model
             'track_stock' => 'boolean',
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
+            'expiry_date' => 'date',
         ];
+    }
+
+    /** Has this product's expiry date passed? False when no date is set. */
+    public function isExpired(): bool
+    {
+        return $this->expiry_date !== null && $this->expiry_date->startOfDay()->isPast();
+    }
+
+    /** Does this product expire within the next $days days (or already has)? */
+    public function isExpiringSoon(int $days = 14): bool
+    {
+        return $this->expiry_date !== null
+            && $this->expiry_date->startOfDay()->lte(now()->startOfDay()->addDays($days));
     }
 
     public function category(): BelongsTo

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Inventory\CategoryController;
+use App\Http\Controllers\Inventory\ExpiringProductController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\ProductImportController;
 use App\Http\Controllers\Inventory\PurchaseOrderController;
@@ -26,6 +27,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('products/out-of-stock/export', [StockAlertController::class, 'outOfStockExport'])->name('products.out-of-stock.export');
         Route::get('products/reorder', [StockAlertController::class, 'belowReorder'])->name('products.reorder');
         Route::get('products/reorder/export', [StockAlertController::class, 'belowReorderExport'])->name('products.reorder.export');
+        // Products approaching (or past) their expiry date.
+        Route::get('products/expiring', [ExpiringProductController::class, 'report'])->name('products.expiring');
+        Route::get('products/expiring/export', [ExpiringProductController::class, 'reportExport'])->name('products.expiring.export');
         // Printable barcode labels (?ids=1,2,3).
         Route::get('products/labels', [ProductController::class, 'labels'])->name('products.labels');
     });

@@ -630,6 +630,7 @@ class ProductController extends Controller
             'variants.*.is_active' => ['nullable'],
             'tax_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'reorder_level' => ['nullable', 'numeric', 'min:0'],
+            'expiry_date' => ['nullable', 'date'],
             'track_stock' => ['boolean'],
             'is_active' => ['boolean'],
             'image' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:8192'],
