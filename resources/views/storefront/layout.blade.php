@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-title" content="{{ $store->setting('branding.app_name') ?: $store->name }}">
     @if ($appIcon)<link rel="apple-touch-icon" href="{{ asset('storage/'.$appIcon) }}">@endif
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }</script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    @vite(['resources/css/app.css'])
     <script defer src="{{ asset('js/alpine.min.js') }}"
             onerror="this.onerror=null;var s=document.createElement('script');s.defer=true;s.src='https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js';document.head.appendChild(s);"></script>
 </head>

@@ -17,7 +17,7 @@
     <meta name="apple-mobile-web-app-title" content="{{ $appName }}">
     @if ($appIcon)<link rel="apple-touch-icon" href="{{ asset('storage/'.$appIcon) }}">@endif
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }</script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    @vite(['resources/css/app.css'])
     {{-- Alpine powers every interactive control in the admin (POS, forms, menus,
          galleries). It's served locally so the app keeps working when the CDN is
          unreachable, with a layered fallback so it never silently dies:
