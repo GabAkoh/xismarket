@@ -340,7 +340,8 @@ function variantEditor(cfg) {
                 </div>
                 {{-- Model shot --}}
                 <div class="flex items-center gap-2">
-                    <button type="button" @click="runAi('model', '')" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Lifestyle / model shot</button>
+                    <input x-model="ai.model" placeholder="a baby girl" title="Who should wear/use it? e.g. a baby girl, a toddler boy. Leave blank for a generic model." class="w-28 rounded-md border border-slate-300 p-1.5 text-sm">
+                    <button type="button" @click="runAi('model', ai.model)" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Lifestyle / model shot</button>
                 </div>
             </div>
             <p x-show="aiError" x-cloak class="mt-2 text-xs text-red-600" x-text="aiError"></p>
@@ -365,7 +366,7 @@ function productGallery(cfg) {
         aiUrl: cfg.aiUrl || null,
         aiConfigured: !!cfg.aiConfigured,
         aiBusy: false, aiError: '',
-        ai: { background: 'white', color: '', angle: 'side' },
+        ai: { background: 'white', color: '', angle: 'side', model: '' },
         init() {
             // The image editor can push an edited image straight into the gallery.
             window.addEventListener('gallery-add-file', (e) => this.addFile(e.detail));
