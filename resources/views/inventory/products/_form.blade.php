@@ -348,6 +348,8 @@ function variantEditor(cfg) {
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="text-xs text-slate-400">Quick:</span>
                         <button type="button" @click="runAi('model', 'a baby')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Baby</button>
+                        <button type="button" @click="runAi('model', 'a baby girl')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Baby girl</button>
+                        <button type="button" @click="runAi('model', 'a baby boy')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Baby boy</button>
                         <button type="button" @click="runAi('model', 'a toddler')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Toddler</button>
                         <button type="button" @click="runAi('model', 'a child')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Child</button>
                     </div>
