@@ -148,14 +148,6 @@
                             @if ((float) ($product->total_stock ?? 0) <= 0)
                                 <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 whitespace-nowrap" title="No stock on hand">Out of stock</span>
                             @endif
-                            @if ($product->expiry_date)
-                                @php $expDays = (int) now()->startOfDay()->diffInDays($product->expiry_date->copy()->startOfDay(), false); @endphp
-                                @if ($expDays < 0)
-                                    <span class="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 whitespace-nowrap" title="Expired {{ $product->expiry_date->format('d M Y') }}">Expired</span>
-                                @elseif ($expDays <= 14)
-                                    <span class="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700 whitespace-nowrap" title="Expires {{ $product->expiry_date->format('d M Y') }}">{{ $expDays === 0 ? 'Expires today' : 'Expires in '.$expDays.'d' }}</span>
-                                @endif
-                            @endif
                         </div>
                     </td>
                     <td class="text-slate-500">{{ $product->sku }}</td>
