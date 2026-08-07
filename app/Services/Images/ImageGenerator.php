@@ -25,7 +25,7 @@ class ImageGenerator
         'background' => 'Remove the existing background and place the product on a clean, plain {extra} studio background. Keep the product itself unchanged, sharply lit and centered.',
         'color' => 'Recolour the main product to {extra}. Keep the shape, material, lighting and background exactly the same — only change the colour of the product.',
         'angle' => 'Generate a realistic {extra} view of this same product, consistent in design, colour and proportions with the original.',
-        'model' => 'Show this product being used or worn by {extra} in a bright, natural lifestyle setting. Keep the product faithful to the original; the person should look natural and the product should be the focus.',
+        'model' => 'Show this product being used or worn by {extra} in a bright, natural lifestyle setting. Keep the product faithful to the original; the model should look natural, age-appropriate, and the product should be the focus.',
     ];
 
     public function configured(): bool

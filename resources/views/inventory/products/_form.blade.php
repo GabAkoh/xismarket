@@ -311,7 +311,7 @@ function variantEditor(cfg) {
                 <span class="text-sm font-semibold text-indigo-700">✨ AI image tools</span>
                 <span x-show="aiBusy" x-cloak class="text-xs text-slate-500" x-text="'Generating ' + aiBusy + '…'"></span>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">Runs on the cover image (or first gallery image) and adds the result here.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Runs on the cover image (or first gallery image) and adds the result here. For the model shot, type who should wear/use it — any age, e.g. “a baby girl”, “a young boy”, or “children”.</p>
 
             @unless ($aiConfigured)
                 <p class="mt-2 text-xs text-amber-700 bg-amber-100 rounded px-2 py-1">
@@ -340,7 +340,7 @@ function variantEditor(cfg) {
                 </div>
                 {{-- Model shot --}}
                 <div class="flex items-center gap-2">
-                    <input x-model="ai.model" placeholder="a baby girl" title="Who should wear/use it? e.g. a baby girl, a toddler boy. Leave blank for a generic model." class="w-28 rounded-md border border-slate-300 p-1.5 text-sm">
+                    <input x-model="ai.model" placeholder="a baby girl / children" title="Who should wear or use the product? Any age — e.g. a baby girl, a toddler boy, a young girl, or children. Leave blank for a generic model." class="w-40 rounded-md border border-slate-300 p-1.5 text-sm">
                     <button type="button" @click="runAi('model', ai.model)" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Lifestyle / model shot</button>
                 </div>
             </div>
