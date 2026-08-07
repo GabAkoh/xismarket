@@ -339,9 +339,18 @@ function variantEditor(cfg) {
                     <button type="button" @click="runAi('angle', ai.angle)" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Add angle view</button>
                 </div>
                 {{-- Model shot --}}
-                <div class="flex items-center gap-2">
-                    <input x-model="ai.model" placeholder="a baby girl / children" title="Who should wear or use the product? Any age — e.g. a baby girl, a toddler boy, a young girl, or children. Leave blank for a generic model." class="w-40 rounded-md border border-slate-300 p-1.5 text-sm">
-                    <button type="button" @click="runAi('model', ai.model)" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Lifestyle / model shot</button>
+                <div class="flex flex-col gap-2">
+                    <div class="flex items-center gap-2">
+                        <input x-model="ai.model" placeholder="a baby girl / children" title="Who should wear or use the product? Any age — e.g. a baby girl, a toddler boy, a young girl, or children. Leave blank for a generic model." class="w-40 rounded-md border border-slate-300 p-1.5 text-sm">
+                        <button type="button" @click="runAi('model', ai.model)" :disabled="aiBusy" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40">Lifestyle / model shot</button>
+                    </div>
+                    {{-- One-click presets: generate a model shot for a common age group. --}}
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs text-slate-400">Quick:</span>
+                        <button type="button" @click="runAi('model', 'a baby')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Baby</button>
+                        <button type="button" @click="runAi('model', 'a toddler')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Toddler</button>
+                        <button type="button" @click="runAi('model', 'a child')" :disabled="aiBusy" class="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs hover:bg-slate-50 disabled:opacity-40">Child</button>
+                    </div>
                 </div>
             </div>
             <p x-show="aiError" x-cloak class="mt-2 text-xs text-red-600" x-text="aiError"></p>
