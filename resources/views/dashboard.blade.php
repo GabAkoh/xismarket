@@ -12,7 +12,7 @@
        class="mb-6 flex items-center gap-3 rounded-lg border px-5 py-4 hover:brightness-95 {{ $anyExpired ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800' }}">
         <span class="text-xl">⏰</span>
         <div class="text-sm">
-            <span class="font-semibold">{{ number_format($expiring) }} product(s)</span> expiring within 14 days@if ($anyExpired), including <span class="font-semibold">{{ number_format($stats['expired']) }}</span> already expired@endif.
+            <span class="font-semibold">{{ number_format($expiring) }} product(s)</span> expiring within 14 days{{ $anyExpired ? ', including '.number_format($stats['expired']).' already expired' : '' }}.
             <span class="underline">View the Expiring Soon report →</span>
         </div>
     </a>
