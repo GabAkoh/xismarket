@@ -79,7 +79,7 @@
     }
     /* Small store name at the very top of each label — branding without crowding
        the barcode. Tiny, muted, one line. */
-    .label-store { font-size: 5px; line-height: 1; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: #475569; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
+    .label-store { font-size: 6.5px; line-height: 1; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: #475569; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
     /* Keep the name to one line so the barcode gets most of the label. */
     .label-name { font-size: 7px; line-height: 1.1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
     .label-price { font-size: 10px; font-weight: 700; flex: 0 0 auto; }
