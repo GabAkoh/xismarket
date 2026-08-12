@@ -8,15 +8,18 @@ use App\Models\Pos\Customer;
 use App\Services\Orders\OnlinePaymentService;
 use App\Services\Orders\OrderService;
 use App\Services\Storefront\CartService;
+use App\Services\Storefront\MetaConversionsService;
 use App\Services\Storefront\PaystackGateway;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class CheckoutController extends Controller
 {
+    use \App\Http\Controllers\Storefront\Concerns\BuildsMetaUserIdentity;
+
     public function __construct(protected CartService $cart) {}
 
-    public function show(PaystackGateway $gateway)
+    public function show(PaystackGateway $gateway, Request $request, MetaConversionsService $meta)
     {
         if ($this->cart->isEmpty()) {
             return redirect()->route('shop.home')->with('status', 'Your cart is empty.');
@@ -25,14 +28,32 @@ class CheckoutController extends Controller
         $store = app(\App\Support\Tenancy::class)->current();
         $shipping = $store->shippingMethods();
         $firstFee = (float) ($shipping[0]['fee'] ?? 0);
+        $lines = $this->cart->lines();
+        $totals = $this->cart->totals($firstFee);
+
+        // Meta InitiateCheckout — fired here (server, CAPI) and in the view
+        // (browser Pixel) under one event_id so Meta de-duplicates the pair.
+        $metaEventId = 'ic-'.Str::uuid();
+        $meta->track($request, 'InitiateCheckout', [
+            'event_id' => $metaEventId,
+            'identity' => $this->customerIdentity(),
+            'custom_data' => [
+                'currency' => (string) $store->currency,
+                'value' => (float) $totals['total'],
+                'content_type' => 'product',
+                'content_ids' => collect($lines)->pluck('product_id')->map(fn ($id) => (string) $id)->values()->all(),
+                'num_items' => (int) collect($lines)->sum('qty'),
+            ],
+        ]);
 
         return view('storefront.checkout', [
-            'lines' => $this->cart->lines(),
-            'totals' => $this->cart->totals($firstFee),
+            'lines' => $lines,
+            'totals' => $totals,
             'shippingMethods' => $shipping,
             'onlinePayment' => $gateway->configured(),
             'requireFull' => (bool) $store->setting('payments.require_full_payment', false),
             'minDepositPercent' => (int) $store->setting('payments.min_deposit_percent', 0),
+            'metaEventId' => $metaEventId,
         ]);
     }
 

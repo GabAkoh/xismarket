@@ -10,12 +10,16 @@ use App\Models\Storefront\Subscriber;
 use App\Services\Search\ProductSearch;
 use App\Services\Storefront\BestsellerService;
 use App\Services\Storefront\CategoryNavService;
+use App\Services\Storefront\MetaConversionsService;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class StorefrontController extends Controller
 {
+    use Concerns\BuildsMetaUserIdentity;
+
     public function __construct(
         protected BestsellerService $bestsellers,
         protected CategoryNavService $nav,
@@ -263,12 +267,28 @@ class StorefrontController extends Controller
      * ({store}, {product}) so the scalar binding is unambiguous. Manual lookup —
      * route-model binding runs before the tenant middleware resolves the store.
      */
-    public function product($store, $product)
+    public function product($store, $product, Request $request, MetaConversionsService $meta)
     {
         $item = Product::where('id', (int) $product)->where('is_active', true)
-            ->with(['variants' => fn ($v) => $v->where('is_active', true)])
+            ->with(['variants' => fn ($v) => $v->where('is_active', true), 'category'])
             ->firstOrFail();
 
-        return view('storefront.product', ['product' => $item]);
+        // Meta ViewContent — fired here (server, CAPI) and in the view (browser
+        // Pixel) under one event_id so Meta de-duplicates the pair.
+        $metaEventId = 'vc-'.Str::uuid();
+        $meta->track($request, 'ViewContent', [
+            'event_id' => $metaEventId,
+            'identity' => $this->customerIdentity(),
+            'custom_data' => [
+                'currency' => (string) app(Tenancy::class)->current()?->currency,
+                'value' => (float) ($item->variants->min('sale_price') ?? 0),
+                'content_type' => 'product',
+                'content_ids' => [(string) $item->id],
+                'content_name' => $item->name,
+                'content_category' => $item->category?->name,
+            ],
+        ]);
+
+        return view('storefront.product', ['product' => $item, 'metaEventId' => $metaEventId]);
     }
 }

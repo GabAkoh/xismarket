@@ -106,6 +106,7 @@
                         ['route' => 'orders.create', 'label' => 'New Order', 'perm' => 'orders.manage'],
                         ['route' => 'storefront.settings', 'label' => 'Storefront', 'perm' => 'storefront.manage'],
                         ['route' => 'payments.settings', 'label' => 'Online Payments', 'perm' => 'payments.manage'],
+                        ['route' => 'meta.settings', 'label' => 'Meta Pixel', 'perm' => 'storefront.manage'],
                         ['route' => 'subscribers.index', 'label' => 'Subscribers', 'perm' => 'subscribers.view'],
                         ['route' => 'coupons.index', 'label' => 'Coupons', 'perm' => 'coupons.manage'],
                     ]],

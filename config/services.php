@@ -61,6 +61,17 @@ return [
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
     ],
 
+    // Meta (Facebook) Pixel + Conversions API. Credentials are managed per
+    // tenant from the admin UI (Online Orders → Meta Pixel); these env values are
+    // only a fallback for single-store setups. graph_version pins the Graph API
+    // version the server-side Conversions API posts to.
+    'meta' => [
+        'pixel_id' => env('META_PIXEL_ID'),
+        'access_token' => env('META_ACCESS_TOKEN'),
+        'test_event_code' => env('META_TEST_EVENT_CODE'),
+        'graph_version' => env('META_GRAPH_VERSION', 'v21.0'),
+    ],
+
     // AI product-image generation (background removal, recolor, side views,
     // model shots). Set IMAGE_AI_KEY to enable; the 'stub' provider echoes the
     // source image for local testing without an external call.

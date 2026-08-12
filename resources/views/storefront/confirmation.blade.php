@@ -61,4 +61,17 @@
         <a href="{{ route('shop.home') }}" class="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Continue shopping</a>
     </div>
 </div>
+
+<script>
+    // Meta Purchase (browser). event_id 'order-<id>' matches the server-side
+    // Conversions API event so Meta de-duplicates the two into one conversion.
+    window.xisMetaTrack && xisMetaTrack('Purchase', {
+        content_ids: @js($order->items->pluck('product_id')->filter()->map(fn ($id) => (string) $id)->values()),
+        content_type: 'product',
+        num_items: {{ (int) $order->items->sum('quantity') }},
+        currency: @js($store->currency),
+        value: {{ (float) $order->total }},
+        order_id: @js((string) $order->number),
+    }, 'order-{{ $order->id }}');
+</script>
 @endsection
