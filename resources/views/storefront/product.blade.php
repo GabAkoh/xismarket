@@ -71,7 +71,8 @@
                 </div>
             </template>
 
-            <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-6 flex items-center gap-3" @submit="if (!canAdd) $event.preventDefault()">
+            <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-6 flex items-center gap-3"
+                  @submit="if (!canAdd) { $event.preventDefault() } else if (window.xisMetaTrack) { xisMetaTrack('AddToCart', { content_ids: [@js((string) $product->id)], content_name: @js($product->name), content_type: 'product', currency: @js($store->currency), value: current.price }) }">
                 @csrf
                 <input type="hidden" name="product_id" value="{{ $product->id }}">
                 <input type="hidden" name="variant_id" :value="current ? current.id : ''">
@@ -119,5 +120,17 @@ function variantBuy(cfg) {
         },
     };
 }
+</script>
+
+<script>
+    // Meta ViewContent — fires when the browser Pixel is enabled (no-op otherwise).
+    window.xisMetaTrack && xisMetaTrack('ViewContent', {
+        content_ids: [@js((string) $product->id)],
+        content_name: @js($product->name),
+        content_type: 'product',
+        content_category: @js($product->category?->name),
+        currency: @js($store->currency),
+        value: {{ (float) ($vs->min('sale_price') ?? 0) }},
+    });
 </script>
 @endsection

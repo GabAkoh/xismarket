@@ -2,10 +2,14 @@
 
 namespace App\Services\Orders;
 
+use App\Jobs\SendMetaEvent;
 use App\Mail\OrderReceiptMail;
 use App\Models\Orders\Order;
+use App\Services\Storefront\MetaConversionsService;
+use App\Support\Tenancy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 /**
  * Post-checkout side effects for storefront orders: mark an order paid from an
@@ -70,5 +74,69 @@ class OnlinePaymentService
         } catch (\Throwable $e) {
             report($e);
         }
+
+        $this->trackPurchase($order);
+    }
+
+    /**
+     * Queue a server-side Meta Purchase (Conversions API). This is the reliable
+     * conversion signal — it fires from the single settlement point hit by the
+     * browser callback, the Paystack webhook AND pay-on-delivery, so every order
+     * is attributed even when the shopper never lands on the confirmation page.
+     * The event_id ('order-<id>') matches the browser Pixel's Purchase so Meta
+     * de-duplicates the pair. PII is hashed here (never queued in the clear).
+     */
+    protected function trackPurchase(Order $order): void
+    {
+        try {
+            $tenant = app(Tenancy::class)->current();
+            $meta = app(MetaConversionsService::class);
+            if (! $tenant || ! $meta->enabled($tenant)) {
+                return;   // Meta not configured for this store — nothing to send.
+            }
+
+            [$first, $last] = $this->splitName($order->contact_name ?: $order->customer?->name);
+
+            $contents = $order->items->map(fn ($item) => [
+                'id' => (string) $item->product_id,
+                'quantity' => (int) $item->quantity,
+                'item_price' => round((float) $item->unit_price, 2),
+            ])->values()->all();
+
+            SendMetaEvent::dispatch($tenant->id, 'Purchase', [
+                'event_id' => 'order-'.$order->id,
+                'action_source' => 'website',
+                'user_data' => $meta->userData(null, [
+                    'email' => $order->customer?->email,
+                    'phone' => $order->contact_phone ?: $order->customer?->phone,
+                    'first_name' => $first,
+                    'last_name' => $last,
+                ]),
+                'custom_data' => [
+                    'currency' => (string) $tenant->currency,
+                    'value' => round((float) $order->total, 2),
+                    'content_type' => 'product',
+                    'content_ids' => $order->items->pluck('product_id')->filter()->map(fn ($id) => (string) $id)->values()->all(),
+                    'contents' => $contents,
+                    'num_items' => (int) $order->items->sum('quantity'),
+                    'order_id' => (string) $order->number,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            report($e);   // never let tracking break settlement
+        }
+    }
+
+    /** Split a full name into [first, last] for Meta user_data matching. */
+    protected function splitName(?string $name): array
+    {
+        $name = trim((string) $name);
+        if ($name === '') {
+            return [null, null];
+        }
+        $first = Str::before($name, ' ');
+        $last = trim(Str::after($name, ' '));
+
+        return [$first, $last !== '' ? $last : null];
     }
 }

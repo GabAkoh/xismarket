@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Marketing\CouponController;
 use App\Http\Controllers\Orders\OrderController;
+use App\Http\Controllers\Storefront\MetaSettingsController;
 use App\Http\Controllers\Storefront\PaymentSettingsController;
 use App\Http\Controllers\Storefront\StorefrontSettingsController;
 use App\Http\Controllers\Storefront\SubscriberController;
@@ -19,6 +20,12 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::middleware('permission:payments.manage')->group(function () {
         Route::get('payments/settings', [PaymentSettingsController::class, 'edit'])->name('payments.settings');
         Route::put('payments/settings', [PaymentSettingsController::class, 'update'])->name('payments.settings.update');
+    });
+
+    // --- Meta (Facebook) Pixel + Conversions API keys ---
+    Route::middleware('permission:storefront.manage')->group(function () {
+        Route::get('meta/settings', [MetaSettingsController::class, 'edit'])->name('meta.settings');
+        Route::put('meta/settings', [MetaSettingsController::class, 'update'])->name('meta.settings.update');
     });
 
     // --- Community / newsletter subscribers ---

@@ -154,4 +154,15 @@
         @endif
     </div>
 </form>
+
+<script>
+    // Meta InitiateCheckout — fires on checkout load when the Pixel is enabled.
+    window.xisMetaTrack && xisMetaTrack('InitiateCheckout', {
+        content_ids: @js(collect($lines)->pluck('product_id')->map(fn ($id) => (string) $id)->values()),
+        content_type: 'product',
+        num_items: {{ (int) collect($lines)->sum('qty') }},
+        currency: @js($store->currency),
+        value: {{ (float) $totals['total'] }},
+    });
+</script>
 @endsection
