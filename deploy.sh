@@ -28,6 +28,14 @@ fi
 echo "==> Building images"
 $COMPOSE build
 
+# Frontend assets: the app self-hosts Tailwind via a Vite build, and public/build
+# is gitignored (built assets don't travel through git). Any deploy that changes
+# Blade markup/classes must (re)build on the box or @vite 500s / styles go stale.
+# Runs the node service (dev profile) after the pull so Tailwind scans the new
+# templates; output lands in ./public/build (bind-mounted, served by nginx).
+echo "==> Building frontend assets (Vite)"
+$COMPOSE --profile dev run --rm node sh -lc 'npm install && npm run build'
+
 echo "==> Starting services"
 $COMPOSE up -d
 
