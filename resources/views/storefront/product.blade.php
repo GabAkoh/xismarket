@@ -72,10 +72,17 @@
             </template>
 
             <form method="POST" action="{{ route('shop.cart.add') }}" class="mt-6 flex items-center gap-3"
-                  @submit="if (!canAdd) { $event.preventDefault() } else if (window.xisMetaTrack) { xisMetaTrack('AddToCart', { content_ids: [@js((string) $product->id)], content_name: @js($product->name), content_type: 'product', currency: @js($store->currency), value: current.price }) }">
+                  @submit="if (!canAdd) { $event.preventDefault() } else {
+                      // Share one event_id between the browser Pixel and the
+                      // server-side (CAPI) AddToCart so Meta de-duplicates them.
+                      const eid = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('atc-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+                      $refs.metaEventId.value = eid;
+                      window.xisMetaTrack && xisMetaTrack('AddToCart', { content_ids: [@js((string) $product->id)], content_name: @js($product->name), content_type: 'product', currency: @js($store->currency), value: current.price }, eid);
+                  }">
                 @csrf
                 <input type="hidden" name="product_id" value="{{ $product->id }}">
                 <input type="hidden" name="variant_id" :value="current ? current.id : ''">
+                <input type="hidden" name="meta_event_id" x-ref="metaEventId">
                 <input type="number" name="qty" value="1" min="1" max="999" class="w-20 rounded-md border border-slate-300 p-2 text-sm text-center">
                 <button :disabled="!canAdd"
                         class="rounded-md bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"

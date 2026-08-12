@@ -2,6 +2,7 @@
 
 namespace App\Services\Storefront;
 
+use App\Jobs\SendMetaEvent;
 use App\Models\Tenant;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
@@ -140,6 +141,30 @@ class MetaConversionsService
         $fbclid = $request->query('fbclid');
 
         return filled($fbclid) ? 'fb.1.'.$request->server('REQUEST_TIME', time()).'.'.$fbclid : null;
+    }
+
+    /**
+     * Queue a Conversions API event for the current tenant, hashing PII and
+     * capturing browser signals (fbp/fbc cookies, IP, UA) from the request.
+     * No-op when Meta isn't configured. Pass event_id matching the browser
+     * Pixel's eventID so Meta de-duplicates the browser + server pair.
+     *
+     * @param  array{event_id?:?string,identity?:array,custom_data?:?array,event_source_url?:?string,action_source?:string}  $opts
+     */
+    public function track(?Request $request, string $eventName, array $opts = []): void
+    {
+        $tenant = app(Tenancy::class)->current();
+        if (! $tenant || ! $this->enabled($tenant)) {
+            return;
+        }
+
+        SendMetaEvent::dispatch($tenant->id, $eventName, [
+            'event_id' => $opts['event_id'] ?? null,
+            'action_source' => $opts['action_source'] ?? 'website',
+            'event_source_url' => $opts['event_source_url'] ?? $request?->fullUrl(),
+            'user_data' => $this->userData($request, $opts['identity'] ?? []),
+            'custom_data' => $opts['custom_data'] ?? null,
+        ]);
     }
 
     /**

@@ -157,12 +157,13 @@
 
 <script>
     // Meta InitiateCheckout — fires on checkout load when the Pixel is enabled.
+    // eventID matches the server-side (CAPI) event so Meta de-duplicates them.
     window.xisMetaTrack && xisMetaTrack('InitiateCheckout', {
         content_ids: @js(collect($lines)->pluck('product_id')->map(fn ($id) => (string) $id)->values()),
         content_type: 'product',
         num_items: {{ (int) collect($lines)->sum('qty') }},
         currency: @js($store->currency),
         value: {{ (float) $totals['total'] }},
-    });
+    }, @js($metaEventId ?? null));
 </script>
 @endsection
