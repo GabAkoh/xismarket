@@ -131,6 +131,7 @@ function variantBuy(cfg) {
 
 <script>
     // Meta ViewContent — fires when the browser Pixel is enabled (no-op otherwise).
+    // eventID matches the server-side (CAPI) event so Meta de-duplicates them.
     window.xisMetaTrack && xisMetaTrack('ViewContent', {
         content_ids: [@js((string) $product->id)],
         content_name: @js($product->name),
@@ -138,6 +139,6 @@ function variantBuy(cfg) {
         content_category: @js($product->category?->name),
         currency: @js($store->currency),
         value: {{ (float) ($vs->min('sale_price') ?? 0) }},
-    });
+    }, @js($metaEventId ?? null));
 </script>
 @endsection
