@@ -77,11 +77,15 @@
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         padding: 0.5mm; gap: 0.3mm; overflow: hidden; box-sizing: border-box; text-align: center;
     }
+    /* Every line spans the full label width and centres its own text, so the
+       whole stack stays dead-centre — even after a long name is ellipsised
+       (a shrink-to-fit box could otherwise drift off-centre). */
+    .label > * { width: 100%; box-sizing: border-box; text-align: center; }
     /* Small store name at the very top of each label — branding without crowding
        the barcode. Tiny, muted, one line. */
-    .label-store { font-size: 6.5px; line-height: 1; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: #475569; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
+    .label-store { font-size: 6.5px; line-height: 1; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
     /* Keep the name to one line so the barcode gets most of the label. */
-    .label-name { font-size: 7px; line-height: 1.1; font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
+    .label-name { font-size: 7px; line-height: 1.1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
     .label-price { font-size: 10px; font-weight: 700; flex: 0 0 auto; }
     /* Barcode area. The scanner quiet zone is baked INTO the SVG (11 modules each
        side, via JsBarcode margins), so this wrapper adds no side padding — every
