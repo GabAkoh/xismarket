@@ -340,6 +340,20 @@
                     <span x-text="'+' + pointsToEarn"></span>
                 </div>
 
+                {{-- Exactly what will be recorded, taken from the same data that is
+                     submitted (paymentsList → t.method). Lets the cashier confirm the
+                     method + amount of every tender before completing, so a wrong
+                     method can never be saved unnoticed. --}}
+                <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" x-show="paymentsList.length" x-cloak>
+                    <div class="text-xs font-medium text-slate-400 mb-1">Recording</div>
+                    <template x-for="pay in paymentsList" :key="pay.method">
+                        <div class="flex justify-between">
+                            <span class="text-slate-600" x-text="methodLabel(pay.method)"></span>
+                            <span class="font-medium text-slate-700" x-text="money(pay.amount)"></span>
+                        </div>
+                    </template>
+                </div>
+
                 <button type="button" @click="submit()"
                         :disabled="!canSubmit"
                         class="w-full rounded-md bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
