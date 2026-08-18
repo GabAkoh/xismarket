@@ -19,11 +19,16 @@ class SalesController extends Controller
 
     public function index(Request $request)
     {
+        // Filter by the STORE-local date of the sale (completed_at is stored UTC),
+        // so the list agrees with the sales/payments reports at the day boundary.
+        $tzOffset = Carbon::now($this->tenancy->current()->timezone())->format('P');
+        $localDate = "DATE(CONVERT_TZ(completed_at, '+00:00', ?))";
+
         $sales = Sale::query()
             ->with('customer', 'user')
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
-            ->when($request->filled('from'), fn ($q) => $q->whereDate('completed_at', '>=', $request->date('from')))
-            ->when($request->filled('to'), fn ($q) => $q->whereDate('completed_at', '<=', $request->date('to')))
+            ->when($request->filled('from'), fn ($q) => $q->whereRaw("$localDate >= ?", [$tzOffset, $request->date('from')->toDateString()]))
+            ->when($request->filled('to'), fn ($q) => $q->whereRaw("$localDate <= ?", [$tzOffset, $request->date('to')->toDateString()]))
             ->when($request->filled('q'), fn ($q) => $q->where('number', 'like', '%'.$request->string('q').'%'))
             ->when($request->filled('product_id'), fn ($q) => $q->whereHas('items',
                 fn ($i) => $i->where('product_id', $request->integer('product_id'))))
@@ -96,17 +101,21 @@ class SalesController extends Controller
      */
     protected function returnsData(Request $request): array
     {
+        // Store-timezone day boundaries; query on the UTC instants (stored UTC).
+        $tz = $this->tenancy->current()->timezone();
         $from = $request->filled('from')
-            ? Carbon::parse($request->input('from'))->startOfDay()
-            : now()->startOfMonth();
+            ? Carbon::parse($request->input('from'), $tz)->startOfDay()
+            : Carbon::now($tz)->startOfMonth();
         $to = $request->filled('to')
-            ? Carbon::parse($request->input('to'))->endOfDay()
-            : now()->endOfDay();
+            ? Carbon::parse($request->input('to'), $tz)->endOfDay()
+            : Carbon::now($tz)->endOfDay();
+        $fromU = $from->copy()->utc();
+        $toU = $to->copy()->utc();
 
         // POS sale returns — negative payment rows grouped by return reference.
         $posRows = Payment::query()
             ->where('amount', '<', 0)
-            ->whereBetween('paid_at', [$from, $to])
+            ->whereBetween('paid_at', [$fromU, $toU])
             ->with('sale.customer')
             ->get()
             ->groupBy('reference')
@@ -133,7 +142,7 @@ class SalesController extends Controller
         $orderRows = Order::query()
             ->where('payment_status', 'refunded')
             ->whereNotNull('refunded_at')
-            ->whereBetween('refunded_at', [$from, $to])
+            ->whereBetween('refunded_at', [$fromU, $toU])
             ->with('customer')
             ->get()
             ->map(function ($order) {
@@ -227,12 +236,18 @@ class SalesController extends Controller
      */
     protected function paymentsSummaryData(Request $request): array
     {
+        // Day boundaries in the STORE's timezone (e.g. Africa/Lagos), so "today"
+        // and the month-to-date range line up with the trading day rather than
+        // UTC. Stored timestamps are UTC, so query on the UTC instants ($fromU/$toU).
+        $tz = $this->tenancy->current()->timezone();
         $from = $request->filled('from')
-            ? Carbon::parse($request->input('from'))->startOfDay()
-            : now()->startOfMonth();
+            ? Carbon::parse($request->input('from'), $tz)->startOfDay()
+            : Carbon::now($tz)->startOfMonth();
         $to = $request->filled('to')
-            ? Carbon::parse($request->input('to'))->endOfDay()
-            : now()->endOfDay();
+            ? Carbon::parse($request->input('to'), $tz)->endOfDay()
+            : Carbon::now($tz)->endOfDay();
+        $fromU = $from->copy()->utc();
+        $toU = $to->copy()->utc();
 
         $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
         $methodLabel = fn ($m) => $labels[$m] ?? ucfirst((string) ($m ?: 'other'));
@@ -247,7 +262,7 @@ class SalesController extends Controller
         // still 'partially_refunded', so its receipts and refund both show.
         $pos = Payment::query()
             ->whereHas('sale', fn ($q) => $q->whereNotIn('status', ['void', 'refunded']))
-            ->whereBetween('paid_at', [$from, $to])
+            ->whereBetween('paid_at', [$fromU, $toU])
             ->selectRaw('kind, method, SUM(amount) as amount, COUNT(*) as n')
             ->groupBy('kind', 'method')
             ->get();
@@ -268,7 +283,7 @@ class SalesController extends Controller
             $online = Order::query()
                 ->whereIn('payment_status', ['paid', 'refunded'])
                 ->whereNotNull('paid_at')
-                ->whereBetween('paid_at', [$from, $to])
+                ->whereBetween('paid_at', [$fromU, $toU])
                 ->selectRaw('payment_method, SUM(paid_total) as amount, COUNT(*) as n')
                 ->groupBy('payment_method')
                 ->get()
@@ -276,7 +291,7 @@ class SalesController extends Controller
                 ->sortByDesc('amount')->values();
 
             $onlineRefunds = round((float) Order::where('payment_status', 'refunded')
-                ->whereBetween('refunded_at', [$from, $to])->sum('total'), 2);
+                ->whereBetween('refunded_at', [$fromU, $toU])->sum('total'), 2);
         }
 
         // Cash drawer movements, grouped by reason.
@@ -284,7 +299,7 @@ class SalesController extends Controller
         $cashOut = collect();
         if (class_exists(CashMovement::class)) {
             $cm = CashMovement::query()
-                ->whereBetween('created_at', [$from, $to])
+                ->whereBetween('created_at', [$fromU, $toU])
                 ->selectRaw('type, reason, SUM(amount) as amount, COUNT(*) as n')
                 ->groupBy('type', 'reason')->get();
 
@@ -442,12 +457,20 @@ class SalesController extends Controller
      */
     protected function reportData(Request $request): array
     {
+        // Day boundaries in the STORE's timezone so the range and the per-day
+        // breakdown follow the trading day, not UTC. Stored timestamps are UTC:
+        // query on the UTC instants ($fromU/$toU), and bucket the daily rows by
+        // the store-local date via CONVERT_TZ using the store's UTC offset.
+        $tz = $this->tenancy->current()->timezone();
         $from = $request->filled('from')
-            ? Carbon::parse($request->input('from'))->startOfDay()
-            : now()->startOfMonth();
+            ? Carbon::parse($request->input('from'), $tz)->startOfDay()
+            : Carbon::now($tz)->startOfMonth();
         $to = $request->filled('to')
-            ? Carbon::parse($request->input('to'))->endOfDay()
-            : now()->endOfDay();
+            ? Carbon::parse($request->input('to'), $tz)->endOfDay()
+            : Carbon::now($tz)->endOfDay();
+        $fromU = $from->copy()->utc();
+        $toU = $to->copy()->utc();
+        $tzOffset = Carbon::now($tz)->format('P');   // e.g. "+01:00"
 
         // Optional filters: narrow the whole report to sales that include a given
         // product and/or were paid (at least partly) with a given method. Baking
@@ -460,8 +483,8 @@ class SalesController extends Controller
         // reversed, so it shouldn't count as a sale in any operational table.
         // (Partial refunds stay: the sale is 'partially_refunded', still real,
         // and its returned portion is subtracted via the returns figures below.)
-        $inRange = function ($q) use ($from, $to, $productId, $method) {
-            $q->whereNotIn('status', ['void', 'refunded'])->whereBetween('completed_at', [$from, $to]);
+        $inRange = function ($q) use ($fromU, $toU, $productId, $method) {
+            $q->whereNotIn('status', ['void', 'refunded'])->whereBetween('completed_at', [$fromU, $toU]);
             if ($productId !== null) {
                 $q->whereHas('items', fn ($i) => $i->where('product_id', $productId));
             }
@@ -505,9 +528,11 @@ class SalesController extends Controller
             $accountIds = $accountClass::whereIn('code', ['4000', '2100', '5000'])->pluck('id', 'code');
             $codeById = $accountIds->flip();
 
+            // entry_date is a plain DATE (accounting date, no timezone) — match on
+            // the store-local calendar dates, not UTC instants.
             $lines = $lineClass::whereIn('account_id', $accountIds->values())
                 ->whereHas('entry', fn ($e) => $e
-                    ->whereBetween('entry_date', [$from, $to])
+                    ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])
                     ->where('reference', 'like', '%-R%'))
                 ->with('entry:id,reference')
                 ->get();
@@ -588,12 +613,13 @@ class SalesController extends Controller
                 'n' => (int) $m->n,
             ]);
 
-        // Per-day breakdown.
+        // Per-day breakdown, bucketed by the store-local date (completed_at is
+        // stored UTC; CONVERT_TZ with the store offset shifts it before DATE()).
         $daily = Sale::query()->tap($inRange)
-            ->selectRaw('DATE(completed_at) as d, COUNT(*) as n,
+            ->selectRaw("DATE(CONVERT_TZ(completed_at, '+00:00', ?)) as d, COUNT(*) as n,
                 COALESCE(SUM(subtotal - discount_total), 0) as net,
                 COALESCE(SUM(tax_total), 0) as tax,
-                COALESCE(SUM(total), 0) as total')
+                COALESCE(SUM(total), 0) as total", [$tzOffset])
             ->groupBy('d')
             ->orderBy('d')
             ->get();
