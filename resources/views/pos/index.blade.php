@@ -296,12 +296,16 @@
                         <button type="button" @click="addTender()" x-show="canAddTender" class="text-xs text-indigo-600 hover:underline">+ Add method</button>
                     </div>
                     <div class="space-y-2">
-                        <template x-for="(t, i) in tenders" :key="i">
+                        <template x-for="(t, i) in tenders" :key="t.id">
                             <div class="flex items-center gap-2">
+                                {{-- Options are rendered server-side (not via x-for) so they always
+                                     exist when x-model binds — a select with x-for-generated options
+                                     can otherwise show the first option ("Cash") while the model holds
+                                     a different method, saving the wrong tender. --}}
                                 <select x-model="t.method" @change="enforceUniqueMethod(t)" class="rounded-md border border-slate-300 p-2 text-sm">
-                                    <template x-for="m in payMethods" :key="m">
-                                        <option :value="m" :disabled="methodTaken(t, m)" x-text="methodLabel(m)"></option>
-                                    </template>
+                                    @foreach ($payMethods as $m)
+                                        <option value="{{ $m['key'] }}" :disabled="methodTaken(t, @js($m['key']))">{{ $m['label'] }}</option>
+                                    @endforeach
                                 </select>
                                 <div class="relative flex-1">
                                     <span class="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{{ $symbol }}</span>
@@ -430,12 +434,16 @@ function posRegister() {
         couponInput: '', couponCode: '', couponDiscount: 0, couponError: '',
         redeemPoints: 0,
         useWallet: 0,
-        // Split tender: one or more payment lines, each { method, amount }.
-        // A method may appear at most once across the lines.
+        // Split tender: one or more payment lines, each { id, method, amount }.
+        // A method may appear at most once across the lines. Each line carries a
+        // stable id so the x-for keys by identity, not array index — index keys
+        // let a line's <select> desync from its data when lines are added/removed,
+        // which could save a different method than the cashier selected.
         payMethods: @json(array_values(array_column($payMethods, 'key'))),
         payMethodLabels: @json(array_column($payMethods, 'label', 'key')),
         creditMethods: @json(array_values($creditMethods)),
-        tenders: [{ method: @json($payMethods[0]['key'] ?? 'cash'), amount: null }],
+        tenderSeq: 2,
+        tenders: [{ id: 1, method: @json($payMethods[0]['key'] ?? 'cash'), amount: null }],
         submitting: false,
         // Parked sales — hold the current cart and start another; persisted per
         // register in the browser so they survive a refresh.
@@ -559,7 +567,7 @@ function posRegister() {
         removeLine(i) { this.cart.splice(i, 1); },
         clearCart() {
             this.cart = []; this.cartDiscount = 0;
-            this.tenders = [{ method: this.payMethods[0] || 'cash', amount: null }];
+            this.tenders = [this.newTender()];
             this.redeemPoints = 0; this.useWallet = 0;
             this.removeCoupon();
         },
@@ -589,7 +597,7 @@ function posRegister() {
             this.couponInput = s.couponInput || ''; this.couponCode = s.couponCode || ''; this.couponDiscount = s.couponDiscount || 0;
             this.couponError = '';
             this.redeemPoints = s.redeemPoints || 0; this.useWallet = s.useWallet || 0;
-            this.tenders = [{ method: this.payMethods[0] || 'cash', amount: null }];
+            this.tenders = [this.newTender()];
         },
         holdSale() {
             if (!this.cart.length) return;
@@ -662,10 +670,14 @@ function posRegister() {
         get canAddTender() {
             return this.tenders.length < this.payMethods.length;
         },
+        // A fresh tender line with a stable id (keeps the x-for keyed by identity).
+        newTender(method) {
+            return { id: this.tenderSeq++, method: method || (this.payMethods[0] || 'cash'), amount: null };
+        },
         addTender() {
             const used = this.tenders.map(t => t.method);
             const next = this.payMethods.find(m => !used.includes(m));
-            if (next) this.tenders.push({ method: next, amount: null });
+            if (next) this.tenders.push(this.newTender(next));
         },
         removeTender(i) {
             this.tenders.splice(i, 1);
