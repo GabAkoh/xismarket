@@ -194,6 +194,16 @@ class Tenant extends Model
         }, $methods)));
     }
 
+    /**
+     * The store's IANA timezone, used for report day-boundaries and local-time
+     * displays. Falls back to the app timezone (UTC). Set under Branding →
+     * general.timezone; the same source AccessHours uses.
+     */
+    public function timezone(): string
+    {
+        return $this->setting('general.timezone') ?: config('app.timezone', 'UTC');
+    }
+
     /** Display symbol for the tenant's currency, falling back to the ISO code. */
     public function currencySymbol(): string
     {
