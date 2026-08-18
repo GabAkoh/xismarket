@@ -74,10 +74,11 @@
         <div class="flex justify-between font-bold text-slate-800 text-base"><span>Total</span><span>{{ $symbol }}{{ number_format($sale->total, 2) }}</span></div>
     </div>
 
+    @php $methodLabels = $currentTenant->paymentMethodLabels() + ['wallet' => 'Wallet']; @endphp
     <div class="border-t border-dashed border-slate-200 mt-3 pt-3 space-y-1 text-sm">
         @foreach ($sale->payments as $payment)
             <div class="flex justify-between text-slate-500">
-                <span class="capitalize">{{ $payment->method }}</span>
+                <span>{{ $methodLabels[$payment->method] ?? \Illuminate\Support\Str::of((string) $payment->method)->replace('_', ' ')->title() }}</span>
                 <span>{{ $symbol }}{{ number_format($payment->amount, 2) }}</span>
             </div>
         @endforeach
