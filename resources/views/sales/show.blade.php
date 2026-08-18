@@ -153,11 +153,18 @@
         </x-card>
 
         <x-card title="Payments">
+            {{-- Show each tender's display label (e.g. "Transfer GTB"), not the raw
+                 stored key (e.g. "bank_transfer"). A key with no configured method
+                 (renamed/removed since) falls back to a readable Title Case form. --}}
+            @php $methodLabels = $currentTenant->paymentMethodLabels() + ['wallet' => 'Wallet']; @endphp
             <ul class="text-sm space-y-1.5">
                 @forelse ($sale->payments as $payment)
-                    @php $isRefund = (float) $payment->amount < 0; @endphp
+                    @php
+                        $isRefund = (float) $payment->amount < 0;
+                        $methodName = $methodLabels[$payment->method] ?? \Illuminate\Support\Str::of((string) $payment->method)->replace('_', ' ')->title();
+                    @endphp
                     <li class="flex justify-between {{ $isRefund ? 'text-red-600' : '' }}">
-                        <span class="capitalize {{ $isRefund ? '' : 'text-slate-500' }}">{{ $payment->method }}{{ $isRefund ? ' refund' : '' }} @if($payment->reference)<span class="text-xs text-slate-400">({{ $payment->reference }})</span>@endif</span>
+                        <span class="{{ $isRefund ? '' : 'text-slate-500' }}">{{ $methodName }}{{ $isRefund ? ' refund' : '' }} @if($payment->reference)<span class="text-xs text-slate-400">({{ $payment->reference }})</span>@endif</span>
                         <span>{{ $isRefund ? '−' : '' }}{{ $symbol }}{{ number_format(abs((float) $payment->amount), 2) }}</span>
                     </li>
                 @empty
