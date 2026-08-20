@@ -40,6 +40,7 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::middleware('permission:sales.reports')->group(function () {
             Route::get('sales/report', [SalesController::class, 'report'])->name('sales.report');
             Route::get('sales/report/export', [SalesController::class, 'reportExport'])->name('sales.report.export');
+            Route::get('sales/report/method-breakdown', [SalesController::class, 'reportMethodBreakdown'])->name('sales.report.method-breakdown');
             Route::get('sales/payments-summary', [SalesController::class, 'paymentsSummary'])->name('sales.payments-summary');
             Route::get('sales/payments-summary/export', [SalesController::class, 'paymentsSummaryExport'])->name('sales.payments-summary.export');
         });

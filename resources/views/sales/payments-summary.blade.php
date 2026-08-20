@@ -70,12 +70,12 @@
                                     <td class="py-1.5 text-slate-600">{{ $r->label }}</td>
                                     <td class="text-right text-slate-400">{{ number_format($r->n) }}</td>
                                     <td class="text-right font-medium text-slate-700">
-                                        {{-- Only POS sales reconcile with the sales list (which is POS-only);
-                                             settlements/online/cash rows show their amount as plain text. --}}
+                                        {{-- Only POS sales drill down to their tender-level payments (which
+                                             reconcile with this figure); other sources show plain amounts. --}}
                                         @if ($s['key'] === 'pos')
-                                            <a href="{{ route('sales.index', ['method' => $r->method, 'from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
+                                            <a href="{{ route('sales.report.method-breakdown', ['method' => $r->method, 'from' => $from->toDateString(), 'to' => $to->toDateString(), 'source' => 'pos-receipts']) }}"
                                                class="text-indigo-600 hover:underline"
-                                               title="View the {{ $r->label }} POS sales in this period">{{ $money($r->amount) }}</a>
+                                               title="Break down the {{ $r->label }} POS payments in this period">{{ $money($r->amount) }}</a>
                                         @else
                                             {{ $money($r->amount) }}
                                         @endif
