@@ -123,10 +123,21 @@
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($methods as $m)
+                    @php
+                        $methodSalesUrl = route('sales.index', array_filter([
+                            'method' => $m->method,
+                            'from' => $from->toDateString(),
+                            'to' => $to->toDateString(),
+                            'product_id' => $productId,
+                        ]));
+                    @endphp
                     <tr>
                         <td class="py-2 text-slate-700">{{ $m->label }}</td>
                         <td class="py-2 text-right text-slate-400 text-xs">{{ number_format($m->n) }}×</td>
-                        <td class="py-2 text-right font-semibold text-slate-700">{{ $money($m->amount) }}</td>
+                        <td class="py-2 text-right font-semibold">
+                            <a href="{{ $methodSalesUrl }}" class="text-indigo-600 hover:underline"
+                               title="View the {{ $m->label }} sales in this period">{{ $money($m->amount) }}</a>
+                        </td>
                     </tr>
                 @empty
                     <tr><td class="py-4 text-center text-slate-400">No payments in this period.</td></tr>

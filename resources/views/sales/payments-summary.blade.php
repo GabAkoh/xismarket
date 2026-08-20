@@ -69,7 +69,17 @@
                                 <tr>
                                     <td class="py-1.5 text-slate-600">{{ $r->label }}</td>
                                     <td class="text-right text-slate-400">{{ number_format($r->n) }}</td>
-                                    <td class="text-right font-medium text-slate-700">{{ $money($r->amount) }}</td>
+                                    <td class="text-right font-medium text-slate-700">
+                                        {{-- Only POS sales reconcile with the sales list (which is POS-only);
+                                             settlements/online/cash rows show their amount as plain text. --}}
+                                        @if ($s['key'] === 'pos')
+                                            <a href="{{ route('sales.index', ['method' => $r->method, 'from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
+                                               class="text-indigo-600 hover:underline"
+                                               title="View the {{ $r->label }} POS sales in this period">{{ $money($r->amount) }}</a>
+                                        @else
+                                            {{ $money($r->amount) }}
+                                        @endif
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
