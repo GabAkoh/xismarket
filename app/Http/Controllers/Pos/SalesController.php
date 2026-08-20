@@ -180,6 +180,69 @@ class SalesController extends Controller
     }
 
     /**
+     * Drill-down behind a single payment-method total: the individual payments
+     * that make it up, each showing that sale's portion for the method (a split
+     * tender records one payment per method per sale), so the rows sum EXACTLY
+     * to the figure the user clicked — unlike the sales list, which shows whole
+     * invoice totals.
+     *
+     * ?source lets the same page reconcile with two different totals:
+     *   - report (default): the Sales report "Payment methods" card — every
+     *     payment of this method on sales COMPLETED in the period (optionally
+     *     product-filtered), matching reportData()'s $methods query.
+     *   - pos-receipts: the Payments summary "POS sales" section — checkout
+     *     receipts (kind = sale) PAID in the period, matching paymentsSummaryData().
+     */
+    public function reportMethodBreakdown(Request $request)
+    {
+        $tz = $this->tenancy->current()->timezone();
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'), $tz)->startOfDay()
+            : Carbon::now($tz)->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'), $tz)->endOfDay()
+            : Carbon::now($tz)->endOfDay();
+        $fromU = $from->copy()->utc();
+        $toU = $to->copy()->utc();
+
+        $method = (string) $request->input('method', '');
+        abort_if($method === '', 404);
+        $productId = $request->filled('product_id') ? (int) $request->input('product_id') : null;
+        $source = $request->input('source') === 'pos-receipts' ? 'pos-receipts' : 'report';
+
+        $labels = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
+        $label = $labels[$method] ?? ucfirst(str_replace('_', ' ', $method));
+
+        $query = Payment::query()->where('method', $method)
+            ->with(['sale:id,number,completed_at,customer_id,total', 'sale.customer:id,name']);
+
+        if ($source === 'pos-receipts') {
+            $query->where('kind', 'sale')
+                ->whereBetween('paid_at', [$fromU, $toU])
+                ->whereHas('sale', fn ($s) => $s->whereNotIn('status', ['void', 'refunded']));
+        } else {
+            $query->whereHas('sale', function ($s) use ($fromU, $toU, $productId) {
+                $s->whereNotIn('status', ['void', 'refunded'])->whereBetween('completed_at', [$fromU, $toU]);
+                if ($productId !== null) {
+                    $s->whereHas('items', fn ($i) => $i->where('product_id', $productId));
+                }
+            });
+        }
+
+        $payments = $query->orderByDesc('paid_at')->get()->map(fn ($p) => (object) [
+            'sale_id' => $p->sale?->id,
+            'number' => $p->sale?->number,
+            'at' => $p->paid_at,
+            'customer' => $p->sale?->customer?->name,
+            'kind' => $p->kind,
+            'amount' => round((float) $p->amount, 2),
+        ]);
+        $total = round($payments->sum('amount'), 2);
+
+        return view('sales.method-breakdown', compact('from', 'to', 'tz', 'method', 'label', 'productId', 'source', 'payments', 'total'));
+    }
+
+    /**
      * Payments summary: every money movement in the period grouped by source —
      * POS sales, customer settlements, online sales, cash in (received) and cash
      * out + refunds (paid out) — each broken down by payment method.
