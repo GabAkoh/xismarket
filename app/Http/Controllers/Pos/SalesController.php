@@ -608,6 +608,7 @@ class SalesController extends Controller
             ->orderByDesc('amount')
             ->get()
             ->map(fn ($m) => (object) [
+                'method' => $m->method,
                 'label' => $labels[$m->method] ?? ucfirst(str_replace('_', ' ', $m->method)),
                 'amount' => round((float) $m->amount, 2),
                 'n' => (int) $m->n,
