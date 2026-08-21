@@ -341,10 +341,11 @@
                 </div>
 
                 {{-- Exactly what will be recorded, taken from the same data that is
-                     submitted (paymentsList → t.method). Lets the cashier confirm the
-                     method + amount of every tender before completing, so a wrong
-                     method can never be saved unnoticed. --}}
-                <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" x-show="paymentsList.length" x-cloak>
+                     submitted (paymentsList → t.method). Shown only for split tenders
+                     (more than one payment line) — the case where it's easy to mis-tag
+                     a method — so the cashier can confirm each before completing. A
+                     single-method sale is unambiguous and doesn't need the summary. --}}
+                <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" x-show="paymentsList.length > 1" x-cloak>
                     <div class="text-xs font-medium text-slate-400 mb-1">Recording</div>
                     <template x-for="pay in paymentsList" :key="pay.method">
                         <div class="flex justify-between">
