@@ -16,40 +16,103 @@ class ReportController extends Controller
     }
 
     /**
-     * Trial balance: every account with its debit/credit sums.
+     * Trial balance for a date range: each account's opening balance (carried
+     * from all activity before the window), the debit and credit movement within
+     * the window, and the resulting closing balance.
      */
-    public function trialBalance()
+    public function trialBalance(Request $request)
     {
-        return view('accounting.reports.trial-balance', $this->trialBalanceData());
+        return view('accounting.reports.trial-balance', $this->trialBalanceData($request));
     }
 
-    /** Download the trial balance as CSV. */
-    public function trialBalanceExport()
+    /** Download the trial balance (current range) as CSV. */
+    public function trialBalanceExport(Request $request)
     {
-        $data = $this->trialBalanceData();
+        $data = $this->trialBalanceData($request);
         $num = fn ($v) => number_format((float) $v, 2, '.', '');
+        $filename = 'trial-balance-'.$data['from']->toDateString().'-to-'.$data['to']->toDateString().'.csv';
 
-        return $this->streamCsv('trial-balance.csv', function ($put) use ($data, $num) {
-            $put(['Trial balance']);
+        return $this->streamCsv($filename, function ($put) use ($data, $num) {
+            $put(['Trial balance', $data['from']->toDateString().' to '.$data['to']->toDateString()]);
+            $put(['Opening / Closing: positive = debit balance, negative = credit balance']);
             $put([]);
-            $put(['Code', 'Account', 'Type', 'Debit', 'Credit']);
+            $put(['Code', 'Account', 'Type', 'Opening', 'Debit', 'Credit', 'Closing']);
             foreach ($data['rows'] as $r) {
-                $put([$r['account']->code, $r['account']->name, $r['type'], $num($r['debit']), $num($r['credit'])]);
+                $put([$r['account']->code, $r['account']->name, $r['type'],
+                    $num($r['opening']), $num($r['debit']), $num($r['credit']), $num($r['closing'])]);
             }
-            $put(['Totals', '', '', $num($data['totalDebit']), $num($data['totalCredit'])]);
+            $put(['Totals', '', '', $num($data['totalOpening']), $num($data['totalDebit']), $num($data['totalCredit']), $num($data['totalClosing'])]);
         });
     }
 
-    /** @return array{rows: \Illuminate\Support\Collection, totalDebit: float, totalCredit: float} */
-    protected function trialBalanceData(): array
+    /**
+     * @return array{rows: \Illuminate\Support\Collection, from: Carbon, to: Carbon, totalOpening: float, totalDebit: float, totalCredit: float, totalClosing: float, totalOpeningDebit: float, totalClosingDebit: float}
+     */
+    protected function trialBalanceData(Request $request): array
     {
-        $rows = $this->accountSums();
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : Carbon::now()->startOfYear();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : Carbon::now()->endOfDay();
+
+        // Two grouped passes: everything before the window (opening) and within it.
+        $prior = $this->movementsByAccount(fn ($q) => $q->where('journal_entries.entry_date', '<', $from));
+        $period = $this->movementsByAccount(fn ($q) => $q->whereBetween('journal_entries.entry_date', [$from, $to]));
+
+        // Opening/closing are net debit-minus-credit (positive = debit balance),
+        // so a balanced ledger nets both to zero and debit movement = credit movement.
+        $rows = Account::orderBy('code')->get()->map(function (Account $account) use ($prior, $period) {
+            $opening = round((float) ($prior[$account->id]->debit ?? 0) - (float) ($prior[$account->id]->credit ?? 0), 2);
+            $debit = round((float) ($period[$account->id]->debit ?? 0), 2);
+            $credit = round((float) ($period[$account->id]->credit ?? 0), 2);
+            $closing = round($opening + $debit - $credit, 2);
+
+            return [
+                'account' => $account,
+                'type' => $account->type,
+                'opening' => $opening,
+                'debit' => $debit,
+                'credit' => $credit,
+                'closing' => $closing,
+            ];
+        })->filter(fn ($r) => $r['opening'] != 0.0 || $r['debit'] != 0.0 || $r['credit'] != 0.0 || $r['closing'] != 0.0)
+            ->values();
 
         return [
             'rows' => $rows,
-            'totalDebit' => $rows->sum('debit'),
-            'totalCredit' => $rows->sum('credit'),
+            'from' => $from,
+            'to' => $to,
+            'totalOpening' => round($rows->sum('opening'), 2),
+            'totalClosing' => round($rows->sum('closing'), 2),
+            'totalDebit' => round($rows->sum('debit'), 2),
+            'totalCredit' => round($rows->sum('credit'), 2),
+            // Debit-side totals of the signed columns; equal the credit side when balanced.
+            'totalOpeningDebit' => round($rows->sum(fn ($r) => max(0.0, $r['opening'])), 2),
+            'totalClosingDebit' => round($rows->sum(fn ($r) => max(0.0, $r['closing'])), 2),
         ];
+    }
+
+    /**
+     * Sum debit/credit per account over the journal lines matching an entry-date
+     * constraint, in a single grouped query. Returns rows keyed by account_id with
+     * ->debit and ->credit.
+     *
+     * @param  callable(\Illuminate\Database\Eloquent\Builder): mixed  $constrain
+     */
+    protected function movementsByAccount(callable $constrain)
+    {
+        $query = JournalLine::query()
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->groupBy('journal_lines.account_id')
+            ->selectRaw('journal_lines.account_id as account_id,
+                COALESCE(SUM(journal_lines.debit), 0) as debit,
+                COALESCE(SUM(journal_lines.credit), 0) as credit');
+
+        $constrain($query);
+
+        return $query->get()->keyBy('account_id');
     }
 
     /**
