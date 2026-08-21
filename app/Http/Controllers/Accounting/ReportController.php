@@ -52,7 +52,7 @@ class ReportController extends Controller
     {
         $from = $request->filled('from')
             ? Carbon::parse($request->input('from'))->startOfDay()
-            : Carbon::now()->startOfYear();
+            : Carbon::now()->startOfMonth();
         $to = $request->filled('to')
             ? Carbon::parse($request->input('to'))->endOfDay()
             : Carbon::now()->endOfDay();
