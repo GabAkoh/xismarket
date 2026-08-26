@@ -310,6 +310,12 @@ class PurchaseOrderController extends Controller
                     continue;
                 }
 
+                // Book the receipt against the variant row — the same row POS
+                // sales draw down and the product-edit stock box reads/writes.
+                // PO lines are product-level today (no variant picker), so fall
+                // back to the product's default variant when none is set.
+                $variantId = $item->variant_id ?? $item->product->defaultVariant()?->id;
+
                 $this->stock->recordMovement(
                     $item->product,
                     $warehouse,
@@ -318,6 +324,7 @@ class PurchaseOrderController extends Controller
                     (float) $item->unit_cost,
                     $purchase,
                     'Received '.$purchase->reference,
+                    $variantId,
                 );
             }
 

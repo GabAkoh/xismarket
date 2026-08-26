@@ -302,6 +302,7 @@ class ProductController extends Controller
                     $this->stock->recordMovement(
                         $product, $warehouse, 'adjustment', (float) $data['quantity'],
                         $product->cost_price ?: null, null, 'Bulk restock',
+                        $product->defaultVariant()?->id,
                     );
                 }
                 $msg = 'Added '.rtrim(rtrim(number_format((float) $data['quantity'], 3), '0'), '.')." stock to {$n} product(s).";

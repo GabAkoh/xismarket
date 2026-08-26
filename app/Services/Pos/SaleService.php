@@ -436,6 +436,7 @@ class SaleService
                         $stock->recordMovement(
                             $product, $warehouse, 'return', $qty,
                             (float) $item->unit_cost, $sale, 'Return '.$sale->number,
+                            $item->variant_id ?? $product->defaultVariant()?->id,
                         );
                     }
                 }

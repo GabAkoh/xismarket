@@ -43,6 +43,9 @@ class StockController extends Controller
         $product = Product::findOrFail($data['product_id']);
         $warehouse = Warehouse::findOrFail($data['warehouse_id']);
 
+        // Book against the default variant — the row POS sales draw down and the
+        // product-edit stock box reads/writes — so adjustments don't strand on a
+        // product-level (null-variant) row.
         $this->stock->recordMovement(
             $product,
             $warehouse,
@@ -51,6 +54,7 @@ class StockController extends Controller
             null,
             null,
             $data['note'] ?? null,
+            $product->defaultVariant()?->id,
         );
 
         return redirect()->route('stock.index')->with('status', 'Stock adjusted.');
