@@ -2,7 +2,16 @@
 @section('title', 'Sales')
 
 @section('content')
-@php $symbol = $currentTenant->currencySymbol() ?? ''; @endphp
+@php
+    $symbol = $currentTenant->currencySymbol() ?? '';
+    // When a product/method filter narrows the amount, relabel the column so the
+    // slice being shown is unambiguous (see SalesController@index $amountMode).
+    $amountLabel = match ($amountMode) {
+        'method' => 'Paid ('.($methodOptions[request('method')] ?? request('method')).')',
+        'product' => 'Product total',
+        default => 'Total',
+    };
+@endphp
 
 <x-page-header title="Sales">
     <a href="{{ route('sales.returns') }}" class="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Returns &amp; refunds</a>
@@ -57,7 +66,7 @@
         <thead class="text-left text-slate-400 border-b">
             <tr>
                 <th class="py-2">Number</th><th>Date</th><th>Customer</th><th>Status</th>
-                <th class="text-right">Total</th><th class="text-right">Balance</th><th></th>
+                <th class="text-right">{{ $amountLabel }}</th><th class="text-right">Balance</th><th></th>
             </tr>
         </thead>
         <tbody class="divide-y">
@@ -78,7 +87,8 @@
                         @endphp
                         <span class="text-xs px-2 py-0.5 rounded-full {{ $badge }}">{{ ucfirst(str_replace('_', ' ', $sale->status)) }}</span>
                     </td>
-                    <td class="text-right font-semibold text-slate-700">{{ $symbol }}{{ number_format($sale->total, 2) }}</td>
+                    @php $rowAmount = $amountMode === 'invoice' ? $sale->total : ($sale->filtered_amount ?? 0); @endphp
+                    <td class="text-right font-semibold text-slate-700">{{ $symbol }}{{ number_format($rowAmount, 2) }}</td>
                     <td class="text-right {{ $sale->balance_due > 0 ? 'text-red-600 font-semibold' : 'text-slate-300' }}">
                         {{ $sale->balance_due > 0 ? $symbol.number_format($sale->balance_due, 2) : '—' }}
                     </td>
@@ -90,6 +100,18 @@
                 <tr><td colspan="7" class="py-8 text-center text-slate-400">No sales found.</td></tr>
             @endforelse
         </tbody>
+        @if ($sales->total() > 0)
+            <tfoot>
+                <tr class="border-t-2 font-semibold text-slate-700">
+                    <td class="py-3" colspan="4">
+                        {{ $amountMode === 'invoice' ? 'Total' : $amountLabel }}
+                        <span class="text-xs font-normal text-slate-400">· all {{ number_format($sales->total()) }} matching sale(s)</span>
+                    </td>
+                    <td class="text-right">{{ $symbol }}{{ number_format($filteredTotal, 2) }}</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        @endif
     </table>
     <div class="mt-4">{{ $sales->links() }}</div>
 </x-card>

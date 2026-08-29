@@ -24,23 +24,53 @@ class SalesController extends Controller
         $tzOffset = Carbon::now($this->tenancy->current()->timezone())->format('P');
         $localDate = "DATE(CONVERT_TZ(completed_at, '+00:00', ?))";
 
-        $sales = Sale::query()
-            ->with('customer', 'user')
+        $method = $request->string('method');
+        $productId = $request->integer('product_id');
+
+        // Shared filtered query, reused for the page rows and the footer total so
+        // both agree on exactly which sales match.
+        $base = Sale::query()
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->when($request->filled('from'), fn ($q) => $q->whereRaw("$localDate >= ?", [$tzOffset, $request->date('from')->toDateString()]))
             ->when($request->filled('to'), fn ($q) => $q->whereRaw("$localDate <= ?", [$tzOffset, $request->date('to')->toDateString()]))
             ->when($request->filled('q'), fn ($q) => $q->where('number', 'like', '%'.$request->string('q').'%'))
             ->when($request->filled('product_id'), fn ($q) => $q->whereHas('items',
-                fn ($i) => $i->where('product_id', $request->integer('product_id'))))
+                fn ($i) => $i->where('product_id', $productId)))
             // A sale can have several payments in different methods (split pay,
             // later credit settlements), so match any positive payment with the
             // chosen method — mirrors the sales report's method filter.
             ->when($request->filled('method'), fn ($q) => $q->whereHas('payments',
-                fn ($p) => $p->where('method', $request->string('method'))->where('amount', '>', 0)))
+                fn ($p) => $p->where('method', $method)->where('amount', '>', 0)));
+
+        // Which slice the amount column shows: a method filter narrows it to that
+        // method's payments; else a product filter narrows it to that product's
+        // lines; else the full invoice total. Method wins when both are set.
+        $amountMode = $request->filled('method') ? 'method'
+            : ($request->filled('product_id') ? 'product' : 'invoice');
+
+        $sales = (clone $base)->with('customer', 'user');
+        if ($amountMode === 'method') {
+            $sales->withSum(['payments as filtered_amount' => fn ($p) => $p
+                ->where('method', $method)->where('amount', '>', 0)], 'amount');
+        } elseif ($amountMode === 'product') {
+            $sales->withSum(['items as filtered_amount' => fn ($i) => $i
+                ->where('product_id', $productId)], 'line_total');
+        }
+        $sales = $sales
             ->orderByDesc('completed_at')
             ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString();
+
+        // Footer total across ALL matching sales (not just the current page), in
+        // the same slice the rows show.
+        $filteredTotal = match ($amountMode) {
+            'method' => (float) Payment::whereIn('sale_id', (clone $base)->select('id'))
+                ->where('method', $method)->where('amount', '>', 0)->sum('amount'),
+            'product' => (float) SaleItem::whereIn('sale_id', (clone $base)->select('id'))
+                ->where('product_id', $productId)->sum('line_total'),
+            default => (float) (clone $base)->sum('total'),
+        };
 
         $statuses = ['completed', 'partially_paid', 'refunded', 'partially_refunded', 'void'];
 
@@ -53,7 +83,7 @@ class SalesController extends Controller
         // Payment method options: the tenant's configured methods plus wallet.
         $methodOptions = $this->tenancy->current()->paymentMethodLabels() + ['wallet' => 'Wallet'];
 
-        return view('sales.index', compact('sales', 'statuses', 'products', 'methodOptions'));
+        return view('sales.index', compact('sales', 'statuses', 'products', 'methodOptions', 'amountMode', 'filteredTotal'));
     }
 
     /**
