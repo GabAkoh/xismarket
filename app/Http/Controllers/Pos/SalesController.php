@@ -588,6 +588,17 @@ class SalesController extends Controller
             return $q;
         };
 
+        // A method filter apportions revenue/profit to each sale's share paid via
+        // that method (a ₦1,000 sale paid ₦600 by card contributes 60% of its
+        // net & profit to "card"). Split payments are attributed fairly and the
+        // shares across methods sum back to the sale. Computed in PHP over the
+        // matching sales; when a product filter is also active, the per-sale base
+        // is that product's lines rather than the whole invoice.
+        $apportionByMethod = $method !== null;
+        $ap = $apportionByMethod
+            ? $this->methodApportionedRevenue($inRange, $method, $productId, $tz)
+            : null;
+
         // Headline revenue totals. With a product filter active these come from
         // that product's SALE ITEM lines, so every revenue figure below reflects
         // the product rather than the whole invoice; otherwise from the sale
@@ -596,7 +607,18 @@ class SalesController extends Controller
         // whole-invoice — the view labels them "whole invoices" when filtered.
         $sliceByProduct = $productId !== null;
 
-        if ($sliceByProduct) {
+        if ($apportionByMethod) {
+            $count = $ap['count'];
+            $gross = $ap['gross'];
+            $discounts = $ap['discounts'];
+            $tax = $ap['tax'];
+            $net = $ap['net'];
+            $total = $ap['total'];
+            $cogs = $ap['cogs'];
+            // Outstanding is an unpaid balance — no payment method — so it stays
+            // whole-invoice for the matching sales.
+            $outstanding = round((float) Sale::query()->tap($inRange)->sum('balance_due'), 2);
+        } elseif ($sliceByProduct) {
             // Line economics: net = gross − line discount, line_total = net + tax.
             // (Cart-level/loyalty discounts are sale-wide and not attributed here.)
             $r = SaleItem::whereHas('sale', $inRange)->where('product_id', $productId)
@@ -744,8 +766,11 @@ class SalesController extends Controller
 
         // Per-day breakdown, bucketed by the store-local date (completed_at is
         // stored UTC; CONVERT_TZ with the store offset shifts it before DATE()).
-        // Sliced to the product's lines when a product filter is active.
-        if ($sliceByProduct) {
+        // Sliced to the product's lines (product filter) or apportioned to the
+        // method's share (method filter).
+        if ($apportionByMethod) {
+            $daily = $ap['daily'];
+        } elseif ($sliceByProduct) {
             $daily = SaleItem::query()
                 ->where('sale_items.product_id', $productId)
                 ->whereHas('sale', $inRange)
@@ -769,16 +794,23 @@ class SalesController extends Controller
                 ->get();
         }
 
-        // Top products by revenue.
-        $top = SaleItem::whereHas('sale', $inRange)
-            ->selectRaw('product_id, name, COALESCE(SUM(quantity), 0) as qty, COALESCE(SUM(line_total), 0) as revenue')
-            ->groupBy('product_id', 'name')
-            ->orderByDesc('revenue')
-            ->limit(10)
-            ->get();
+        // Top products by revenue (apportioned to the method's share when a method
+        // filter is active; otherwise each product's own line revenue).
+        if ($apportionByMethod) {
+            $top = $ap['top'];
+        } else {
+            $top = SaleItem::whereHas('sale', $inRange)
+                ->selectRaw('product_id, name, COALESCE(SUM(quantity), 0) as qty, COALESCE(SUM(line_total), 0) as revenue')
+                ->groupBy('product_id', 'name')
+                ->orderByDesc('revenue')
+                ->limit(10)
+                ->get();
+        }
 
-        // Per-cashier breakdown (product-sliced when a product filter is active).
-        if ($sliceByProduct) {
+        // Per-cashier breakdown (product-sliced, or method-apportioned).
+        if ($apportionByMethod) {
+            $cashiers = $ap['cashiers'];
+        } elseif ($sliceByProduct) {
             $cashiers = SaleItem::query()
                 ->where('sale_items.product_id', $productId)
                 ->whereHas('sale', $inRange)
@@ -801,8 +833,10 @@ class SalesController extends Controller
         $names = \App\Models\User::whereIn('id', $cashiers->pluck('user_id')->filter())->pluck('name', 'id');
         $cashiers->each(fn ($c) => $c->name = $names[$c->user_id] ?? 'Unknown');
 
-        // Per-register breakdown (product-sliced when a product filter is active).
-        if ($sliceByProduct) {
+        // Per-register breakdown (product-sliced, or method-apportioned).
+        if ($apportionByMethod) {
+            $registers = $ap['registers'];
+        } elseif ($sliceByProduct) {
             $registers = SaleItem::query()
                 ->where('sale_items.product_id', $productId)
                 ->whereHas('sale', $inRange)
@@ -833,13 +867,141 @@ class SalesController extends Controller
         $methodOptions = $labels;
 
         // What each family of figures reflects, so the view can label the rest as
-        // "whole invoices": revenue is sliced by the product filter, payment
-        // receipts by the method filter.
+        // "whole invoices": revenue is sliced by the product filter and/or
+        // apportioned by the method filter; payment receipts by the method filter.
         $revenueSliced = $sliceByProduct;
+        $revenueApportioned = $apportionByMethod;
         $paymentSliced = $method !== null;
 
         return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'registers', 'from', 'to',
-            'products', 'methodOptions', 'productId', 'method', 'filtered', 'revenueSliced', 'paymentSliced');
+            'products', 'methodOptions', 'productId', 'method', 'filtered',
+            'revenueSliced', 'revenueApportioned', 'paymentSliced');
+    }
+
+    /**
+     * Revenue for a payment-method filter, apportioned to each matching sale's
+     * share paid via that method: share = (that method's net payments on the
+     * sale) ÷ (sale total), clamped to [0,1]. Every revenue figure below is the
+     * sale's value × its share, so split payments are attributed fairly and a
+     * sale counts once, split across its methods. When a product filter is also
+     * active the per-sale base is that product's lines instead of the whole
+     * invoice. Done in PHP over the matching sales (bounded by the report's date
+     * range) rather than one big apportioning SQL query.
+     *
+     * @return array{count:int,gross:float,discounts:float,tax:float,net:float,total:float,cogs:float,daily:\Illuminate\Support\Collection,cashiers:\Illuminate\Support\Collection,registers:\Illuminate\Support\Collection,top:\Illuminate\Support\Collection}
+     */
+    protected function methodApportionedRevenue(\Closure $inRange, string $method, ?int $productId, $tz): array
+    {
+        $sales = Sale::query()->tap($inRange)
+            ->select('id', 'completed_at', 'user_id', 'register_id', 'subtotal', 'discount_total', 'tax_total', 'total')
+            ->withSum(['payments as method_paid' => fn ($p) => $p->where('method', $method)], 'amount')
+            ->get();
+
+        $ids = $sales->pluck('id');
+
+        // Per-sale COGS (all lines) — the whole-invoice base.
+        $cogsBySale = SaleItem::whereIn('sale_id', $ids)
+            ->selectRaw('sale_id, COALESCE(SUM(unit_cost * quantity), 0) as cogs')
+            ->groupBy('sale_id')->pluck('cogs', 'sale_id');
+
+        // Per-sale product-line base, when a product filter is also active.
+        $lineBySale = collect();
+        if ($productId !== null) {
+            $lineBySale = SaleItem::whereIn('sale_id', $ids)->where('product_id', $productId)
+                ->selectRaw('sale_id,
+                    COALESCE(SUM(unit_price * quantity), 0) as gross,
+                    COALESCE(SUM(discount), 0) as discounts,
+                    COALESCE(SUM(unit_price * quantity - discount), 0) as net,
+                    COALESCE(SUM(line_total), 0) as total,
+                    COALESCE(SUM(unit_cost * quantity), 0) as cogs')
+                ->groupBy('sale_id')->get()->keyBy('sale_id');
+        }
+
+        $sum = ['gross' => 0.0, 'discounts' => 0.0, 'tax' => 0.0, 'net' => 0.0, 'total' => 0.0, 'cogs' => 0.0];
+        $daily = $byUser = $byReg = [];
+        $shareBySale = [];
+
+        foreach ($sales as $s) {
+            $saleTotal = (float) $s->total;
+            $share = $saleTotal > 0 ? min(1.0, max(0.0, (float) $s->method_paid / $saleTotal)) : 0.0;
+            $shareBySale[$s->id] = $share;
+
+            if ($productId !== null) {
+                $l = $lineBySale->get($s->id);
+                $bGross = (float) ($l->gross ?? 0);
+                $bDisc = (float) ($l->discounts ?? 0);
+                $bNet = (float) ($l->net ?? 0);
+                $bTotal = (float) ($l->total ?? 0);
+                $bCogs = (float) ($l->cogs ?? 0);
+                $bTax = $bTotal - $bNet;
+            } else {
+                $bGross = (float) $s->subtotal;
+                $bDisc = (float) $s->discount_total;
+                $bTax = (float) $s->tax_total;
+                $bNet = $bGross - $bDisc;
+                $bTotal = (float) $s->total;
+                $bCogs = (float) ($cogsBySale[$s->id] ?? 0);
+            }
+
+            $sum['gross'] += $bGross * $share;
+            $sum['discounts'] += $bDisc * $share;
+            $sum['tax'] += $bTax * $share;
+            $sum['net'] += $bNet * $share;
+            $sum['total'] += $bTotal * $share;
+            $sum['cogs'] += $bCogs * $share;
+
+            $d = Carbon::parse($s->completed_at)->setTimezone($tz)->toDateString();
+            $daily[$d] ??= ['n' => 0, 'net' => 0.0, 'tax' => 0.0, 'total' => 0.0];
+            $daily[$d]['n']++;
+            $daily[$d]['net'] += $bNet * $share;
+            $daily[$d]['tax'] += $bTax * $share;
+            $daily[$d]['total'] += $bTotal * $share;
+
+            $byUser[$s->user_id] ??= ['n' => 0, 'net' => 0.0, 'total' => 0.0];
+            $byUser[$s->user_id]['n']++;
+            $byUser[$s->user_id]['net'] += $bNet * $share;
+            $byUser[$s->user_id]['total'] += $bTotal * $share;
+
+            $byReg[$s->register_id] ??= ['n' => 0, 'net' => 0.0, 'total' => 0.0];
+            $byReg[$s->register_id]['n']++;
+            $byReg[$s->register_id]['net'] += $bNet * $share;
+            $byReg[$s->register_id]['total'] += $bTotal * $share;
+        }
+
+        // Top products: each line apportioned by its sale's share (co-purchased
+        // products kept, each at its own apportioned line revenue).
+        $topAgg = [];
+        foreach (SaleItem::whereIn('sale_id', $ids)->select('sale_id', 'product_id', 'name', 'quantity', 'line_total')->cursor() as $it) {
+            $f = $shareBySale[$it->sale_id] ?? 0.0;
+            $key = $it->product_id.'|'.$it->name;
+            $topAgg[$key] ??= ['product_id' => $it->product_id, 'name' => $it->name, 'qty' => 0.0, 'revenue' => 0.0];
+            $topAgg[$key]['qty'] += (float) $it->quantity * $f;
+            $topAgg[$key]['revenue'] += (float) $it->line_total * $f;
+        }
+
+        ksort($daily);
+
+        return [
+            'count' => $sales->count(),
+            'gross' => round($sum['gross'], 2),
+            'discounts' => round($sum['discounts'], 2),
+            'tax' => round(max(0.0, $sum['tax']), 2),
+            'net' => round($sum['net'], 2),
+            'total' => round($sum['total'], 2),
+            'cogs' => round($sum['cogs'], 2),
+            'daily' => collect($daily)->map(fn ($v, $d) => (object) [
+                'd' => $d, 'n' => $v['n'], 'net' => round($v['net'], 2), 'tax' => round($v['tax'], 2), 'total' => round($v['total'], 2),
+            ])->values(),
+            'cashiers' => collect($byUser)->map(fn ($v, $id) => (object) [
+                'user_id' => $id ?: null, 'n' => $v['n'], 'net' => round($v['net'], 2), 'total' => round($v['total'], 2),
+            ])->sortByDesc('total')->values(),
+            'registers' => collect($byReg)->map(fn ($v, $id) => (object) [
+                'register_id' => $id ?: null, 'n' => $v['n'], 'net' => round($v['net'], 2), 'total' => round($v['total'], 2),
+            ])->sortByDesc('total')->values(),
+            'top' => collect($topAgg)->map(fn ($v) => (object) [
+                'product_id' => $v['product_id'], 'name' => $v['name'], 'qty' => round($v['qty'], 3), 'revenue' => round($v['revenue'], 2),
+            ])->sortByDesc('revenue')->take(10)->values(),
+        ];
     }
 
     public function show(Sale $sale)

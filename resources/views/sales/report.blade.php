@@ -61,23 +61,27 @@
             @if ($activeMethod) paid with <span class="font-semibold text-slate-700">{{ $activeMethod }}</span>@endif.
         </p>
         <p class="mt-1 text-xs text-slate-400">
-            @if ($revenueSliced)
+            @if ($revenueSliced && $revenueApportioned)
+                Revenue and profit reflect <span class="font-medium text-slate-500">{{ $activeProduct }}</span>’s lines, apportioned to each sale’s <span class="font-medium text-slate-500">{{ $activeMethod }}</span> share.
+            @elseif ($revenueSliced)
                 Revenue, profit and the daily / cashier / register figures reflect <span class="font-medium text-slate-500">{{ $activeProduct }}</span>’s lines only.
+            @elseif ($revenueApportioned)
+                Revenue and profit are apportioned to each sale’s <span class="font-medium text-slate-500">{{ $activeMethod }}</span> share (split payments counted pro-rata).
             @endif
             @if ($paymentSliced)
                 Collected and the payment mix reflect <span class="font-medium text-slate-500">{{ $activeMethod }}</span>.
-            @endif
-            @if (! $revenueSliced || ! $paymentSliced)
-                Figures marked <span class="font-medium text-slate-500">whole invoices</span> can’t be split by this filter and cover the full matching sales.
+            @elseif ($revenueSliced)
+                Collected, outstanding and the payment mix are marked <span class="font-medium text-slate-500">whole invoices</span> — they can’t be split by product and cover the full matching sales.
             @endif
         </p>
     @endif
 </x-card>
 @php
-    // A figure family isn't sliceable by the active filter → mark it "whole
-    // invoices". Revenue can't be split by a payment method; payment receipts
+    // A figure family isn't reflected by the active filter → mark it "whole
+    // invoices". Revenue now reflects any filter (product → lines, method →
+    // apportioned), so it's never whole once filtered; payment receipts still
     // can't be split by a product.
-    $revenueWhole = $filtered && ! $revenueSliced;   // method-only filter
+    $revenueWhole = $filtered && ! $revenueSliced && ! $revenueApportioned;
     $paymentWhole = $filtered && ! $paymentSliced;   // product-only filter
     $wholeTag = '<span class="ml-1 text-xs font-normal text-slate-400">· whole invoices</span>';
 @endphp
