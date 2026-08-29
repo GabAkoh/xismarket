@@ -60,20 +60,39 @@
             @if ($activeProduct && $activeMethod) and @endif
             @if ($activeMethod) paid with <span class="font-semibold text-slate-700">{{ $activeMethod }}</span>@endif.
         </p>
+        <p class="mt-1 text-xs text-slate-400">
+            @if ($revenueSliced)
+                Revenue, profit and the daily / cashier / register figures reflect <span class="font-medium text-slate-500">{{ $activeProduct }}</span>’s lines only.
+            @endif
+            @if ($paymentSliced)
+                Collected and the payment mix reflect <span class="font-medium text-slate-500">{{ $activeMethod }}</span>.
+            @endif
+            @if (! $revenueSliced || ! $paymentSliced)
+                Figures marked <span class="font-medium text-slate-500">whole invoices</span> can’t be split by this filter and cover the full matching sales.
+            @endif
+        </p>
     @endif
 </x-card>
+@php
+    // A figure family isn't sliceable by the active filter → mark it "whole
+    // invoices". Revenue can't be split by a payment method; payment receipts
+    // can't be split by a product.
+    $revenueWhole = $filtered && ! $revenueSliced;   // method-only filter
+    $paymentWhole = $filtered && ! $paymentSliced;   // product-only filter
+    $wholeTag = '<span class="ml-1 text-xs font-normal text-slate-400">· whole invoices</span>';
+@endphp
 
 {{-- Headline KPIs (net of returns) --}}
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Net sales</p>
         <p class="mt-1 text-2xl font-bold text-slate-800">{{ $money($summary['net_after_returns']) }}</p>
-        <p class="text-xs text-slate-400 mt-1">ex-tax, after returns</p>
+        <p class="text-xs text-slate-400 mt-1">ex-tax, after returns{!! $revenueWhole ? $wholeTag : '' !!}</p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Gross profit</p>
         <p class="mt-1 text-2xl font-bold text-green-600">{{ $money($summary['profit_after_returns']) }}</p>
-        <p class="text-xs text-slate-400 mt-1">{{ number_format($summary['margin_after_returns'], 1) }}% margin · after returns</p>
+        <p class="text-xs text-slate-400 mt-1">{{ number_format($summary['margin_after_returns'], 1) }}% margin · after returns{!! $revenueWhole ? $wholeTag : '' !!}</p>
     </div>
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Sales</p>
@@ -83,13 +102,14 @@
     <div class="bg-white rounded-lg shadow-sm p-5">
         <p class="text-sm text-slate-500">Outstanding (credit)</p>
         <p class="mt-1 text-2xl font-bold {{ $summary['outstanding'] > 0 ? 'text-amber-600' : 'text-slate-800' }}">{{ $money($summary['outstanding']) }}</p>
-        <p class="text-xs text-slate-400 mt-1">collected {{ $money($summary['collected']) }}</p>
+        <p class="text-xs text-slate-400 mt-1">collected {{ $money($summary['collected']) }}{!! $paymentWhole ? $wholeTag : '' !!}</p>
     </div>
 </div>
 
 {{-- Sales vs returns breakdown --}}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="Sales (this period)">
+        @if ($revenueWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — revenue can’t be split by payment method.</p>@endif
         <dl class="text-sm space-y-1.5">
             <div class="flex justify-between"><dt class="text-slate-500">Gross</dt><dd class="font-medium text-slate-700">{{ $money($summary['gross']) }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">Discounts</dt><dd class="font-medium text-slate-700">−{{ $money($summary['discounts']) }}</dd></div>
@@ -120,6 +140,7 @@
     {{-- Payment mix --}}
     <x-card title="Payment methods">
         <x-slot:actions><a href="{{ $exportUrl('methods') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        @if ($paymentWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — payments can’t be split by product.</p>@endif
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($methods as $m)
@@ -176,6 +197,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="Sales by cashier">
         <x-slot:actions><a href="{{ $exportUrl('cashiers') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        @if ($revenueWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — revenue can’t be split by payment method.</p>@endif
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -206,6 +228,7 @@
 
     <x-card title="Sales by register">
         <x-slot:actions><a href="{{ $exportUrl('registers') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        @if ($revenueWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — revenue can’t be split by payment method.</p>@endif
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -238,6 +261,7 @@
 {{-- Daily trend --}}
 <x-card title="Daily breakdown">
     <x-slot:actions><a href="{{ $exportUrl('daily') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+    @if ($revenueWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — revenue can’t be split by payment method.</p>@endif
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>

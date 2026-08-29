@@ -588,21 +588,53 @@ class SalesController extends Controller
             return $q;
         };
 
-        // Headline totals.
-        $t = Sale::query()->tap($inRange)->selectRaw('
-            COUNT(*) as count,
-            COALESCE(SUM(subtotal), 0) as gross,
-            COALESCE(SUM(discount_total), 0) as discounts,
-            COALESCE(SUM(tax_total), 0) as tax,
-            COALESCE(SUM(total), 0) as total,
-            COALESCE(SUM(balance_due), 0) as outstanding
-        ')->first();
+        // Headline revenue totals. With a product filter active these come from
+        // that product's SALE ITEM lines, so every revenue figure below reflects
+        // the product rather than the whole invoice; otherwise from the sale
+        // invoices as before. Payment-/invoice-level figures (collected,
+        // outstanding) can't be attributed to a single product, so they stay
+        // whole-invoice — the view labels them "whole invoices" when filtered.
+        $sliceByProduct = $productId !== null;
 
-        $cogs = round((float) SaleItem::whereHas('sale', $inRange)
-            ->selectRaw('COALESCE(SUM(unit_cost * quantity), 0) as cogs')
-            ->value('cogs'), 2);
-
-        $net = round((float) $t->gross - (float) $t->discounts, 2);   // ex-tax revenue
+        if ($sliceByProduct) {
+            // Line economics: net = gross − line discount, line_total = net + tax.
+            // (Cart-level/loyalty discounts are sale-wide and not attributed here.)
+            $r = SaleItem::whereHas('sale', $inRange)->where('product_id', $productId)
+                ->selectRaw('
+                    COALESCE(SUM(unit_price * quantity), 0) as gross,
+                    COALESCE(SUM(discount), 0) as discounts,
+                    COALESCE(SUM(unit_price * quantity - discount), 0) as net,
+                    COALESCE(SUM(line_total), 0) as total,
+                    COALESCE(SUM(unit_cost * quantity), 0) as cogs
+                ')->first();
+            $count = (int) Sale::query()->tap($inRange)->count();
+            $gross = round((float) $r->gross, 2);
+            $discounts = round((float) $r->discounts, 2);
+            $net = round((float) $r->net, 2);
+            $total = round((float) $r->total, 2);
+            $cogs = round((float) $r->cogs, 2);
+            $tax = round(max(0, $total - $net), 2);   // line_total already carries line tax
+            $outstanding = round((float) Sale::query()->tap($inRange)->sum('balance_due'), 2);
+        } else {
+            $t = Sale::query()->tap($inRange)->selectRaw('
+                COUNT(*) as count,
+                COALESCE(SUM(subtotal), 0) as gross,
+                COALESCE(SUM(discount_total), 0) as discounts,
+                COALESCE(SUM(tax_total), 0) as tax,
+                COALESCE(SUM(total), 0) as total,
+                COALESCE(SUM(balance_due), 0) as outstanding
+            ')->first();
+            $count = (int) $t->count;
+            $gross = round((float) $t->gross, 2);
+            $discounts = round((float) $t->discounts, 2);
+            $tax = round((float) $t->tax, 2);
+            $total = round((float) $t->total, 2);
+            $net = round($gross - $discounts, 2);   // ex-tax revenue
+            $cogs = round((float) SaleItem::whereHas('sale', $inRange)
+                ->selectRaw('COALESCE(SUM(unit_cost * quantity), 0) as cogs')
+                ->value('cogs'), 2);
+            $outstanding = round((float) $t->outstanding, 2);
+        }
         $profit = round($net - $cogs, 2);
 
         // Returns processed in this period, taken from the reversing journal entries
@@ -661,22 +693,25 @@ class SalesController extends Controller
 
         // Money actually kept = every payment net of refunds (a refund is a
         // negative payment row), so a refunded sale nets to zero rather than
-        // showing its receipts as collected.
-        $collected = round((float) Payment::whereHas('sale', $inRange)->sum('amount'), 2);
+        // showing its receipts as collected. A method filter narrows this to that
+        // method's receipts (it's the one payment figure that IS method-sliceable).
+        $collected = round((float) Payment::whereHas('sale', $inRange)
+            ->when($method !== null, fn ($q) => $q->where('method', $method))
+            ->sum('amount'), 2);
 
         $summary = [
-            'count' => (int) $t->count,
-            'gross' => round((float) $t->gross, 2),
-            'discounts' => round((float) $t->discounts, 2),
-            'tax' => round((float) $t->tax, 2),
-            'total' => round((float) $t->total, 2),
+            'count' => $count,
+            'gross' => $gross,
+            'discounts' => $discounts,
+            'tax' => $tax,
+            'total' => $total,
             'net' => $net,
             'cogs' => $cogs,
             'profit' => $profit,
             // Money actually kept, net of refunds (see $collected above).
             'collected' => $collected,
-            'outstanding' => round((float) $t->outstanding, 2),
-            'avg' => (int) $t->count > 0 ? round((float) $t->total / (int) $t->count, 2) : 0.0,
+            'outstanding' => $outstanding,
+            'avg' => $count > 0 ? round($total / $count, 2) : 0.0,
             // Returns in the period + net-of-returns bottom lines.
             'returns_net' => $returnsNet,
             'returns_tax' => $returnsTax,
@@ -709,14 +744,30 @@ class SalesController extends Controller
 
         // Per-day breakdown, bucketed by the store-local date (completed_at is
         // stored UTC; CONVERT_TZ with the store offset shifts it before DATE()).
-        $daily = Sale::query()->tap($inRange)
-            ->selectRaw("DATE(CONVERT_TZ(completed_at, '+00:00', ?)) as d, COUNT(*) as n,
-                COALESCE(SUM(subtotal - discount_total), 0) as net,
-                COALESCE(SUM(tax_total), 0) as tax,
-                COALESCE(SUM(total), 0) as total", [$tzOffset])
-            ->groupBy('d')
-            ->orderBy('d')
-            ->get();
+        // Sliced to the product's lines when a product filter is active.
+        if ($sliceByProduct) {
+            $daily = SaleItem::query()
+                ->where('sale_items.product_id', $productId)
+                ->whereHas('sale', $inRange)
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->selectRaw("DATE(CONVERT_TZ(sales.completed_at, '+00:00', ?)) as d,
+                    COUNT(DISTINCT sales.id) as n,
+                    COALESCE(SUM(sale_items.unit_price * sale_items.quantity - sale_items.discount), 0) as net,
+                    COALESCE(SUM(sale_items.line_total - (sale_items.unit_price * sale_items.quantity - sale_items.discount)), 0) as tax,
+                    COALESCE(SUM(sale_items.line_total), 0) as total", [$tzOffset])
+                ->groupBy('d')
+                ->orderBy('d')
+                ->get();
+        } else {
+            $daily = Sale::query()->tap($inRange)
+                ->selectRaw("DATE(CONVERT_TZ(completed_at, '+00:00', ?)) as d, COUNT(*) as n,
+                    COALESCE(SUM(subtotal - discount_total), 0) as net,
+                    COALESCE(SUM(tax_total), 0) as tax,
+                    COALESCE(SUM(total), 0) as total", [$tzOffset])
+                ->groupBy('d')
+                ->orderBy('d')
+                ->get();
+        }
 
         // Top products by revenue.
         $top = SaleItem::whereHas('sale', $inRange)
@@ -726,25 +777,51 @@ class SalesController extends Controller
             ->limit(10)
             ->get();
 
-        // Per-cashier breakdown.
-        $cashiers = Sale::query()->tap($inRange)
-            ->selectRaw('user_id, COUNT(*) as n,
-                COALESCE(SUM(subtotal - discount_total), 0) as net,
-                COALESCE(SUM(total), 0) as total')
-            ->groupBy('user_id')
-            ->orderByDesc('total')
-            ->get();
+        // Per-cashier breakdown (product-sliced when a product filter is active).
+        if ($sliceByProduct) {
+            $cashiers = SaleItem::query()
+                ->where('sale_items.product_id', $productId)
+                ->whereHas('sale', $inRange)
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->selectRaw('sales.user_id as user_id, COUNT(DISTINCT sales.id) as n,
+                    COALESCE(SUM(sale_items.unit_price * sale_items.quantity - sale_items.discount), 0) as net,
+                    COALESCE(SUM(sale_items.line_total), 0) as total')
+                ->groupBy('sales.user_id')
+                ->orderByDesc('total')
+                ->get();
+        } else {
+            $cashiers = Sale::query()->tap($inRange)
+                ->selectRaw('user_id, COUNT(*) as n,
+                    COALESCE(SUM(subtotal - discount_total), 0) as net,
+                    COALESCE(SUM(total), 0) as total')
+                ->groupBy('user_id')
+                ->orderByDesc('total')
+                ->get();
+        }
         $names = \App\Models\User::whereIn('id', $cashiers->pluck('user_id')->filter())->pluck('name', 'id');
         $cashiers->each(fn ($c) => $c->name = $names[$c->user_id] ?? 'Unknown');
 
-        // Per-register breakdown.
-        $registers = Sale::query()->tap($inRange)
-            ->selectRaw('register_id, COUNT(*) as n,
-                COALESCE(SUM(subtotal - discount_total), 0) as net,
-                COALESCE(SUM(total), 0) as total')
-            ->groupBy('register_id')
-            ->orderByDesc('total')
-            ->get();
+        // Per-register breakdown (product-sliced when a product filter is active).
+        if ($sliceByProduct) {
+            $registers = SaleItem::query()
+                ->where('sale_items.product_id', $productId)
+                ->whereHas('sale', $inRange)
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->selectRaw('sales.register_id as register_id, COUNT(DISTINCT sales.id) as n,
+                    COALESCE(SUM(sale_items.unit_price * sale_items.quantity - sale_items.discount), 0) as net,
+                    COALESCE(SUM(sale_items.line_total), 0) as total')
+                ->groupBy('sales.register_id')
+                ->orderByDesc('total')
+                ->get();
+        } else {
+            $registers = Sale::query()->tap($inRange)
+                ->selectRaw('register_id, COUNT(*) as n,
+                    COALESCE(SUM(subtotal - discount_total), 0) as net,
+                    COALESCE(SUM(total), 0) as total')
+                ->groupBy('register_id')
+                ->orderByDesc('total')
+                ->get();
+        }
         $regNames = \App\Models\Pos\Register::whereIn('id', $registers->pluck('register_id')->filter())->pluck('name', 'id');
         $registers->each(fn ($r) => $r->name = $regNames[$r->register_id] ?? 'No register');
 
@@ -755,8 +832,14 @@ class SalesController extends Controller
             ->orderBy('name')->get(['id', 'name']);
         $methodOptions = $labels;
 
+        // What each family of figures reflects, so the view can label the rest as
+        // "whole invoices": revenue is sliced by the product filter, payment
+        // receipts by the method filter.
+        $revenueSliced = $sliceByProduct;
+        $paymentSliced = $method !== null;
+
         return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'registers', 'from', 'to',
-            'products', 'methodOptions', 'productId', 'method', 'filtered');
+            'products', 'methodOptions', 'productId', 'method', 'filtered', 'revenueSliced', 'paymentSliced');
     }
 
     public function show(Sale $sale)
