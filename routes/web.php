@@ -8,10 +8,14 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\SearchSettingsController;
+use App\Http\Controllers\Storefront\FeedController;
 use Illuminate\Support\Facades\Route;
 
 // PWA web app manifest (public; branded per tenant).
 Route::get('manifest.webmanifest', [ManifestController::class, 'show'])->name('manifest');
+
+// Public product feed for the default store (JSON list of active products).
+Route::get('feed.json', FeedController::class)->name('feed');
 
 Route::get('/', function () {
     // Logged-in staff go to the admin dashboard. Everyone else lands on the
