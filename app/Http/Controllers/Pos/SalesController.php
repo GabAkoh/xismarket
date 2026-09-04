@@ -510,6 +510,9 @@ class SalesController extends Controller
                 $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)])
                     ->when($data['creditExtended'], fn ($rows) => $rows->push([
                         'On credit (receivable, not cash)', $data['creditExtended']->n, $num($data['creditExtended']->amount),
+                    ]))
+                    ->concat($data['settlementsReceived']->map(fn ($s) => [
+                        'Settlement received (earlier credit sale): '.$s->label, $s->n, $num($s->amount),
                     ]))],
             'products' => ['top-products', ['Product', 'Qty', 'Revenue'],
                 $data['top']->map(fn ($p) => [$p->name, $qty($p->qty), $num($p->revenue)])],
@@ -587,6 +590,9 @@ class SalesController extends Controller
                 $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)])
                     ->when($data['creditExtended'], fn ($rows) => $rows->push([
                         'On credit (receivable, not cash)', $data['creditExtended']->n, $num($data['creditExtended']->amount),
+                    ]))
+                    ->concat($data['settlementsReceived']->map(fn ($s) => [
+                        'Settlement received (earlier credit sale): '.$s->label, $s->n, $num($s->amount),
                     ])));
             $section('Top products', ['Product', 'Qty', 'Revenue'],
                 $data['top']->map(fn ($p) => [$p->name, $qty($p->qty), $num($p->revenue)]));
@@ -823,6 +829,37 @@ class SalesController extends Controller
                 'n' => (int) $m->n,
             ]);
 
+        // Settlements RECEIVED in the period on credit sales completed EARLIER.
+        // The card above counts a sale's payments against the sale's completion
+        // date, so a follow-up payment on an older credit sale lands in that older
+        // period, not the day the cash actually came in — leaving it invisible
+        // here. Surface it as its own by-method breakdown (money received now, on
+        // sales outside this period). Sales completed IN the period are excluded —
+        // their settlements are already in the card, so this never double-counts.
+        // Shown only unfiltered: like returns, it can't be sliced by product, and
+        // it's a cash-received figure rather than part of this period's sales.
+        $settlementsReceived = collect();
+        if (! $filtered) {
+            $settlementsReceived = Payment::query()
+                ->where('kind', 'settlement')
+                ->whereBetween('paid_at', [$fromU, $toU])
+                ->whereHas('sale', fn ($s) => $s
+                    ->whereNotIn('status', ['void', 'refunded'])
+                    ->where(fn ($q) => $q->whereNull('completed_at')
+                        ->orWhereNotBetween('completed_at', [$fromU, $toU])))
+                ->selectRaw('method, COALESCE(SUM(amount), 0) as amount, COUNT(*) as n')
+                ->groupBy('method')
+                ->havingRaw('COALESCE(SUM(amount), 0) <> 0')
+                ->orderByDesc('amount')
+                ->get()
+                ->map(fn ($m) => (object) [
+                    'method' => $m->method,
+                    'label' => $labels[$m->method] ?? ucfirst(str_replace('_', ' ', $m->method)),
+                    'amount' => round((float) $m->amount, 2),
+                    'n' => (int) $m->n,
+                ]);
+        }
+
         // Per-day breakdown, bucketed by the store-local date (completed_at is
         // stored UTC; CONVERT_TZ with the store offset shifts it before DATE()).
         // Sliced to the product's lines (product filter) or apportioned to the
@@ -939,7 +976,7 @@ class SalesController extends Controller
 
         return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'registers', 'from', 'to',
             'products', 'methodOptions', 'productId', 'method', 'filtered',
-            'revenueSliced', 'revenueApportioned', 'paymentSliced', 'creditExtended');
+            'revenueSliced', 'revenueApportioned', 'paymentSliced', 'creditExtended', 'settlementsReceived');
     }
 
     /**

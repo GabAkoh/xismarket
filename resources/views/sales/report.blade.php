@@ -183,6 +183,26 @@
                 </div>
             </div>
         @endif
+        @if ($settlementsReceived->isNotEmpty())
+            {{-- Follow-up payments collected in this period on credit sales made
+                 earlier. The card above books payments to the sale's date, so these
+                 land in the older period — shown here so the day's actual receipts
+                 by method are complete. Not added to the card total (different sales). --}}
+            <div class="mt-3 border-t border-dashed pt-3">
+                <p class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Settlements received <span class="normal-case font-normal text-slate-400">(on earlier credit sales)</span></p>
+                <table class="w-full text-sm">
+                    <tbody class="divide-y">
+                        @foreach ($settlementsReceived as $s)
+                            <tr>
+                                <td class="py-1.5 text-slate-600">{{ $s->label }}</td>
+                                <td class="py-1.5 text-right text-slate-400 text-xs">{{ number_format($s->n) }}×</td>
+                                <td class="py-1.5 text-right font-medium text-emerald-600">{{ $money($s->amount) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
     </x-card>
 
     {{-- Top products --}}
