@@ -164,7 +164,10 @@
                         $methodName = $methodLabels[$payment->method] ?? \Illuminate\Support\Str::of((string) $payment->method)->replace('_', ' ')->title();
                     @endphp
                     <li class="flex justify-between {{ $isRefund ? 'text-red-600' : '' }}">
-                        <span class="{{ $isRefund ? '' : 'text-slate-500' }}">{{ $methodName }}{{ $isRefund ? ' refund' : '' }} @if($payment->reference)<span class="text-xs text-slate-400">({{ $payment->reference }})</span>@endif</span>
+                        <span class="{{ $isRefund ? '' : 'text-slate-500' }}">
+                            {{ $methodName }}{{ $isRefund ? ' refund' : '' }} @if($payment->reference)<span class="text-xs text-slate-400">({{ $payment->reference }})</span>@endif
+                            @if($payment->paid_at)<span class="block text-xs text-slate-400">{{ $payment->paid_at->format('d M Y H:i') }}</span>@endif
+                        </span>
                         <span>{{ $isRefund ? '−' : '' }}{{ $symbol }}{{ number_format(abs((float) $payment->amount), 2) }}</span>
                     </li>
                 @empty
