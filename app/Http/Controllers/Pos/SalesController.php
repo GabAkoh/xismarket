@@ -468,11 +468,14 @@ class SalesController extends Controller
     {
         // Per-sale credit = total − Σ(kind='sale' payments). Keep only the sales
         // that were left with a balance owing at checkout.
+        // MAX(sales.total) (one row per sale.id, so MAX = the sale's total) keeps
+        // this valid under MySQL's ONLY_FULL_GROUP_BY; HAVING then filters on the
+        // SELECT alias — a raw sales.total isn't allowed in a HAVING clause.
         $perSale = Sale::query()->tap($scope)
             ->leftJoin('payments as cp', fn ($j) => $j->on('cp.sale_id', '=', 'sales.id')->where('cp.kind', '=', 'sale'))
             ->groupBy('sales.id')
-            ->havingRaw('COALESCE(SUM(cp.amount), 0) < sales.total - 0.005')
-            ->selectRaw('sales.total - COALESCE(SUM(cp.amount), 0) as credit');
+            ->selectRaw('MAX(sales.total) - COALESCE(SUM(cp.amount), 0) as credit')
+            ->havingRaw('credit > 0.005');
 
         $agg = DB::query()->fromSub($perSale, 'c')
             ->selectRaw('COUNT(*) as n, COALESCE(SUM(credit), 0) as amount')
