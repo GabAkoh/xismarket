@@ -147,6 +147,22 @@
                 </table>
                 <p class="mt-2 text-xs text-slate-400">Excludes cash-in (recorded by reason, not a tender). Wallet means store credit redeemed, not new cash.</p>
             @endif
+
+            @if ($creditExtended)
+                {{-- New receivables raised at the point of sale. Deliberately below
+                     the total above: credit isn't money received — it lands there
+                     later as a settlement (under its actual tender) once paid. --}}
+                <div class="mt-4 border-t border-dashed pt-3">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">On credit (receivable, not cash)</p>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-slate-600">Sold on credit this period</span>
+                        <span class="flex items-center gap-3">
+                            <span class="text-slate-400">{{ number_format($creditExtended->n) }}</span>
+                            <span class="font-semibold text-amber-600">{{ $money($creditExtended->amount) }}</span>
+                        </span>
+                    </div>
+                </div>
+            @endif
         </x-card>
     </div>
 </div>

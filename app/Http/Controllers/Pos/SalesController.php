@@ -12,6 +12,7 @@ use App\Services\Pos\SaleService;
 use App\Support\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class SalesController extends Controller
 {
@@ -313,6 +314,12 @@ class SalesController extends Controller
             }
             $section('All received by method', $data['combined'], $data['totalReceived']);
 
+            if ($data['creditExtended']) {
+                $put(['On credit (receivable, not cash)', 'Count', 'Amount']);
+                $put(['Sold on credit', $data['creditExtended']->n, $num($data['creditExtended']->amount)]);
+                $put([]);
+            }
+
             $put(['Totals']);
             $put(['Total received', '', $num($data['totalReceived'])]);
             $put(['Total paid out', '', $num($data['totalOut'])]);
@@ -428,11 +435,54 @@ class SalesController extends Controller
             ['key' => 'refunds', 'title' => 'Refunds', 'rows' => $posRefunds, 'total' => $sum($posRefunds)],
         ];
 
+        // Sold on credit in the period — new receivables, shown as a line kept
+        // OUT of the received totals (it isn't money in hand). Scoped by the
+        // SALE's completed_at, since a credit tender has no payment/paid_at.
+        $creditExtended = $this->creditExtendedRow(
+            fn ($q) => $q->whereNotIn('status', ['void', 'refunded'])->whereBetween('completed_at', [$fromU, $toU])
+        );
+
         $totalReceived = round($sum($posSales) + $sum($settlements) + $sum($online) + $sum($cashIn), 2);
         $totalOut = round($sum($cashOut) + $sum($posRefunds), 2);
         $net = round($totalReceived - $totalOut, 2);
 
-        return compact('from', 'to', 'sources', 'outflows', 'combined', 'totalReceived', 'totalOut', 'net');
+        return compact('from', 'to', 'sources', 'outflows', 'combined', 'totalReceived', 'totalOut', 'net', 'creditExtended');
+    }
+
+    /**
+     * "Sold on credit" for a set of sales, as a single pseudo-method row — the
+     * new accounts receivable those sales created in the period.
+     *
+     * A credit tender is deliberately NOT a Payment (SaleService captures it as
+     * balance_due), so it never appears in the payment-method tables. This
+     * derives it from each sale's total minus what was actually tendered at
+     * checkout (kind='sale' payments), i.e. the receivable ORIGINALLY raised.
+     * Settlements (kind='settlement') are excluded, so the figure never drifts
+     * as the balance is paid down and never double-counts the settlement
+     * payments that DO show as money received.
+     *
+     * @param  \Closure  $scope  applies the caller's row filters (date, status, product) to a Sale query
+     * @return object{n:int, amount:float}|null  null when nothing was sold on credit
+     */
+    protected function creditExtendedRow(\Closure $scope): ?object
+    {
+        // Per-sale credit = total − Σ(kind='sale' payments). Keep only the sales
+        // that were left with a balance owing at checkout.
+        $perSale = Sale::query()->tap($scope)
+            ->leftJoin('payments as cp', fn ($j) => $j->on('cp.sale_id', '=', 'sales.id')->where('cp.kind', '=', 'sale'))
+            ->groupBy('sales.id')
+            ->havingRaw('COALESCE(SUM(cp.amount), 0) < sales.total - 0.005')
+            ->selectRaw('sales.total - COALESCE(SUM(cp.amount), 0) as credit');
+
+        $agg = DB::query()->fromSub($perSale, 'c')
+            ->selectRaw('COUNT(*) as n, COALESCE(SUM(credit), 0) as amount')
+            ->first();
+
+        if (! $agg || (float) $agg->amount <= 0.005) {
+            return null;
+        }
+
+        return (object) ['n' => (int) $agg->n, 'amount' => round((float) $agg->amount, 2)];
     }
 
     /**
@@ -454,7 +504,10 @@ class SalesController extends Controller
 
         [$name, $header, $rows] = match ($request->input('section')) {
             'methods' => ['payment-methods', ['Method', 'Count', 'Amount'],
-                $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)])],
+                $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)])
+                    ->when($data['creditExtended'], fn ($rows) => $rows->push([
+                        'On credit (receivable, not cash)', $data['creditExtended']->n, $num($data['creditExtended']->amount),
+                    ]))],
             'products' => ['top-products', ['Product', 'Qty', 'Revenue'],
                 $data['top']->map(fn ($p) => [$p->name, $qty($p->qty), $num($p->revenue)])],
             'cashiers' => ['cashiers', ['Cashier', 'Sales', 'Net', 'Total'],
@@ -528,7 +581,10 @@ class SalesController extends Controller
             ]);
 
             $section('Payment methods', ['Method', 'Count', 'Amount'],
-                $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)]));
+                $data['methods']->map(fn ($m) => [$m->label, $m->n, $num($m->amount)])
+                    ->when($data['creditExtended'], fn ($rows) => $rows->push([
+                        'On credit (receivable, not cash)', $data['creditExtended']->n, $num($data['creditExtended']->amount),
+                    ])));
             $section('Top products', ['Product', 'Qty', 'Revenue'],
                 $data['top']->map(fn ($p) => [$p->name, $qty($p->qty), $num($p->revenue)]));
             $section('Sales by cashier', ['Cashier', 'Sales', 'Net', 'Total'],
@@ -873,9 +929,14 @@ class SalesController extends Controller
         $revenueApportioned = $apportionByMethod;
         $paymentSliced = $method !== null;
 
+        // Amount sold on credit in the period (new receivables), shown as a line
+        // separate from the money-received method mix. Omitted under a method
+        // filter — that view is scoped to one tender, and credit isn't one.
+        $creditExtended = $method === null ? $this->creditExtendedRow($inRange) : null;
+
         return compact('summary', 'methods', 'daily', 'top', 'cashiers', 'registers', 'from', 'to',
             'products', 'methodOptions', 'productId', 'method', 'filtered',
-            'revenueSliced', 'revenueApportioned', 'paymentSliced');
+            'revenueSliced', 'revenueApportioned', 'paymentSliced', 'creditExtended');
     }
 
     /**

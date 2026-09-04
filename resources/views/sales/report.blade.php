@@ -169,6 +169,20 @@
                 @endforelse
             </tbody>
         </table>
+        @if ($creditExtended)
+            {{-- Kept out of the method mix above: credit is a receivable raised at
+                 the point of sale, not money received. Shows up as a settlement
+                 (under its actual tender) once the customer pays it down. --}}
+            <div class="mt-3 border-t border-dashed pt-3">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-600">On credit <span class="text-xs text-slate-400">(receivable, not cash)</span></span>
+                    <span class="flex items-center gap-3">
+                        <span class="text-slate-400 text-xs">{{ number_format($creditExtended->n) }}×</span>
+                        <span class="font-semibold text-amber-600">{{ $money($creditExtended->amount) }}</span>
+                    </span>
+                </div>
+            </div>
+        @endif
     </x-card>
 
     {{-- Top products --}}
