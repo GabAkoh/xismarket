@@ -26,6 +26,7 @@
     </x-card>
 
     <x-card title="Lines">
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -77,6 +78,7 @@
                 </tr>
             </tfoot>
         </table>
+        </div>
 
         <button type="button" @click="addLine()" class="mt-3 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">+ Add line</button>
     </x-card>

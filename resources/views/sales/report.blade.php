@@ -145,6 +145,7 @@
     <x-card title="Payment methods">
         <x-slot:actions><a href="{{ $exportUrl('methods') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
         @if ($paymentWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — payments can’t be split by product.</p>@endif
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($methods as $m)
@@ -169,6 +170,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
         @if ($creditExtended)
             {{-- Kept out of the method mix above: credit is a receivable raised at
                  the point of sale, not money received. Shows up as a settlement
@@ -190,6 +192,7 @@
                  by method are complete. Not added to the card total (different sales). --}}
             <div class="mt-3 border-t border-dashed pt-3">
                 <p class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Settlements received <span class="normal-case font-normal text-slate-400">(on earlier credit sales)</span></p>
+                <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <tbody class="divide-y">
                         @foreach ($settlementsReceived as $s)
@@ -201,6 +204,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             </div>
         @endif
     </x-card>
@@ -208,6 +212,7 @@
     {{-- Top products --}}
     <x-card title="Top products">
         <x-slot:actions><a href="{{ $exportUrl('products') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr><th class="py-2">Product</th><th class="text-right">Qty</th><th class="text-right">Revenue</th></tr>
@@ -224,6 +229,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 </div>
 
@@ -236,6 +242,7 @@
     <x-card title="Sales by cashier">
         <x-slot:actions><a href="{{ $exportUrl('cashiers') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
         @if ($revenueWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — revenue can’t be split by payment method.</p>@endif
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -262,11 +269,13 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 
     <x-card title="Sales by register">
         <x-slot:actions><a href="{{ $exportUrl('registers') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
         @if ($revenueWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — revenue can’t be split by payment method.</p>@endif
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -293,6 +302,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 </div>
 
@@ -300,6 +310,7 @@
 <x-card title="Daily breakdown">
     <x-slot:actions><a href="{{ $exportUrl('daily') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
     @if ($revenueWhole)<p class="mb-2 text-xs text-slate-400">Whole invoices — revenue can’t be split by payment method.</p>@endif
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
@@ -327,5 +338,6 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </x-card>
 @endsection

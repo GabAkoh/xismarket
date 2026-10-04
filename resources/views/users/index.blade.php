@@ -9,6 +9,7 @@
 </x-page-header>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Name</th><th>Email</th><th>Roles</th><th>Status</th><th></th></tr>
@@ -50,6 +51,7 @@
             @endforeach
         </tbody>
     </table>
+    </div>
     <div class="mt-4">{{ $users->links() }}</div>
 </x-card>
 @endsection

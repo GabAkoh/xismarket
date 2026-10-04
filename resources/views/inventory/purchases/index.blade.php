@@ -9,6 +9,7 @@
 </x-page-header>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Reference</th><th>Supplier</th><th>Warehouse</th><th class="text-right">Items</th><th class="text-right">Total</th><th>Status</th><th></th></tr>
@@ -37,6 +38,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
     <div class="mt-4">{{ $orders->links() }}</div>
 </x-card>
 @endsection

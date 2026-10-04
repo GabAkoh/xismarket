@@ -23,6 +23,7 @@
 </x-page-header>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
@@ -63,6 +64,7 @@
             </tfoot>
         @endif
     </table>
+    </div>
     <p class="mt-3 text-xs text-slate-400">
         A sale split across methods contributes only its {{ $label }} portion here, so this total matches the {{ $label }} figure on the {{ $source === 'pos-receipts' ? 'payments summary' : 'report' }}. Refunds appear as negative amounts.
     </p>

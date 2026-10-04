@@ -38,6 +38,7 @@
 </x-card>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Tracking</th><th>Order</th><th>Recipient</th><th>Address</th><th>Driver</th><th>Status</th><th class="text-right">Fee</th><th></th></tr>
@@ -59,6 +60,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
     <div class="mt-4">{{ $deliveries->links() }}</div>
 </x-card>
 @endsection

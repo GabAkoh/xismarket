@@ -86,6 +86,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="Order status">
         <x-slot:actions><a href="{{ $exportUrl('status') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b"><tr><th class="py-2">Status</th><th class="text-right">Orders</th><th class="text-right">Value</th><th class="pl-4 w-1/4">&nbsp;</th></tr></thead>
             <tbody class="divide-y">
@@ -101,10 +102,12 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 
     <x-card title="Fulfilment">
         <x-slot:actions><a href="{{ $exportUrl('fulfilment') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($fulfilment as $f)
@@ -118,6 +121,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 </div>
 
@@ -125,6 +129,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="Shipping methods">
         <x-slot:actions><a href="{{ $exportUrl('shipping') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($shipping as $s)
@@ -138,6 +143,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 </div>
 
@@ -145,6 +151,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="Payment methods">
         <x-slot:actions><a href="{{ $exportUrl('methods') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($methods as $m)
@@ -158,10 +165,12 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 
     <x-card title="Top products">
         <x-slot:actions><a href="{{ $exportUrl('products') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b"><tr><th class="py-2">Product</th><th class="text-right">Qty</th><th class="text-right">Revenue</th></tr></thead>
             <tbody class="divide-y">
@@ -176,12 +185,14 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 </div>
 
 {{-- Daily trend --}}
 <x-card title="Daily breakdown">
     <x-slot:actions><a href="{{ $exportUrl('daily') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Date</th><th class="text-right">Orders</th><th class="text-right">Net</th><th class="text-right">Tax</th><th class="text-right">Total</th><th class="pl-4 w-1/3">&nbsp;</th></tr>
@@ -201,5 +212,6 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </x-card>
 @endsection

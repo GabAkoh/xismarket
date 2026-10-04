@@ -33,6 +33,7 @@
                        class="w-full sm:w-64 rounded-md border border-slate-300 p-2 text-sm">
             </form>
 
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="text-left text-slate-400 border-b">
                     <tr><th class="py-2">Customer</th><th>Phone</th><th class="text-right">Balance</th><th></th></tr>
@@ -55,6 +56,7 @@
                     @endforelse
                 </tbody>
             </table>
+            </div>
             <div class="mt-4">{{ $customers->links() }}</div>
         </x-card>
     </div>

@@ -45,6 +45,7 @@
     </div>
 
     {{-- Ledger --}}
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
@@ -85,6 +86,7 @@
             </tr>
         </tfoot>
     </table>
+    </div>
 
     {{-- Closing balance --}}
     <div class="mt-6 flex justify-end">

@@ -10,6 +10,7 @@
 
 @forelse ($grouped as $type => $accounts)
     <x-card title="{{ ucfirst($type) }}" class="mb-5">
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr><th class="py-2 w-24">Code</th><th>Name</th><th>Subtype</th><th class="text-right">Balance</th><th>Status</th><th></th></tr>
@@ -41,6 +42,7 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     </x-card>
 @empty
     <x-card>

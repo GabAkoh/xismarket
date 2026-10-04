@@ -57,6 +57,7 @@
     <div class="lg:col-span-2 bg-white rounded-lg shadow-sm p-5">
         <h2 class="font-semibold text-slate-800 mb-4">Recent sales</h2>
         @if (count($recentSales))
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="text-left text-slate-400 border-b">
                     <tr><th class="py-2">Reference</th><th>Status</th><th class="text-right">Total</th><th class="text-right">When</th></tr>
@@ -72,6 +73,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
         @else
             <p class="text-sm text-slate-400">No sales yet. Open the <a href="{{ route('pos.index') }}" class="text-indigo-600">register</a> to make your first sale.</p>
         @endif

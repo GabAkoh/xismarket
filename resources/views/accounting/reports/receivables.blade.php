@@ -32,6 +32,7 @@
 
 {{-- Aging summary by customer --}}
 <x-card title="Aging by customer" class="mb-6">
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
@@ -82,11 +83,13 @@
             </tfoot>
         @endif
     </table>
+    </div>
 </x-card>
 
 {{-- Invoice-level detail --}}
 @if ($customers->isNotEmpty())
     <x-card title="Outstanding invoices">
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr>
@@ -117,6 +120,7 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     </x-card>
 @endif
 

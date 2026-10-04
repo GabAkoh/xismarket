@@ -9,6 +9,7 @@
 </x-page-header>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Name</th><th class="text-right">Rate</th><th>Status</th><th></th></tr>
@@ -40,5 +41,6 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </x-card>
 @endsection

@@ -9,6 +9,7 @@
 </x-page-header>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Role</th><th>Description</th><th class="text-center">Permissions</th><th class="text-center">Users</th><th></th></tr>
@@ -38,5 +39,6 @@
             @endforeach
         </tbody>
     </table>
+    </div>
 </x-card>
 @endsection

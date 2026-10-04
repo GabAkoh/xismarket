@@ -35,6 +35,7 @@
 
     <div class="mt-4">
         <x-card title="Line items">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="text-left text-slate-400 border-b">
                     <tr><th class="py-2">Product</th><th class="w-32">Quantity</th><th class="w-32">Unit cost</th><th class="w-10"></th></tr>
@@ -72,6 +73,7 @@
                     </template>
                 </tbody>
             </table>
+            </div>
             <button type="button" @click="addLine()" class="mt-3 text-sm text-indigo-600 hover:underline">+ Add line</button>
         </x-card>
     </div>

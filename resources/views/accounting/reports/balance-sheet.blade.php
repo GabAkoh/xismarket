@@ -19,6 +19,7 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <x-card title="Assets">
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <tbody class="divide-y">
                 @forelse ($assets as $row)
@@ -35,10 +36,12 @@
                 </tr>
             </tbody>
         </table>
+        </div>
     </x-card>
 
     <div class="space-y-4">
         <x-card title="Liabilities">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <tbody class="divide-y">
                     @forelse ($liabilities as $row)
@@ -55,9 +58,11 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
         </x-card>
 
         <x-card title="Equity">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <tbody class="divide-y">
                     @foreach ($equity as $row)
@@ -76,6 +81,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
         </x-card>
     </div>
 </div>

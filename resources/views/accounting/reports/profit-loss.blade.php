@@ -22,6 +22,7 @@
 </x-card>
 
 <x-card title="Income">
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <tbody class="divide-y">
             @forelse ($income as $row)
@@ -38,9 +39,11 @@
             </tr>
         </tbody>
     </table>
+    </div>
 </x-card>
 
 <x-card title="Expenses" class="mt-4">
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <tbody class="divide-y">
             @forelse ($expense as $row)
@@ -57,6 +60,7 @@
             </tr>
         </tbody>
     </table>
+    </div>
 </x-card>
 
 <x-card class="mt-4">

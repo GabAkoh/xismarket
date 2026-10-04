@@ -28,6 +28,7 @@
 </div>
 
 <x-card title="Line items">
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Product</th><th class="text-right">Quantity</th><th class="text-right">Unit cost</th><th class="text-right">Line total</th></tr>
@@ -49,6 +50,7 @@
             </tr>
         </tfoot>
     </table>
+    </div>
     @if ($purchase->note)
         <p class="mt-4 text-sm text-slate-500">{{ $purchase->note }}</p>
     @endif
