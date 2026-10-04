@@ -95,13 +95,25 @@
             </div>
             <div class="flex-1 overflow-y-auto p-4">
                 @php
-                    // Responsive ramp down from the configured wide-screen column count
-                    // (Tailwind CDN generates these literal classes at runtime).
+                    // Responsive ramp down from the configured wide-screen column count.
+                    // Driven by an inline style block, not Tailwind utilities: the column
+                    // counts are tenant-configurable at request time, so classes like
+                    // `sm:grid-cols-{{ '{n}' }}` can't be seen by Tailwind's build-time
+                    // source scan and would never be generated. Breakpoints and the
+                    // template match Tailwind's own (grid-cols-N = repeat(N,minmax(0,1fr))).
                     $xl = $gridColumns;
                     $lg = max(3, $xl - 1);
                     $sm = max(2, $xl - 2);
                 @endphp
-                <div class="grid grid-cols-2 sm:grid-cols-{{ $sm }} lg:grid-cols-{{ $lg }} xl:grid-cols-{{ $xl }} gap-2">
+                @push('head')
+                    <style>
+                        #pos-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        @media (min-width: 640px)  { #pos-product-grid { grid-template-columns: repeat({{ $sm }}, minmax(0, 1fr)); } }
+                        @media (min-width: 1024px) { #pos-product-grid { grid-template-columns: repeat({{ $lg }}, minmax(0, 1fr)); } }
+                        @media (min-width: 1280px) { #pos-product-grid { grid-template-columns: repeat({{ $xl }}, minmax(0, 1fr)); } }
+                    </style>
+                @endpush
+                <div id="pos-product-grid" class="grid gap-2">
                     <template x-for="p in filteredProducts" :key="p.id">
                         <button type="button" @click="addToCart(p)" :disabled="isOut(p)"
                                 class="text-left rounded-lg border p-2 transition"
