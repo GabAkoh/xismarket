@@ -49,6 +49,7 @@
 @endpermission
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Product</th><th>SKU</th><th>Warehouse</th><th class="text-right">On hand</th><th class="text-right">Reorder level</th></tr>
@@ -67,5 +68,6 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </x-card>
 @endsection

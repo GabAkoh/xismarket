@@ -11,6 +11,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="lg:col-span-2">
         <x-card title="Items">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="text-left text-slate-400 border-b">
                     <tr><th class="py-2">Product</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Disc</th><th class="text-right">Tax</th><th class="text-right">Total</th></tr>
@@ -36,6 +37,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
         </x-card>
     </div>
 

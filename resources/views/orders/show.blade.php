@@ -26,6 +26,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="lg:col-span-2 space-y-4">
         <x-card title="Items">
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="text-left text-slate-400 border-b">
                     <tr><th class="py-2">Product</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Disc</th><th class="text-right">Total</th></tr>
@@ -65,6 +66,7 @@
                     <tr class="font-bold text-slate-800"><td colspan="4" class="text-right">Total</td><td class="text-right">{{ $symbol }}{{ number_format($order->total, 2) }}</td></tr>
                 </tfoot>
             </table>
+            </div>
             @if ($order->notes)<p class="mt-3 text-sm text-slate-500 border-t pt-3">{{ $order->notes }}</p>@endif
         </x-card>
 

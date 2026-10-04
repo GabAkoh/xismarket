@@ -16,6 +16,7 @@
             @if ($openSales->isEmpty())
                 <p class="text-sm text-slate-400">No open credit sales. Any amount received will be added to store credit (an advance on account).</p>
             @else
+                <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="text-left text-slate-400 border-b">
                         <tr><th class="py-2">Sale</th><th>Date</th><th class="text-right">Total</th><th class="text-right">Balance due</th></tr>
@@ -43,6 +44,7 @@
                         </tr>
                     </tfoot>
                 </table>
+                </div>
             @endif
         </x-card>
     </div>

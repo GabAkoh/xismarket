@@ -56,10 +56,25 @@
     </script>
     @stack('head')
 </head>
-<body class="h-full" x-data="{ sidebar: true }">
+<body class="h-full"
+      x-data="{ sidebar: window.innerWidth >= 1024 }"
+      @resize.window.debounce.150ms="sidebar = window.innerWidth >= 1024"
+      @keydown.escape.window="if (window.innerWidth < 1024) sidebar = false">
 <div class="min-h-full flex">
-    {{-- Sidebar --}}
-    <aside class="w-64 shrink-0 bg-slate-900 text-slate-300 flex flex-col" x-show="sidebar" x-cloak>
+    {{-- Backdrop (mobile only) — tap to dismiss the drawer --}}
+    <div x-show="sidebar" x-cloak @click="sidebar = false"
+         x-transition.opacity
+         class="fixed inset-0 z-30 bg-black/40 lg:hidden"></div>
+
+    {{-- Sidebar: off-canvas overlay on mobile, persistent column on desktop --}}
+    <aside x-show="sidebar" x-cloak
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="-translate-x-full"
+           x-transition:enter-end="translate-x-0"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="translate-x-0"
+           x-transition:leave-end="-translate-x-full"
+           class="fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-slate-900 text-slate-300 flex flex-col overflow-y-auto lg:static lg:z-auto lg:translate-x-0">
         <div class="h-16 flex items-center px-6 border-b border-slate-800">
             <a href="{{ route('dashboard') }}" class="flex items-center gap-2 text-xl font-extrabold text-white">
                 @if ($appIcon)<img src="{{ asset('storage/'.$appIcon) }}" alt="{{ $appName }}" class="h-8 w-8 rounded object-contain bg-white/10">@endif
@@ -146,6 +161,7 @@
                     @foreach ($visible as $link)
                         @php $active = request()->routeIs($link['route']) || request()->routeIs(\Illuminate\Support\Str::beforeLast($link['route'], '.').'.*'); @endphp
                         <a href="{{ route($link['route']) }}"
+                           @click="if (window.innerWidth < 1024) sidebar = false"
                            class="block px-6 py-2 {{ $active ? 'bg-slate-800 text-white border-l-2 border-indigo-400' : 'hover:bg-slate-800 hover:text-white' }}">
                             {{ $link['label'] }}
                         </a>
@@ -157,12 +173,12 @@
 
     {{-- Main --}}
     <div class="flex-1 flex flex-col min-w-0">
-        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-            <div class="flex items-center gap-3">
-                <button @click="sidebar = !sidebar" class="text-slate-500 hover:text-slate-800">☰</button>
-                <h1 class="text-lg font-semibold text-slate-800">@yield('title', 'Dashboard')</h1>
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20">
+            <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                <button @click="sidebar = !sidebar" aria-label="Toggle menu" class="shrink-0 text-xl leading-none text-slate-500 hover:text-slate-800 -ml-1 p-1">☰</button>
+                <h1 class="text-base sm:text-lg font-semibold text-slate-800 truncate">@yield('title', 'Dashboard')</h1>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3 sm:gap-4 shrink-0">
                 <span class="text-sm text-slate-500 hidden sm:block">{{ $currentTenant?->name }}</span>
                 <div class="relative" x-data="{ open: false }">
                     <button @click="open = !open" class="flex items-center gap-2 text-sm text-slate-700">
@@ -183,7 +199,7 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto p-6">
+        <main class="flex-1 overflow-y-auto p-4 sm:p-6">
             @if (session('status'))
                 <div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-700">{{ session('status') }}</div>
             @endif

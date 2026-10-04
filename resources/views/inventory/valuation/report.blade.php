@@ -90,6 +90,7 @@
 {{-- By category --}}
 <x-card title="Value by category" class="mb-6">
     <x-slot:actions><a href="{{ $exportUrl('category') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Category</th><th class="text-right">Products</th><th class="text-right">Units</th>
@@ -111,11 +112,13 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </x-card>
 
 {{-- By product --}}
 <x-card title="Valuation by product">
     <x-slot:actions><a href="{{ $exportUrl('detailed') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
@@ -140,6 +143,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
     <div class="mt-4">{{ $rows->links() }}</div>
 </x-card>
 @endsection

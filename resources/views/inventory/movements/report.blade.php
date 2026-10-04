@@ -102,6 +102,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     <x-card title="By movement type">
         <x-slot:actions><a href="{{ $exportUrl('bytype') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b"><tr><th class="py-2">Type</th><th class="text-right">Moves</th><th class="text-right">In</th><th class="text-right">Out</th><th class="text-right">Net</th><th class="text-right">Value</th></tr></thead>
             <tbody class="divide-y">
@@ -119,10 +120,12 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
     </x-card>
 
     <x-card title="Top movers">
         <x-slot:actions><a href="{{ $exportUrl('byproduct') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b"><tr><th class="py-2">Product</th><th class="text-right">Moves</th><th class="text-right">In</th><th class="text-right">Out</th><th class="text-right">Net</th></tr></thead>
             <tbody class="divide-y">
@@ -139,6 +142,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
         @if ($byProduct->count() > 12)
             <p class="mt-2 text-xs text-slate-400">Showing top 12 of {{ number_format($byProduct->count()) }} products — export CSV for the full list.</p>
         @endif
@@ -148,6 +152,7 @@
 {{-- Movement ledger --}}
 <x-card title="Movement log">
     <x-slot:actions><a href="{{ $exportUrl('detailed') }}" class="text-xs text-indigo-600 hover:underline">Export CSV</a></x-slot:actions>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
@@ -175,6 +180,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
     <div class="mt-4">{{ $rows->links() }}</div>
 </x-card>
 @endsection

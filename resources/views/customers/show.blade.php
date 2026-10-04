@@ -126,6 +126,7 @@
             @if ($customer->walletTransactions->isEmpty())
                 <p class="text-sm text-slate-400">No wallet activity yet.</p>
             @else
+                <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="text-left text-slate-400 border-b">
                         <tr><th class="py-2">When</th><th>Reason</th><th class="text-right">Amount</th><th class="text-right">Balance</th></tr>
@@ -143,6 +144,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </x-card>
 
@@ -150,6 +152,7 @@
             @if ($customer->loyaltyTransactions->isEmpty())
                 <p class="text-sm text-slate-400">No loyalty activity yet.</p>
             @else
+                <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="text-left text-slate-400 border-b">
                         <tr><th class="py-2">When</th><th>Reason</th><th class="text-right">Points</th><th class="text-right">Balance</th></tr>
@@ -167,6 +170,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </x-card>
 
@@ -174,6 +178,7 @@
             @if ($recentSales->isEmpty())
                 <p class="text-sm text-slate-400">No purchases yet.</p>
             @else
+                <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="text-left text-slate-400 border-b">
                         <tr><th class="py-2">Sale</th><th>Status</th><th class="text-right">Total</th><th class="text-right">When</th></tr>
@@ -195,6 +200,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </x-card>
     </div>

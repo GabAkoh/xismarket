@@ -14,6 +14,7 @@
     @if ($devices->isEmpty())
         <p class="text-sm text-slate-400 py-6 text-center">No devices yet. They appear here the first time someone signs in from a browser (after enabling the device allowlist).</p>
     @else
+        <div class="overflow-x-auto">
         <table class="w-full text-sm">
             <thead class="text-left text-slate-400 border-b">
                 <tr><th class="py-2">Device</th><th>Status</th><th>Last seen</th><th class="text-right">Actions</th></tr>
@@ -58,6 +59,7 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     @endif
 </x-card>
 @endsection

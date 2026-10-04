@@ -60,6 +60,7 @@
                 @if ($s['rows']->isEmpty())
                     <p class="text-sm text-slate-400">No activity in this period.</p>
                 @else
+                    <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="text-left text-slate-400 border-b">
                             <tr><th class="py-1.5">Method</th><th class="text-right">Count</th><th class="text-right">Amount</th></tr>
@@ -84,6 +85,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 @endif
             </x-card>
         @endforeach
@@ -101,6 +103,7 @@
                 @if ($s['rows']->isEmpty())
                     <p class="text-sm text-slate-400">No activity in this period.</p>
                 @else
+                    <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="text-left text-slate-400 border-b">
                             <tr><th class="py-1.5">{{ $s['key'] === 'cash_out' ? 'Reason' : 'Method' }}</th><th class="text-right">Count</th><th class="text-right">Amount</th></tr>
@@ -115,6 +118,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 @endif
             </x-card>
         @endforeach
@@ -124,6 +128,7 @@
             @if ($combined->isEmpty())
                 <p class="text-sm text-slate-400">No payments received in this period.</p>
             @else
+                <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead class="text-left text-slate-400 border-b">
                         <tr><th class="py-1.5">Method</th><th class="text-right">Count</th><th class="text-right">Amount</th></tr>
@@ -145,6 +150,7 @@
                         </tr>
                     </tfoot>
                 </table>
+                </div>
                 <p class="mt-2 text-xs text-slate-400">Excludes cash-in (recorded by reason, not a tender). Wallet means store credit redeemed, not new cash.</p>
             @endif
 

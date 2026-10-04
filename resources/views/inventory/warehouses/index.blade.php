@@ -9,6 +9,7 @@
 </x-page-header>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Name</th><th>Code</th><th>Address</th><th>Default</th><th></th></tr>
@@ -43,6 +44,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
     <div class="mt-4">{{ $warehouses->links() }}</div>
 </x-card>
 @endsection

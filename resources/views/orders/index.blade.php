@@ -67,6 +67,7 @@
 </x-card>
 
 <x-card>
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr>
@@ -102,6 +103,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
     <div class="mt-4">{{ $orders->links() }}</div>
 </x-card>
 @endsection

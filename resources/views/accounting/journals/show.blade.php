@@ -34,6 +34,7 @@
 </x-card>
 
 <x-card title="Lines">
+    <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="text-left text-slate-400 border-b">
             <tr><th class="py-2">Account</th><th>Memo</th><th class="text-right">Debit</th><th class="text-right">Credit</th></tr>
@@ -58,5 +59,6 @@
             </tr>
         </tfoot>
     </table>
+    </div>
 </x-card>
 @endsection
